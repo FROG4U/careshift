@@ -15,50 +15,60 @@ export default async function AppLayout({
   const session = await getSession();
   if (!session) redirect("/login");
 
-  const tenant = await prisma.tenant.findUnique({
-    where: { id: session.tenantId },
-  });
-  if (!tenant) redirect("/login");
-
-  const brand = tenant.brandColor || "#2563a8";
-
-  const notifications = await prisma.notification.findMany({
-    where: { userId: session.id },
-    orderBy: { createdAt: "desc" },
-    take: 20,
-  });
-
-  // Timesheets awaiting approval — drives the sidebar count badge.
-  const pendingTimesheets = await prisma.shift.count({
-    where: { tenantId: tenant.id, approval: "PENDING", status: "COMPLETED" },
-  });
-
-  // Shift swaps awaiting a manager decision.
-  const pendingSwaps = await prisma.shiftSwap.count({
-    where: { tenantId: tenant.id, status: "PENDING" },
-  });
-
-  // Time-off / availability requests awaiting a decision.
-  const pendingLeave = await prisma.availability.count({
-    where: { tenantId: tenant.id, status: "PENDING" },
-  });
-
   // Not-yet-approved accounts never reach the management area.
   if (session.status !== "APPROVED") redirect("/pending");
 
-  // Payroll is restricted to admins/coordinators.
+  // Payroll etc. are restricted to admins/coordinators.
   const isManager =
     session.role === "ADMIN" || session.role === "COORDINATOR";
 
-  // Unread chat messages → Messages nav badge.
-  const unreadChat = await totalUnread(tenant.id, session.id);
+  // Fetch everything the layout needs in ONE parallel batch. These used to run
+  // sequentially — with the DB in Sydney and the app abroad, ~7 round-trips
+  // stacked back-to-back on every page load (~10s). Running them together
+  // collapses that to a single round-trip. All scope by session.tenantId so
+  // none has to wait for the tenant lookup first.
+  const [
+    tenant,
+    notifications,
+    pendingTimesheets,
+    pendingSwaps,
+    pendingLeave,
+    unreadChat,
+    pendingApprovals,
+  ] = await Promise.all([
+    prisma.tenant.findUnique({ where: { id: session.tenantId } }),
+    prisma.notification.findMany({
+      where: { userId: session.id },
+      orderBy: { createdAt: "desc" },
+      take: 20,
+    }),
+    prisma.shift.count({
+      where: {
+        tenantId: session.tenantId,
+        approval: "PENDING",
+        status: "COMPLETED",
+      },
+    }),
+    prisma.shiftSwap.count({
+      where: { tenantId: session.tenantId, status: "PENDING" },
+    }),
+    prisma.availability.count({
+      where: { tenantId: session.tenantId, status: "PENDING" },
+    }),
+    totalUnread(session.tenantId, session.id),
+    isManager
+      ? prisma.user.count({
+          where: {
+            tenantId: session.tenantId,
+            status: "PENDING",
+            role: "WORKER",
+          },
+        })
+      : Promise.resolve(0),
+  ]);
+  if (!tenant) redirect("/login");
 
-  // Support workers awaiting approval → Approvals nav badge (managers only).
-  const pendingApprovals = isManager
-    ? await prisma.user.count({
-        where: { tenantId: tenant.id, status: "PENDING", role: "WORKER" },
-      })
-    : 0;
+  const brand = tenant.brandColor || "#2563a8";
 
   return (
     <div
