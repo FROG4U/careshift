@@ -6,6 +6,7 @@ import { NotificationBell } from "@/components/NotificationBell";
 import { logoutAction } from "./actions";
 import { totalUnread } from "@/lib/chat";
 import { InstallPrompt } from "@/components/InstallPrompt";
+import { AdminBottomNav } from "@/components/AdminBottomNav";
 
 export default async function AppLayout({
   children,
@@ -96,13 +97,14 @@ export default async function AppLayout({
       />
 
       {/* Main content */}
-      <main className="flex-1 overflow-x-hidden bg-[var(--background)]">
+      <main className="flex-1 overflow-x-hidden bg-[var(--background)] pb-28 md:pb-0">
         {/* Top header bar — notifications on the right */}
         <header className="sticky top-0 z-30 flex h-14 items-center justify-end gap-2 border-b border-[var(--border)] bg-[var(--background)]/80 pl-6 pr-3 backdrop-blur">
           <NotificationBell notifications={notifications} />
         </header>
         {children}
       </main>
+      <AdminBottomNav unreadChat={unreadChat} pendingTimesheets={pendingTimesheets} />
       <InstallPrompt />
     </div>
   );
