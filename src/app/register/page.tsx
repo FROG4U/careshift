@@ -36,7 +36,7 @@ export default function RegisterPage() {
   return (
     <div className="flex min-h-screen flex-col bg-[var(--background)]">
       {/* ── Site header ───────────────────────────────────────────── */}
-      <header className="sticky top-0 z-30 border-b border-[var(--border)] bg-[var(--background)]/85 backdrop-blur">
+      <header className="sticky top-0 z-30 border-b border-[var(--border)] bg-[var(--background)]">
         <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-5 py-3.5">
           <Link href="/register" className="flex items-center gap-2.5">
             <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-[var(--brand)] text-sm font-bold text-white shadow-sm">
