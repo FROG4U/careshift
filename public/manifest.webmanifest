@@ -1,8 +1,8 @@
 {
   "name": "Pristine Care Group",
   "short_name": "PCG Care",
-  "description": "Shifts, clock-in and timesheets for Pristine Care Group support workers.",
-  "start_url": "/my-shifts",
+  "description": "Shift & schedule platform for Pristine Care Group.",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
