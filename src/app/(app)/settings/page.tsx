@@ -17,7 +17,8 @@ const field =
 
 export default async function SettingsPage() {
   const { tenant, session } = await requireTenant();
-  const isAdmin = session.role === "ADMIN";
+  const isAdmin =
+    session.role === "ADMIN" || session.role === "SUPER_ADMIN";
 
   // Build the public registration link (protocol + host) so admins can share it.
   const h = await headers();

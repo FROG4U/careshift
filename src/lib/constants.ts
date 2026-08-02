@@ -1,6 +1,6 @@
 // Allowed string-enum values (SQLite has no native enums).
 
-export const ROLES = ["ADMIN", "COORDINATOR", "WORKER"] as const;
+export const ROLES = ["SUPER_ADMIN", "ADMIN", "COORDINATOR", "WORKER"] as const;
 export type Role = (typeof ROLES)[number];
 
 export const SHIFT_STATUS = [
@@ -15,6 +15,7 @@ export const APPROVAL = ["PENDING", "APPROVED", "REJECTED"] as const;
 export type Approval = (typeof APPROVAL)[number];
 
 export const ROLE_LABELS: Record<Role, string> = {
+  SUPER_ADMIN: "Super Admin",
   ADMIN: "Administrator",
   COORDINATOR: "Coordinator",
   WORKER: "Support Worker",

@@ -73,6 +73,7 @@ model Tenant {
   lateNotices    LateNotice[]
   conversations  Conversation[]
   availabilities Availability[]
+  adminInvites   AdminInvite[]
 }
 
 /// A worker tapping "Running late" on a shift, with their reason. Managers see
@@ -740,4 +741,24 @@ model SpeedEvent {
 
   @@index([tenantId])
   @@index([transportId])
+}
+
+/// An invitation for someone to join as an ADMIN (or SUPER_ADMIN). A super admin
+/// creates one; it produces a shareable link (/invite/<token>). When the invitee
+/// opens the link and sets a password, a PENDING admin account is created for the
+/// super admin to approve.
+model AdminInvite {
+  id             String   @id @default(cuid())
+  tenantId       String
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  email          String
+  name           String?
+  token          String   @unique
+  role           String   @default("ADMIN") // ADMIN | SUPER_ADMIN
+  status         String   @default("PENDING") // PENDING | ACCEPTED | REVOKED
+  invitedById    String?
+  acceptedUserId String?
+  createdAt      DateTime @default(now())
+
+  @@index([tenantId])
 }

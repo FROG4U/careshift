@@ -55,7 +55,8 @@ export default async function SchedulePage({
   const { tenant, session } = await requireTenant();
   const { week, branch, from, to, staff: staffFilter, client: clientFilter } =
     await searchParams;
-  const isAdmin = session.role === "ADMIN";
+  const isAdmin =
+    session.role === "ADMIN" || session.role === "SUPER_ADMIN";
   const canAuthorise = isAdmin || session.role === "COORDINATOR";
 
   // Date range: a custom from/to wins over the week view. Capped at 31 days so

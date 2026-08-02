@@ -6,7 +6,9 @@ import { prisma } from "@/lib/prisma";
 import { notifyWorker } from "@/lib/notify";
 
 function assertManager(role: string) {
-  return role === "ADMIN" || role === "COORDINATOR";
+  return (
+    role === "ADMIN" || role === "SUPER_ADMIN" || role === "COORDINATOR"
+  );
 }
 
 /** Approve a pending worker: activate their account + Staff record. */
@@ -17,6 +19,7 @@ export async function approveWorker(formData: FormData) {
   const userId = String(formData.get("userId") ?? "");
   const branchId = String(formData.get("branchId") ?? "").trim();
   const employmentType = String(formData.get("employmentType") ?? "").trim();
+  const payLevelId = String(formData.get("payLevelId") ?? "").trim();
 
   const user = await prisma.user.findFirst({
     where: { id: userId, tenantId: tenant.id, status: "PENDING" },
@@ -35,6 +38,7 @@ export async function approveWorker(formData: FormData) {
       data: {
         active: true,
         ...(branchId ? { branchId } : {}),
+        ...(payLevelId ? { payLevelId } : {}),
         ...(employmentType === "CASUAL" || employmentType === "PERMANENT"
           ? { employmentType }
           : {}),

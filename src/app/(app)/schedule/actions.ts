@@ -92,7 +92,9 @@ export async function createShift(
 
     if (used + newHours > client.weeklyHours + 1e-6) {
       const isManager =
-        session.role === "ADMIN" || session.role === "COORDINATOR";
+        session.role === "ADMIN" ||
+        session.role === "SUPER_ADMIN" ||
+        session.role === "COORDINATOR";
       const wantsOverride = String(formData.get("authorise") ?? "") === "on";
 
       if (!wantsOverride) {

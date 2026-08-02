@@ -15,10 +15,13 @@ function fmtDate(d: Date) {
 
 export default async function ApprovalsPage() {
   const { tenant, session } = await requireTenant();
-  const isManager = session.role === "ADMIN" || session.role === "COORDINATOR";
+  const isManager =
+    session.role === "ADMIN" ||
+    session.role === "SUPER_ADMIN" ||
+    session.role === "COORDINATOR";
   if (!isManager) redirect("/dashboard");
 
-  const [pending, branches] = await Promise.all([
+  const [pending, branches, payLevels] = await Promise.all([
     prisma.user.findMany({
       where: { tenantId: tenant.id, status: "PENDING", role: "WORKER" },
       include: { staff: true },
@@ -27,6 +30,11 @@ export default async function ApprovalsPage() {
     prisma.branch.findMany({
       where: { tenantId: tenant.id },
       orderBy: { name: "asc" },
+      select: { id: true, name: true },
+    }),
+    prisma.payLevel.findMany({
+      where: { tenantId: tenant.id },
+      orderBy: { sortOrder: "asc" },
       select: { id: true, name: true },
     }),
   ]);
@@ -111,6 +119,24 @@ export default async function ApprovalsPage() {
                     >
                       <option value="PERMANENT">Permanent</option>
                       <option value="CASUAL">Casual</option>
+                    </select>
+                  </label>
+
+                  <label className="flex flex-col gap-1 text-xs font-medium text-slate-600">
+                    Pay level
+                    <select
+                      name="payLevelId"
+                      defaultValue=""
+                      className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
+                    >
+                      <option value="">
+                        {payLevels.length ? "Set later" : "No pay levels yet"}
+                      </option>
+                      {payLevels.map((pl) => (
+                        <option key={pl.id} value={pl.id}>
+                          {pl.name}
+                        </option>
+                      ))}
                     </select>
                   </label>
 

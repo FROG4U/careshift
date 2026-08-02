@@ -21,7 +21,10 @@ export default async function AppLayout({
 
   // Payroll etc. are restricted to admins/coordinators.
   const isManager =
-    session.role === "ADMIN" || session.role === "COORDINATOR";
+    session.role === "ADMIN" ||
+    session.role === "SUPER_ADMIN" ||
+    session.role === "COORDINATOR";
+  const superAdmin = session.role === "SUPER_ADMIN";
 
   // Fetch everything the layout needs in ONE parallel batch. These used to run
   // sequentially — with the DB in Sydney and the app abroad, ~7 round-trips
@@ -36,6 +39,7 @@ export default async function AppLayout({
     pendingLeave,
     unreadChat,
     pendingApprovals,
+    pendingAdmins,
   ] = await Promise.all([
     prisma.tenant.findUnique({ where: { id: session.tenantId } }),
     prisma.notification.findMany({
@@ -66,6 +70,15 @@ export default async function AppLayout({
           },
         })
       : Promise.resolve(0),
+    superAdmin
+      ? prisma.user.count({
+          where: {
+            tenantId: session.tenantId,
+            status: "PENDING",
+            role: { in: ["ADMIN", "SUPER_ADMIN"] },
+          },
+        })
+      : Promise.resolve(0),
   ]);
   if (!tenant) redirect("/login");
 
@@ -86,12 +99,14 @@ export default async function AppLayout({
         name={session.name}
         email={session.email}
         isManager={isManager}
+        isSuperAdmin={superAdmin}
         counts={{
           unreadChat,
           pendingSwaps,
           pendingLeave,
           pendingTimesheets,
           pendingApprovals,
+          pendingAdmins,
         }}
         logout={logoutAction}
       />

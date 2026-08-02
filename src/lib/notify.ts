@@ -32,15 +32,14 @@ export async function notifyWorker(staffId: string, n: NotifyInput) {
   if (user) await notifyUser(user.id, n);
 }
 
-/** Notify every admin / coordinator in the tenant. */
-export async function notifyManagers(n: NotifyInput) {
-  const managers = await prisma.user.findMany({
-    where: { tenantId: n.tenantId, role: { in: ["ADMIN", "COORDINATOR"] } },
+async function notifyRoles(roles: string[], n: NotifyInput) {
+  const users = await prisma.user.findMany({
+    where: { tenantId: n.tenantId, role: { in: roles } },
     select: { id: true },
   });
-  if (managers.length === 0) return;
+  if (users.length === 0) return;
   await prisma.notification.createMany({
-    data: managers.map((m) => ({
+    data: users.map((m) => ({
       tenantId: n.tenantId,
       userId: m.id,
       type: n.type,
@@ -49,4 +48,14 @@ export async function notifyManagers(n: NotifyInput) {
       shiftId: n.shiftId ?? null,
     })),
   });
+}
+
+/** Notify every super admin / admin / coordinator in the tenant. */
+export async function notifyManagers(n: NotifyInput) {
+  await notifyRoles(["SUPER_ADMIN", "ADMIN", "COORDINATOR"], n);
+}
+
+/** Notify only super admins (e.g. an admin invite was accepted / needs approval). */
+export async function notifySuperAdmins(n: NotifyInput) {
+  await notifyRoles(["SUPER_ADMIN"], n);
 }

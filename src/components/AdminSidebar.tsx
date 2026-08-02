@@ -10,6 +10,7 @@ export type SidebarCounts = {
   pendingLeave: number;
   pendingTimesheets: number;
   pendingApprovals: number;
+  pendingAdmins: number;
 };
 
 type Item = {
@@ -18,6 +19,7 @@ type Item = {
   icon: string;
   badgeKey?: keyof SidebarCounts;
   managerOnly?: boolean;
+  superAdminOnly?: boolean;
 };
 
 type Group = { title: string; items: Item[] };
@@ -57,7 +59,10 @@ const GROUPS: Group[] = [
   },
   {
     title: "Account",
-    items: [{ href: "/settings", label: "Settings", icon: "settings" }],
+    items: [
+      { href: "/admins", label: "Admins", icon: "shield_person", badgeKey: "pendingAdmins", superAdminOnly: true },
+      { href: "/settings", label: "Settings", icon: "settings" },
+    ],
   },
 ];
 
@@ -67,6 +72,7 @@ export function AdminSidebar({
   name,
   email,
   isManager,
+  isSuperAdmin,
   counts,
   logout,
 }: {
@@ -75,6 +81,7 @@ export function AdminSidebar({
   name: string;
   email: string;
   isManager: boolean;
+  isSuperAdmin: boolean;
   counts: SidebarCounts;
   logout: (formData: FormData) => void;
 }) {
@@ -128,7 +135,11 @@ export function AdminSidebar({
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto pb-3">
         {GROUPS.map((group) => {
-          const items = group.items.filter((i) => !i.managerOnly || isManager);
+          const items = group.items.filter(
+            (i) =>
+              (!i.managerOnly || isManager) &&
+              (!i.superAdminOnly || isSuperAdmin),
+          );
           if (items.length === 0) return null;
           const isCollapsed = collapsed.has(group.title);
           return (
