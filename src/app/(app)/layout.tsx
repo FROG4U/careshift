@@ -24,6 +24,8 @@ export default async function AppLayout({
     session.role === "ADMIN" ||
     session.role === "SUPER_ADMIN" ||
     session.role === "COORDINATOR";
+  const adminLevel =
+    session.role === "ADMIN" || session.role === "SUPER_ADMIN";
   const superAdmin = session.role === "SUPER_ADMIN";
 
   // Fetch everything the layout needs in ONE parallel batch. These used to run
@@ -99,6 +101,7 @@ export default async function AppLayout({
         name={session.name}
         email={session.email}
         isManager={isManager}
+        isAdmin={adminLevel}
         isSuperAdmin={superAdmin}
         counts={{
           unreadChat,

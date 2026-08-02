@@ -19,6 +19,7 @@ type Item = {
   icon: string;
   badgeKey?: keyof SidebarCounts;
   managerOnly?: boolean;
+  adminOnly?: boolean;
   superAdminOnly?: boolean;
 };
 
@@ -60,7 +61,7 @@ const GROUPS: Group[] = [
   {
     title: "Account",
     items: [
-      { href: "/admins", label: "Admin", icon: "shield_person", badgeKey: "pendingAdmins", superAdminOnly: true },
+      { href: "/admins", label: "Admin", icon: "shield_person", badgeKey: "pendingAdmins", adminOnly: true },
       { href: "/settings", label: "Settings", icon: "settings" },
     ],
   },
@@ -72,6 +73,7 @@ export function AdminSidebar({
   name,
   email,
   isManager,
+  isAdmin,
   isSuperAdmin,
   counts,
   logout,
@@ -81,6 +83,7 @@ export function AdminSidebar({
   name: string;
   email: string;
   isManager: boolean;
+  isAdmin: boolean;
   isSuperAdmin: boolean;
   counts: SidebarCounts;
   logout: (formData: FormData) => void;
@@ -138,6 +141,7 @@ export function AdminSidebar({
           const items = group.items.filter(
             (i) =>
               (!i.managerOnly || isManager) &&
+              (!i.adminOnly || isAdmin) &&
               (!i.superAdminOnly || isSuperAdmin),
           );
           if (items.length === 0) return null;

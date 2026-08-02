@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { requireTenant } from "@/lib/tenant";
 import { prisma } from "@/lib/prisma";
-import { isSuperAdmin } from "@/lib/roles";
+import { isAdmin, isSuperAdmin } from "@/lib/roles";
 import { ROLE_LABELS } from "@/lib/constants";
 import { CopyLink } from "./CopyLink";
 import {
@@ -17,7 +17,39 @@ export const dynamic = "force-dynamic";
 
 export default async function AdminsPage() {
   const { tenant, session } = await requireTenant();
-  if (!isSuperAdmin(session.role)) redirect("/dashboard");
+  if (!isAdmin(session.role)) redirect("/dashboard");
+
+  // Regular admins only see their own account. Managing other admins (invite,
+  // approve, promote) is super-admin only.
+  if (!isSuperAdmin(session.role)) {
+    return (
+      <div className="max-w-3xl p-6 lg:p-8">
+        <header className="mb-6">
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+            Admin
+          </h1>
+          <p className="text-sm text-slate-500">Your admin account.</p>
+        </header>
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-slate-900">
+                {session.name}
+              </p>
+              <p className="text-xs text-slate-500">{session.email}</p>
+            </div>
+            <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
+              {ROLE_LABELS[session.role as keyof typeof ROLE_LABELS] ??
+                session.role}
+            </span>
+          </div>
+          <p className="mt-4 border-t border-slate-100 pt-4 text-xs text-slate-400">
+            Only a super admin can invite new admins or change roles.
+          </p>
+        </section>
+      </div>
+    );
+  }
 
   const [admins, pendingAdmins, invites] = await Promise.all([
     prisma.user.findMany({
