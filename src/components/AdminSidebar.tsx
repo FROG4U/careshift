@@ -78,6 +78,7 @@ export function AdminSidebar({
 }) {
   const path = usePathname();
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   const toggle = (title: string) =>
     setCollapsed((prev) => {
@@ -86,6 +87,8 @@ export function AdminSidebar({
       return next;
     });
 
+  const closeMobile = () => setMobileOpen(false);
+
   const initials = name
     .split(" ")
     .map((n) => n[0])
@@ -93,11 +96,10 @@ export function AdminSidebar({
     .toUpperCase()
     .slice(0, 2);
 
-  return (
-    <aside
-      className="hidden w-64 shrink-0 flex-col text-white md:flex"
-      style={{ background: "var(--brand)" }}
-    >
+  // Shared sidebar contents — rendered in both the desktop sidebar and the
+  // mobile slide-in drawer.
+  const inner = (
+    <>
       {/* Logo / org */}
       <div className="flex items-center gap-3 px-5 py-5">
         <div
@@ -139,6 +141,7 @@ export function AdminSidebar({
                     <Link
                       key={item.href}
                       href={item.href}
+                      onClick={closeMobile}
                       className={`flex items-center gap-3 border-l-[3px] px-5 py-2.5 text-sm transition ${
                         active
                           ? "border-[var(--accent,#886949)] bg-white/10 font-semibold text-white"
@@ -189,6 +192,50 @@ export function AdminSidebar({
           </button>
         </form>
       </div>
-    </aside>
+    </>
+  );
+
+  return (
+    <>
+      {/* Mobile hamburger — sits in the top bar on phones */}
+      <button
+        onClick={() => setMobileOpen(true)}
+        aria-label="Open menu"
+        className="fixed left-3 top-2.5 z-40 flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--border)] bg-white text-[var(--text-primary)] shadow-sm md:hidden"
+      >
+        <span className="material-symbols-rounded text-[22px]">menu</span>
+      </button>
+
+      {/* Desktop sidebar */}
+      <aside
+        className="hidden w-64 shrink-0 flex-col text-white md:flex"
+        style={{ background: "var(--brand)" }}
+      >
+        {inner}
+      </aside>
+
+      {/* Mobile slide-in drawer */}
+      {mobileOpen && (
+        <div className="md:hidden">
+          <div
+            className="fixed inset-0 z-40 bg-black/40"
+            onClick={closeMobile}
+          />
+          <aside
+            className="fixed inset-y-0 left-0 z-50 flex w-72 max-w-[82%] flex-col text-white shadow-2xl"
+            style={{ background: "var(--brand)" }}
+          >
+            <button
+              onClick={closeMobile}
+              aria-label="Close menu"
+              className="absolute right-3 top-5 z-10 text-white/70 transition hover:text-white"
+            >
+              <span className="material-symbols-rounded text-[22px]">close</span>
+            </button>
+            {inner}
+          </aside>
+        </div>
+      )}
+    </>
   );
 }
