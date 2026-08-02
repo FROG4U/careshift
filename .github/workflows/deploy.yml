@@ -16,9 +16,9 @@ name: Deploy to Plesk
 # Secrets (DATABASE_URL / DIRECT_URL / AUTH_SECRET) live in a server-side .env,
 # never in git.
 
+# Deploy is handled by Plesk Git (pull + build actions on the server), so this
+# workflow is manual-only and does nothing unless SSH secrets are configured.
 on:
-  push:
-    branches: [main]
   workflow_dispatch: {}
 
 jobs:
