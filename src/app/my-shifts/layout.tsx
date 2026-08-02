@@ -6,6 +6,7 @@ import { notesDueFor } from "@/lib/notesDue";
 import { WorkerShell } from "@/components/worker/WorkerShell";
 import { NotesGuard } from "@/components/worker/NotesGuard";
 import { LocationPinger } from "@/components/worker/LocationPinger";
+import { InstallPrompt } from "@/components/InstallPrompt";
 
 export default async function WorkerLayout({
   children,
@@ -79,6 +80,7 @@ export default async function WorkerLayout({
         {children}
       </WorkerShell>
       <NotesGuard dues={notesDue} />
+      <InstallPrompt />
     </>
   );
 }

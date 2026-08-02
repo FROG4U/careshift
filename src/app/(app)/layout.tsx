@@ -5,6 +5,7 @@ import { AdminSidebar } from "@/components/AdminSidebar";
 import { NotificationBell } from "@/components/NotificationBell";
 import { logoutAction } from "./actions";
 import { totalUnread } from "@/lib/chat";
+import { InstallPrompt } from "@/components/InstallPrompt";
 
 export default async function AppLayout({
   children,
@@ -91,6 +92,7 @@ export default async function AppLayout({
         </header>
         {children}
       </main>
+      <InstallPrompt />
     </div>
   );
 }
