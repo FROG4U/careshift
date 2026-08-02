@@ -17,9 +17,12 @@ export default function LoginPage() {
       <div className="relative w-full max-w-sm">
         {/* Logo */}
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-3xl bg-[var(--brand)] text-2xl font-bold text-white shadow-lg">
-            P
-          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/logo.png"
+            alt="Pristine Care Group"
+            className="mx-auto mb-4 h-16 w-16 rounded-3xl shadow-lg"
+          />
           <h1 className="text-2xl font-bold tracking-tight text-[var(--text-primary)]">
             Pristine Care Group
           </h1>

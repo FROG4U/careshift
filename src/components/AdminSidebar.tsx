@@ -63,6 +63,7 @@ const GROUPS: Group[] = [
 
 export function AdminSidebar({
   tenantName,
+  logoUrl,
   name,
   email,
   isManager,
@@ -70,6 +71,7 @@ export function AdminSidebar({
   logout,
 }: {
   tenantName: string;
+  logoUrl?: string | null;
   name: string;
   email: string;
   isManager: boolean;
@@ -102,12 +104,21 @@ export function AdminSidebar({
     <>
       {/* Logo / org */}
       <div className="flex items-center gap-3 px-5 py-5">
-        <div
-          className="flex h-10 w-10 items-center justify-center rounded-2xl text-sm font-bold text-white shadow-md"
-          style={{ background: "var(--accent, #886949)" }}
-        >
-          {tenantName[0]}
-        </div>
+        {logoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={logoUrl}
+            alt={tenantName}
+            className="h-10 w-10 rounded-2xl object-cover shadow-md"
+          />
+        ) : (
+          <div
+            className="flex h-10 w-10 items-center justify-center rounded-2xl text-sm font-bold text-white shadow-md"
+            style={{ background: "var(--accent, #886949)" }}
+          >
+            {tenantName[0]}
+          </div>
+        )}
         <div className="min-w-0 leading-tight">
           <div className="truncate text-sm font-bold">{tenantName}</div>
           <div className="text-xs font-medium text-white/50">Care Platform</div>

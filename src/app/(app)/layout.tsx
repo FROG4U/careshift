@@ -81,6 +81,7 @@ export default async function AppLayout({
       {/* Sidebar — grouped, collapsible, navy/bronze */}
       <AdminSidebar
         tenantName={tenant.name}
+        logoUrl={tenant.logoUrl}
         name={session.name}
         email={session.email}
         isManager={isManager}

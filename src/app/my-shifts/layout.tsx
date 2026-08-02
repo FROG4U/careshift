@@ -71,6 +71,7 @@ export default async function WorkerLayout({
         brand={tenant?.brandColor || "#003146"}
         accent={tenant?.accentColor || "#886949"}
         tenantName={tenant?.name ?? "CareShift"}
+        logoUrl={tenant?.logoUrl}
         firstName={session.name.split(" ")[0]}
         photoUrl={staff?.photoUrl ?? null}
         notifications={notifications}

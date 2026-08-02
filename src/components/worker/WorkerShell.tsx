@@ -37,6 +37,7 @@ export function WorkerShell({
   brand,
   accent,
   tenantName,
+  logoUrl,
   firstName,
   photoUrl,
   notifications,
@@ -47,6 +48,7 @@ export function WorkerShell({
   brand: string;
   accent: string;
   tenantName: string;
+  logoUrl?: string | null;
   firstName: string;
   photoUrl: string | null;
   notifications: NotifItem[];
@@ -89,10 +91,19 @@ export function WorkerShell({
           >
             <span className="material-symbols-rounded text-[24px]">menu</span>
           </button>
-          <div className="text-center">
-            <div className="text-[10px] font-semibold uppercase tracking-widest text-white/60">
-              {tenantName}
-            </div>
+          <div className="flex flex-col items-center text-center">
+            {logoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={logoUrl}
+                alt={tenantName}
+                className="mb-0.5 h-6 w-6 rounded-lg object-cover"
+              />
+            ) : (
+              <div className="text-[10px] font-semibold uppercase tracking-widest text-white/60">
+                {tenantName}
+              </div>
+            )}
             <div className="text-base font-bold leading-tight text-white">
               {titleFor(path)}
             </div>
