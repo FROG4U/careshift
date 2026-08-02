@@ -38,6 +38,29 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Route loading spinner: stay invisible during fast navigations, only fade in
+   if the page is genuinely slow — avoids a "buffering" flash on every click. */
+@keyframes loadingFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.loading-delayed {
+  opacity: 0;
+  animation: loadingFadeIn 0.2s ease 0.45s forwards;
+}
+
+/* Launch splash — logo pops in, text rises. */
+@keyframes splashPop {
+  from { opacity: 0; transform: scale(0.82); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes splashRise {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.splash-logo { animation: splashPop 0.5s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.splash-text { animation: splashRise 0.5s ease 0.2s both; }
+
 .card-hover {
   transition: box-shadow 0.2s ease, transform 0.2s ease;
 }
