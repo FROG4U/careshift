@@ -56,7 +56,7 @@ export default function LoginPage() {
               Pristine Care Group
             </h1>
             <p className="mt-1 text-sm text-slate-500">
-              NDIS Care Management Platform
+              Shift &amp; schedule platform for support workers
             </p>
           </div>
 
