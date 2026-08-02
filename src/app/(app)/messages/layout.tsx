@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { conversationTitle } from "@/lib/chat";
+import { isOnline } from "@/lib/presence";
 import { MessagesShell, type ConvoSummary, type DirectoryUser } from "./MessagesShell";
 
 export default async function MessagesLayout({
@@ -17,7 +18,11 @@ export default async function MessagesLayout({
     include: {
       conversation: {
         include: {
-          members: { include: { user: { select: { id: true, name: true } } } },
+          members: {
+            include: {
+              user: { select: { id: true, name: true, lastSeenAt: true } },
+            },
+          },
           messages: {
             orderBy: { createdAt: "desc" },
             take: 1,
@@ -40,11 +45,16 @@ export default async function MessagesLayout({
         },
       });
       const title = conversationTitle(c, session.id, session.name);
+      const otherMember =
+        c.type === "GROUP"
+          ? null
+          : c.members.find((mm) => mm.user.id !== session.id);
       return {
         id: c.id,
         type: c.type,
         title,
         memberCount: c.members.length,
+        online: otherMember ? isOnline(otherMember.user.lastSeenAt) : false,
         lastBody: last
           ? last.attachmentUrl && !last.body
             ? "📷 Photo"

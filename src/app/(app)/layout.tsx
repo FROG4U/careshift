@@ -7,6 +7,7 @@ import { logoutAction } from "./actions";
 import { totalUnread } from "@/lib/chat";
 import { InstallPrompt } from "@/components/InstallPrompt";
 import { AdminBottomNav } from "@/components/AdminBottomNav";
+import { PresenceHeartbeat } from "@/components/PresenceHeartbeat";
 
 export default async function AppLayout({
   children,
@@ -124,6 +125,7 @@ export default async function AppLayout({
       </main>
       <AdminBottomNav unreadChat={unreadChat} pendingTimesheets={pendingTimesheets} />
       <InstallPrompt />
+      <PresenceHeartbeat />
     </div>
   );
 }

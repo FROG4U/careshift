@@ -14,6 +14,7 @@ export type ConvoSummary = {
   lastBody: string;
   lastAt: string;
   unread: number;
+  online: boolean;
 };
 export type DirectoryUser = { id: string; name: string; role: string };
 
@@ -74,15 +75,20 @@ export function MessagesShell({
                 activeId === c.id ? "bg-[var(--background)]" : ""
               }`}
             >
-              <span
-                className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white ${
-                  c.type === "GROUP" ? "bg-violet-500" : "bg-[var(--brand)]"
-                }`}
-              >
-                {c.type === "GROUP" ? (
-                  <span className="material-symbols-rounded text-[22px]">group</span>
-                ) : (
-                  initials(...(c.title.split(" ") as [string, string]))
+              <span className="relative shrink-0">
+                <span
+                  className={`flex h-11 w-11 items-center justify-center rounded-full text-sm font-bold text-white ${
+                    c.type === "GROUP" ? "bg-violet-500" : "bg-[var(--brand)]"
+                  }`}
+                >
+                  {c.type === "GROUP" ? (
+                    <span className="material-symbols-rounded text-[22px]">group</span>
+                  ) : (
+                    initials(...(c.title.split(" ") as [string, string]))
+                  )}
+                </span>
+                {c.online && (
+                  <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-white bg-green-500" />
                 )}
               </span>
               <div className="min-w-0 flex-1">

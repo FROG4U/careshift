@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { conversationTitle } from "@/lib/chat";
+import { isOnline, presenceLabel } from "@/lib/presence";
 import {
   Thread,
   type ChatMessage,
@@ -31,6 +32,7 @@ export default async function WorkerThreadPage({
               id: true,
               name: true,
               phone: true,
+              lastSeenAt: true,
               staff: { select: { phone: true } },
             },
           },
@@ -82,6 +84,8 @@ export default async function WorkerThreadPage({
   const callNumber = other
     ? other.user.phone ?? other.user.staff?.phone ?? null
     : null;
+  const online = other ? isOnline(other.user.lastSeenAt) : false;
+  const presence = other ? presenceLabel(other.user.lastSeenAt) : null;
 
   return (
     <Thread
@@ -94,6 +98,8 @@ export default async function WorkerThreadPage({
       messages={messages}
       backHref="/my-shifts/chat"
       callNumber={callNumber}
+      online={online}
+      presence={presence}
     />
   );
 }

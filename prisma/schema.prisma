@@ -238,6 +238,9 @@ model User {
   staffId      String?  @unique // set when this account is a support worker
   staff        Staff?   @relation(fields: [staffId], references: [id], onDelete: SetNull)
   createdAt    DateTime @default(now())
+  /// Last time this user was active in the app (heartbeat while open) — drives
+  /// the "Online" presence dot in chat. Online = seen within ~2 minutes.
+  lastSeenAt   DateTime?
 
   notifications Notification[]
   chatMemberships ConversationMember[]

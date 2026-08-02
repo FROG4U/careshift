@@ -53,6 +53,8 @@ export function Thread({
   messages,
   backHref,
   callNumber,
+  online,
+  presence,
 }: {
   conversationId: string;
   title: string;
@@ -65,6 +67,9 @@ export function Thread({
   backHref?: string;
   /** The other person's phone (DMs only) — shows a tap-to-call button. */
   callNumber?: string | null;
+  /** Presence (DMs only): whether the other person is online + a status label. */
+  online?: boolean;
+  presence?: string | null;
 }) {
   const router = useRouter();
   const [text, setText] = useState("");
@@ -141,22 +146,34 @@ export function Thread({
             arrow_back_ios
           </span>
         </Link>
-        <span
-          className={`flex h-9 w-9 items-center justify-center rounded-full text-xs font-bold text-white ${
-            isGroup ? "bg-violet-500" : "bg-[var(--brand)]"
-          }`}
-        >
-          {isGroup ? (
-            <span className="material-symbols-rounded text-[18px]">group</span>
-          ) : (
-            initials(...(title.split(" ") as [string, string]))
+        <span className="relative shrink-0">
+          <span
+            className={`flex h-9 w-9 items-center justify-center rounded-full text-xs font-bold text-white ${
+              isGroup ? "bg-violet-500" : "bg-[var(--brand)]"
+            }`}
+          >
+            {isGroup ? (
+              <span className="material-symbols-rounded text-[18px]">group</span>
+            ) : (
+              initials(...(title.split(" ") as [string, string]))
+            )}
+          </span>
+          {!isGroup && online && (
+            <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white bg-green-500" />
           )}
         </span>
         <div className="leading-tight">
           <div className="font-semibold text-[var(--text-primary)]">{title}</div>
-          {isGroup && (
+          {isGroup ? (
             <div className="text-xs text-[var(--text-muted)]">{memberCount} people</div>
-          )}
+          ) : presence ? (
+            <div className="flex items-center gap-1 text-xs">
+              {online && <span className="h-1.5 w-1.5 rounded-full bg-green-500" />}
+              <span className={online ? "font-medium text-green-600" : "text-[var(--text-muted)]"}>
+                {presence}
+              </span>
+            </div>
+          ) : null}
         </div>
         {!isGroup && callNumber && (
           <a

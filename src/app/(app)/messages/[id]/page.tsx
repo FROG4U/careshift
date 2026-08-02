@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { conversationTitle } from "@/lib/chat";
+import { isOnline, presenceLabel } from "@/lib/presence";
 import { Thread, type ChatMessage, type Member } from "./Thread";
 
 export default async function ThreadPage({
@@ -27,6 +28,7 @@ export default async function ThreadPage({
               id: true,
               name: true,
               phone: true,
+              lastSeenAt: true,
               staff: { select: { phone: true } },
             },
           },
@@ -66,6 +68,8 @@ export default async function ThreadPage({
   const callNumber = other
     ? other.user.phone ?? other.user.staff?.phone ?? null
     : null;
+  const online = other ? isOnline(other.user.lastSeenAt) : false;
+  const presence = other ? presenceLabel(other.user.lastSeenAt) : null;
 
   const messages: ChatMessage[] = convo.messages.map((m) => ({
     id: m.id,
@@ -91,6 +95,8 @@ export default async function ThreadPage({
       members={members}
       messages={messages}
       callNumber={callNumber}
+      online={online}
+      presence={presence}
     />
   );
 }

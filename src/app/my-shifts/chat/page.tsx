@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { conversationTitle } from "@/lib/chat";
+import { isOnline } from "@/lib/presence";
 import { initials } from "@/lib/format";
 
 function ago(iso: string) {
@@ -33,7 +34,11 @@ export default async function WorkerChatPage() {
     include: {
       conversation: {
         include: {
-          members: { include: { user: { select: { id: true, name: true } } } },
+          members: {
+            include: {
+              user: { select: { id: true, name: true, lastSeenAt: true } },
+            },
+          },
           messages: {
             orderBy: { createdAt: "desc" },
             take: 1,
@@ -55,9 +60,14 @@ export default async function WorkerChatPage() {
           ...(m.lastReadAt ? { createdAt: { gt: m.lastReadAt } } : {}),
         },
       });
+      const otherMember =
+        c.type === "GROUP"
+          ? null
+          : c.members.find((mm) => mm.user.id !== session.id);
       return {
         id: c.id,
         isGroup: c.type === "GROUP",
+        online: otherMember ? isOnline(otherMember.user.lastSeenAt) : false,
         title: conversationTitle(c, session.id, session.name),
         lastBody: last
           ? last.attachmentUrl && !last.body
@@ -85,17 +95,22 @@ export default async function WorkerChatPage() {
               href={`/my-shifts/chat/${c.id}`}
               className="flex items-center gap-3 border-b border-slate-100 px-4 py-3 transition last:border-0 hover:bg-slate-50"
             >
-              <span
-                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white"
-                style={{
-                  background:
-                    "linear-gradient(135deg, var(--brand), color-mix(in srgb, var(--brand) 55%, #000))",
-                }}
-              >
-                {c.isGroup ? (
-                  <span className="material-symbols-rounded text-[22px]">group</span>
-                ) : (
-                  initials(c.title.split(" ")[0] ?? "", c.title.split(" ")[1] ?? "")
+              <span className="relative shrink-0">
+                <span
+                  className="flex h-12 w-12 items-center justify-center rounded-full text-sm font-bold text-white"
+                  style={{
+                    background:
+                      "linear-gradient(135deg, var(--brand), color-mix(in srgb, var(--brand) 55%, #000))",
+                  }}
+                >
+                  {c.isGroup ? (
+                    <span className="material-symbols-rounded text-[22px]">group</span>
+                  ) : (
+                    initials(c.title.split(" ")[0] ?? "", c.title.split(" ")[1] ?? "")
+                  )}
+                </span>
+                {c.online && (
+                  <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-white bg-green-500" />
                 )}
               </span>
               <div className="min-w-0 flex-1">
