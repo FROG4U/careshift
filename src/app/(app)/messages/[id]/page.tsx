@@ -20,7 +20,18 @@ export default async function ThreadPage({
       members: { some: { userId: session.id } },
     },
     include: {
-      members: { include: { user: { select: { id: true, name: true } } } },
+      members: {
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              phone: true,
+              staff: { select: { phone: true } },
+            },
+          },
+        },
+      },
       messages: {
         orderBy: { createdAt: "asc" },
         include: {
@@ -46,6 +57,16 @@ export default async function ThreadPage({
     name: m.user.name,
   }));
 
+  // For a DM, offer tap-to-call the other person (their login phone, else their
+  // staff record's phone).
+  const other =
+    convo.type === "GROUP"
+      ? null
+      : convo.members.find((m) => m.user.id !== session.id);
+  const callNumber = other
+    ? other.user.phone ?? other.user.staff?.phone ?? null
+    : null;
+
   const messages: ChatMessage[] = convo.messages.map((m) => ({
     id: m.id,
     senderId: m.senderId,
@@ -69,6 +90,7 @@ export default async function ThreadPage({
       meId={session.id}
       members={members}
       messages={messages}
+      callNumber={callNumber}
     />
   );
 }

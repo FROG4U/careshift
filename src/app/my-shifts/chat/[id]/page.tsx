@@ -24,7 +24,18 @@ export default async function WorkerThreadPage({
       members: { some: { userId: session.id } },
     },
     include: {
-      members: { include: { user: { select: { id: true, name: true } } } },
+      members: {
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              phone: true,
+              staff: { select: { phone: true } },
+            },
+          },
+        },
+      },
       messages: {
         orderBy: { createdAt: "asc" },
         include: {
@@ -64,6 +75,14 @@ export default async function WorkerThreadPage({
     likes: m.reactions.map((r) => ({ userId: r.userId, name: r.user.name })),
   }));
 
+  const other =
+    convo.type === "GROUP"
+      ? null
+      : convo.members.find((m) => m.user.id !== session.id);
+  const callNumber = other
+    ? other.user.phone ?? other.user.staff?.phone ?? null
+    : null;
+
   return (
     <Thread
       conversationId={convo.id}
@@ -74,6 +93,7 @@ export default async function WorkerThreadPage({
       members={members}
       messages={messages}
       backHref="/my-shifts/chat"
+      callNumber={callNumber}
     />
   );
 }

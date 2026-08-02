@@ -52,6 +52,7 @@ export function Thread({
   members,
   messages,
   backHref,
+  callNumber,
 }: {
   conversationId: string;
   title: string;
@@ -62,6 +63,8 @@ export function Thread({
   messages: ChatMessage[];
   /** Where the back arrow goes. When set, the arrow always shows (worker app). */
   backHref?: string;
+  /** The other person's phone (DMs only) — shows a tap-to-call button. */
+  callNumber?: string | null;
 }) {
   const router = useRouter();
   const [text, setText] = useState("");
@@ -155,6 +158,16 @@ export function Thread({
             <div className="text-xs text-[var(--text-muted)]">{memberCount} people</div>
           )}
         </div>
+        {!isGroup && callNumber && (
+          <a
+            href={`tel:${callNumber}`}
+            className="ml-auto flex h-9 w-9 items-center justify-center rounded-full text-[var(--brand)] transition hover:bg-[var(--background)]"
+            title={`Call ${title}`}
+            aria-label={`Call ${title}`}
+          >
+            <span className="material-symbols-rounded text-[24px]">call</span>
+          </a>
+        )}
       </header>
 
       {/* Messages */}
@@ -221,8 +234,8 @@ export function Thread({
                   )}
                 </div>
 
-                {/* Hover actions */}
-                <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition group-hover/msg:opacity-100">
+                {/* Actions — always visible on touch, hover-reveal on desktop */}
+                <div className="flex shrink-0 items-center gap-0.5 opacity-70 transition md:opacity-0 md:group-hover/msg:opacity-100">
                   <button
                     onClick={() => {
                       const fd = new FormData();
@@ -250,7 +263,7 @@ export function Thread({
       </div>
 
       {/* Composer */}
-      <div className="border-t border-[var(--border)] bg-white px-3 py-2">
+      <div className="border-t border-[var(--border)] bg-white px-3 pt-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)]">
         {replyTo && (
           <div className="mb-2 flex items-center justify-between rounded-lg bg-[var(--background)] px-3 py-1.5 text-xs">
             <span className="truncate text-[var(--text-secondary)]">
