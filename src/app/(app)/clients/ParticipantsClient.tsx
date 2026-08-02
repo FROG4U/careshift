@@ -454,6 +454,18 @@ export function ParticipantsClient({
                       <span className="material-symbols-rounded text-[16px]">group</span>
                       Team
                     </Link>
+                    {c.phone && (
+                      <a
+                        href={`tel:${c.phone}`}
+                        className="ml-2 align-middle text-[var(--text-muted)] hover:text-[var(--brand)]"
+                        title={`Call ${c.firstName}`}
+                        aria-label={`Call ${c.firstName}`}
+                      >
+                        <span className="material-symbols-rounded text-[18px] align-middle">
+                          call
+                        </span>
+                      </a>
+                    )}
                     <button
                       onClick={() => setEditing(c)}
                       className="ml-2 text-[var(--text-muted)] hover:text-[var(--brand)]"

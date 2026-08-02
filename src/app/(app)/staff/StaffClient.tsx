@@ -228,18 +228,33 @@ export function StaffClient({
                 <td className="px-5 py-3">
                   <div className="flex items-center justify-between gap-2">
                     <ClearanceBadge expiry={s.clearanceExpiry} />
-                    <form action={setStaffArchived} onClick={(e) => e.stopPropagation()}>
-                      <input type="hidden" name="id" value={s.id} />
-                      <input type="hidden" name="archive" value={s.active ? "true" : "false"} />
-                      <button
-                        className="text-[var(--text-muted)] hover:text-amber-600"
-                        title={s.active ? "Archive staff" : "Restore staff"}
-                      >
-                        <span className="material-symbols-rounded text-[18px] align-middle">
-                          {s.active ? "archive" : "unarchive"}
-                        </span>
-                      </button>
-                    </form>
+                    <div className="flex items-center gap-1.5">
+                      {s.phone && (
+                        <a
+                          href={`tel:${s.phone}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="text-[var(--text-muted)] hover:text-[var(--brand)]"
+                          title={`Call ${s.firstName}`}
+                          aria-label={`Call ${s.firstName}`}
+                        >
+                          <span className="material-symbols-rounded text-[18px] align-middle">
+                            call
+                          </span>
+                        </a>
+                      )}
+                      <form action={setStaffArchived} onClick={(e) => e.stopPropagation()}>
+                        <input type="hidden" name="id" value={s.id} />
+                        <input type="hidden" name="archive" value={s.active ? "true" : "false"} />
+                        <button
+                          className="text-[var(--text-muted)] hover:text-amber-600"
+                          title={s.active ? "Archive staff" : "Restore staff"}
+                        >
+                          <span className="material-symbols-rounded text-[18px] align-middle">
+                            {s.active ? "archive" : "unarchive"}
+                          </span>
+                        </button>
+                      </form>
+                    </div>
                   </div>
                 </td>
               </tr>
