@@ -60,7 +60,7 @@ const GROUPS: Group[] = [
   {
     title: "Account",
     items: [
-      { href: "/admins", label: "Admins", icon: "shield_person", badgeKey: "pendingAdmins", superAdminOnly: true },
+      { href: "/admins", label: "Admin", icon: "shield_person", badgeKey: "pendingAdmins", superAdminOnly: true },
       { href: "/settings", label: "Settings", icon: "settings" },
     ],
   },
