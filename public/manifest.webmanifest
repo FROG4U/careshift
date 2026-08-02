@@ -1,0 +1,16 @@
+{
+  "name": "Pristine Care Group",
+  "short_name": "PCG Care",
+  "description": "Shifts, clock-in and timesheets for Pristine Care Group support workers.",
+  "start_url": "/my-shifts",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#003146",
+  "theme_color": "#003146",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

@@ -1,0 +1,743 @@
+// CareShift — multi-tenant NDIS care management platform
+// Database: PostgreSQL (Supabase, Sydney region for NDIS data residency).
+// DATABASE_URL = pooled connection (pgbouncer, :6543) for the app.
+// DIRECT_URL   = direct/session connection (:5432) for migrations & db push.
+// Note: role/status fields are kept as strings (allowed values documented
+// in src/lib/constants.ts) — carried over from the SQLite origin; can be
+// migrated to native Postgres enums later if desired.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+/// A white-label customer of the platform (your company is tenant #1).
+model Tenant {
+  id         String   @id @default(cuid())
+  name       String
+  slug       String   @unique
+  brandColor String   @default("#0F766E") // teal-700
+  /// Secondary / accent brand colour (buttons, highlights). Optional.
+  accentColor String? // e.g. #886949
+  logoUrl    String?
+  /// Company sign-up code. Workers enter this on the public /register page to
+  /// join this tenant (and it identifies which tenant they're joining). Null =
+  /// self sign-up disabled until an admin generates one in Settings.
+  joinCode   String?  @unique
+  createdAt  DateTime @default(now())
+
+  // ── Attendance / reliability thresholds (admin-configurable) ──
+  /// Minutes after the rostered start a worker may clock in and still be
+  /// counted on time (the "green zone").
+  lateGraceMin       Int @default(5)
+  /// Minutes before the rostered end a worker may clock out without it
+  /// counting as finishing early.
+  earlyFinishGraceMin Int @default(5)
+  /// Minutes after the rostered end before a clock-out counts as finishing late.
+  lateFinishGraceMin  Int @default(15)
+  /// Score thresholds: at or above `ratingGreenAt` is green, at or above
+  /// `ratingAmberAt` is amber, below that is red.
+  ratingGreenAt      Int @default(85)
+  ratingAmberAt      Int @default(65)
+  /// Points deducted from the score for each "running late" notice.
+  lateNoticePenalty  Int @default(2)
+
+  // ── Leave & time-off allowances (per year) ──
+  annualLeaveDays  Int     @default(20)
+  sickLeaveDays    Int     @default(10)
+  /// When on, workers see their leave/sick balance on their profile.
+  showLeaveBalance Boolean @default(false)
+
+  users      User[]
+  clients    Client[]
+  staff      Staff[]
+  shifts     Shift[]
+  branches   Branch[]
+  priceLists PriceList[]
+  priceItems PriceItem[]
+  planSlots  PlanSlot[]
+  payLevels  PayLevel[]
+  payRates   PayRate[]
+  carePlans  CarePlan[]
+  careGoals  CareGoal[]
+  notifications Notification[]
+  clientWorkers ClientWorker[]
+  shiftSwaps    ShiftSwap[]
+  payrollPeriods PayrollPeriod[]
+  publicHolidays PublicHoliday[]
+  lateNotices    LateNotice[]
+  conversations  Conversation[]
+  availabilities Availability[]
+}
+
+/// A worker tapping "Running late" on a shift, with their reason. Managers see
+/// these in Attendance; each one nudges the worker's reliability score down.
+model LateNotice {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  shiftId   String
+  shift     Shift    @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  staffId   String
+  staff     Staff    @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  reason    String
+  /// Worker's own estimate of how many minutes late they'll be (optional).
+  etaMin    Int?
+  createdAt DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([staffId])
+  @@index([shiftId])
+}
+
+/// A public holiday. Shifts falling on one are paid at the public-holiday
+/// penalty. Holidays vary by state, so `branchId` can scope one to a single
+/// branch; null means it applies everywhere in the tenant.
+model PublicHoliday {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  /// Local date at midnight.
+  date      DateTime
+  name      String
+  /// State/territory this holiday applies to. Null = national (all states).
+  state     String?
+  branchId  String?
+  createdAt DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([date])
+}
+
+/// Which support workers are approved to work with a participant. Admin
+/// manages this list; only these workers can be rostered to the client and
+/// only they appear as swap candidates for that client's shifts.
+model ClientWorker {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  staffId   String
+  staff     Staff    @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([clientId, staffId])
+  @@index([tenantId])
+  @@index([clientId])
+  @@index([staffId])
+}
+
+/// A worker-initiated request to hand a shift to another worker who is also
+/// allocated to that client. Requires admin approval before the shift moves.
+/// status ∈ PENDING | APPROVED | REJECTED | CANCELLED
+model ShiftSwap {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  shiftId     String
+  shift       Shift    @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  fromStaffId String
+  fromStaff   Staff    @relation("SwapFrom", fields: [fromStaffId], references: [id], onDelete: Cascade)
+  toStaffId   String
+  toStaff     Staff    @relation("SwapTo", fields: [toStaffId], references: [id], onDelete: Cascade)
+  status      String   @default("PENDING")
+  reason      String?
+  decidedBy   String?  // admin/coordinator name, for the audit trail
+  decidedAt   DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([shiftId])
+  @@index([status])
+}
+
+/// An in-app notification for a user (worker or manager). Drives the bell in
+/// the header; not a device push (that can layer on later).
+model Notification {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// SHIFT_PUBLISHED | SHIFT_ACCEPTED | SHIFT_REJECTED | SHIFT_REASSIGNED
+  type      String
+  title     String
+  body      String?
+  shiftId   String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId, read])
+  @@index([tenantId])
+}
+
+/// A physical location / office. Workers and participants belong to a branch,
+/// and the Schedule shows a separate calendar per branch.
+model Branch {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name      String
+  /// Australian state/territory this branch operates in (NSW, VIC, QLD, WA,
+  /// SA, TAS, ACT, NT). Public holidays are matched against it.
+  state     String?
+  createdAt DateTime @default(now())
+
+  staff   Staff[]
+  clients Client[]
+  shifts  Shift[]
+  payrollPeriods PayrollPeriod[]
+
+  @@index([tenantId])
+}
+
+/// A pay run for one branch over a date range. Opening it pulls every worker's
+/// completed shifts in the window and totals hours, mileage and pay so a
+/// manager can review and approve the run. Managers only — never workers.
+/// status ∈ DRAFT | APPROVED
+model PayrollPeriod {
+  id         String    @id @default(cuid())
+  tenantId   String
+  tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  branchId   String?
+  branch     Branch?   @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  startDate  DateTime
+  endDate    DateTime
+  status     String    @default("DRAFT")
+  approvedBy String?
+  approvedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([tenantId])
+  @@index([branchId])
+}
+
+/// A login account. role ∈ ADMIN | COORDINATOR | WORKER.
+model User {
+  id           String   @id @default(cuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  email        String
+  passwordHash String
+  name         String
+  role         String   @default("WORKER")
+  /// Account approval state ∈ PENDING | APPROVED | REJECTED. Self-registered
+  /// workers start PENDING and can only see the "awaiting approval" screen
+  /// until an admin approves them. Seeded/admin-created users are APPROVED.
+  status       String   @default("APPROVED")
+  /// Optional contact phone captured at self-registration (before a Staff
+  /// record's own phone is set).
+  phone        String?
+  staffId      String?  @unique // set when this account is a support worker
+  staff        Staff?   @relation(fields: [staffId], references: [id], onDelete: SetNull)
+  createdAt    DateTime @default(now())
+
+  notifications Notification[]
+  chatMemberships ConversationMember[]
+  messages      Message[]
+  reactions     MessageReaction[]
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+}
+
+/// A chat thread: a one-to-one DM or a named group. Members are login users
+/// (workers and managers).
+model Conversation {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  /// DIRECT | GROUP
+  type        String   @default("DIRECT")
+  name        String?  // group name (DMs derive their title from the members)
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) // bumped on each new message, for sorting
+
+  members  ConversationMember[]
+  messages Message[]
+
+  @@index([tenantId])
+}
+
+model ConversationMember {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Last time this member opened the thread — drives unread counts.
+  lastReadAt     DateTime?
+  createdAt      DateTime     @default(now())
+
+  @@unique([conversationId, userId])
+  @@index([userId])
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  tenantId       String
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String
+  sender         User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  body           String
+  /// Reply-to another message (threaded quote).
+  parentId       String?
+  parent         Message?     @relation("MessageReply", fields: [parentId], references: [id], onDelete: SetNull)
+  replies        Message[]    @relation("MessageReply")
+  /// Optional image/file attachment.
+  attachmentUrl  String?
+  attachmentType String?      // e.g. "image"
+  createdAt      DateTime     @default(now())
+
+  reactions MessageReaction[]
+
+  @@index([conversationId])
+  @@index([tenantId])
+}
+
+model MessageReaction {
+  id        String   @id @default(cuid())
+  messageId String
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emoji     String   @default("❤️")
+  createdAt DateTime @default(now())
+
+  @@unique([messageId, userId, emoji])
+  @@index([messageId])
+}
+
+/// A participant / client receiving support.
+model Client {
+  id         String    @id @default(cuid())
+  tenantId   String
+  tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  firstName  String
+  lastName   String
+  /// Funding agreement type ∈ NDIS | AGED_CARE | DVA. Drives which price
+  /// list applies and how participants are grouped/filtered.
+  agreementType String @default("NDIS")
+  ndisNumber String?
+  planStart  DateTime?
+  planEnd    DateTime?
+  budget     Float?
+  /// Agreed support hours per week from the participant's service
+  /// agreement. The roster cannot exceed this without manager authorisation.
+  weeklyHours Float?
+  address    String?
+  phone      String?
+  email      String?
+  notes      String?
+
+  // Clock-in location + geofence. Workers may only clock in/out within
+  // `geofenceFt` feet of (lat,lng). Admin sets these on the participant card.
+  lat        Float?
+  lng        Float?
+  geofenceFt Int      @default(150)
+
+  active     Boolean   @default(true)
+  createdAt  DateTime  @default(now())
+
+  // Home branch / location this participant is served from.
+  branchId String?
+  branch   Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
+
+  shifts    Shift[]
+  planSlots PlanSlot[]
+  carePlan  CarePlan?
+  careGoals CareGoal[]
+  workers   ClientWorker[]
+
+  @@index([tenantId])
+  @@index([branchId])
+}
+
+/// A participant's care plan — the narrative support document (one per client).
+model CarePlan {
+  id                String   @id @default(cuid())
+  tenantId          String
+  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  clientId          String   @unique
+  client            Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  summary           String? // About the participant / overview
+  supportNeeds      String? // Daily support needs & how to assist
+  medicalConditions String?
+  medications       String?
+  allergies         String?
+  risks             String? // Risks & how to manage them
+  preferences       String? // Routines, likes/dislikes, communication
+  emergencyName     String?
+  emergencyPhone    String?
+  emergencyRelation String?
+
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  @@index([tenantId])
+}
+
+/// A single goal on a participant's care plan.
+model CareGoal {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  title     String
+  detail    String?
+  achieved  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([clientId])
+}
+
+/// A named collection of priced support items. One per funding stream
+/// (NDIS / Aged Care / DVA); NDIS lists are seeded from the price guide,
+/// Aged Care & DVA lists are created with custom names by the provider.
+model PriceList {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name      String
+  /// ∈ NDIS | AGED_CARE | DVA
+  type      String
+  /// True for the canonical seeded NDIS list (informational only).
+  seeded    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  items PriceItem[]
+
+  @@index([tenantId])
+}
+
+/// A single priced line item within a price list (e.g. an NDIS support item).
+model PriceItem {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  priceListId String
+  priceList   PriceList @relation(fields: [priceListId], references: [id], onDelete: Cascade)
+  /// Support item number (NDIS) or custom code; optional for custom lists.
+  code        String?
+  name        String
+  /// Billing unit, e.g. "hour", "each", "km", "day".
+  unit        String   @default("hour")
+  price       Float
+  category    String?
+  createdAt   DateTime @default(now())
+
+  planSlots PlanSlot[]
+  shifts    Shift[]
+
+  @@index([tenantId])
+  @@index([priceListId])
+}
+
+/// A recurring weekly schedule slot for a participant. Multiple slots can
+/// share a dayOfWeek (e.g. a morning and an afternoon visit). These form the
+/// template used to generate the roster each week.
+model PlanSlot {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  clientId    String
+  client      Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  /// 0 = Monday … 6 = Sunday.
+  dayOfWeek   Int
+  startTime   String   // "HH:MM"
+  endTime     String   // "HH:MM"
+  /// The rate applied to this visit, from the participant's price list.
+  priceItemId String?
+  priceItem   PriceItem? @relation(fields: [priceItemId], references: [id], onDelete: SetNull)
+  mileageKm   Float?
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([clientId])
+}
+
+/// A support worker / carer.
+model Staff {
+  id              String    @id @default(cuid())
+  tenantId        String
+  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  firstName       String
+  lastName        String
+  email           String?
+  phone           String?
+  title           String?   // e.g. "Support Worker", "Registered Nurse"
+  /// Small, worker-uploaded profile photo, stored as a compressed JPEG data URL.
+  photoUrl        String?
+  clearanceType   String?   // e.g. "NDIS Worker Screening", "WWCC", "Police Check"
+  clearanceExpiry DateTime? // drives compliance/expiry alerts
+  active          Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+
+  // Employment basis ∈ PERMANENT | CASUAL. Casual adds the casual loading
+  // on top of the pay level's (permanent base) rates.
+  employmentType String @default("PERMANENT")
+
+  // Latest known device location — pinged by the worker app only while they
+  // have a live/imminent shift, so the office can see where a late worker is.
+  // (Location tracking needs the worker's consent under privacy/surveillance law.)
+  lastLat    Float?
+  lastLng    Float?
+  lastSeenAt DateTime?
+
+  // Home branch / location this worker comes from.
+  branchId String?
+  branch   Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
+
+  // Award pay level — drives the worker's hourly rates per stream.
+  payLevelId String?
+  payLevel   PayLevel? @relation(fields: [payLevelId], references: [id], onDelete: SetNull)
+
+  // Optional manual overrides ($/hr). When set, they win over the pay level;
+  // otherwise rates are pulled automatically from the selected level.
+  rateNdis      Float?
+  rateAgedCare  Float?
+  rateDva       Float?
+  rateCleaning  Float?
+
+  user        User?
+  shifts      Shift[]
+  allocations ClientWorker[]
+  swapsFrom   ShiftSwap[] @relation("SwapFrom")
+  swapsTo     ShiftSwap[] @relation("SwapTo")
+  lateNotices LateNotice[]
+  availabilities Availability[]
+
+  @@index([tenantId])
+  @@index([branchId])
+}
+
+/// Worker-declared unavailability (time off). Once APPROVED the office should
+/// not roster the worker in this window — the schedule flags a clash.
+model Availability {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  staffId   String
+  staff     Staff    @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  startDate DateTime // first day off (local midnight)
+  endDate   DateTime // last day off (inclusive) — same as startDate for one day
+  allDay    Boolean  @default(true)
+  startTime String?  // "HH:MM" when !allDay (single-day time range)
+  endTime   String?  // "HH:MM"
+  /// Which allowance this counts against ∈ ANNUAL | SICK | OTHER.
+  leaveType String   @default("ANNUAL")
+  reason    String?
+  status    String   @default("PENDING") // PENDING | APPROVED | REJECTED
+  decidedBy String?
+  createdAt DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([staffId])
+}
+
+/// A worker award pay level (e.g. "SCHADS L2.3"). One level holds a grid of
+/// rates: one per service stream × day-type band (see PayRate), plus a single
+/// mileage allowance. Staff only pick their level.
+/// Seeded with representative SCHADS-style rates — verify before payroll.
+model PayLevel {
+  id          String  @id @default(cuid())
+  tenantId    String
+  tenant      Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name        String
+  award       String? // e.g. "SCHADS", "Aged Care Award"
+  mileageRate Float   @default(0) // $ per km
+  sortOrder   Int     @default(0)
+  seeded      Boolean @default(false)
+  createdAt   DateTime @default(now())
+
+  rates PayRate[]
+  staff Staff[]
+
+  @@index([tenantId])
+}
+
+/// One hourly rate cell within a pay level: a specific stream + day-type.
+/// stream ∈ NDIS | AGED_CARE | DVA | CLEANING
+/// dayType ∈ WEEKDAY | WEEKDAY_EVENING | SATURDAY | SUNDAY | PUBLIC_HOLIDAY
+model PayRate {
+  id         String   @id @default(cuid())
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  payLevelId String
+  payLevel   PayLevel @relation(fields: [payLevelId], references: [id], onDelete: Cascade)
+  stream     String
+  dayType    String
+  rate       Float    @default(0)
+
+  @@unique([payLevelId, stream, dayType])
+  @@index([tenantId])
+  @@index([payLevelId])
+}
+
+/// A scheduled visit. status ∈ SCHEDULED | IN_PROGRESS | COMPLETED | CANCELLED.
+/// approval ∈ PENDING | APPROVED | REJECTED (for the timesheet workflow).
+model Shift {
+  id       String   @id @default(cuid())
+  tenantId String
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  clientId String
+  client   Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  staffId  String?
+  staff    Staff?   @relation(fields: [staffId], references: [id], onDelete: SetNull)
+
+  // Which branch calendar this shift belongs to (defaults from participant/worker).
+  branchId String?
+  branch   Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
+
+  start  DateTime
+  end    DateTime
+  status String   @default("SCHEDULED")
+  notes  String?
+
+  // Rate (from a price list) and travel applied to this visit.
+  priceItemId String?
+  priceItem   PriceItem? @relation(fields: [priceItemId], references: [id], onDelete: SetNull)
+  mileageKm   Float?
+
+  // Shift location for GPS geofenced clock-in
+  address String?
+  lat     Float?
+  lng     Float?
+
+  // Clock in/out (populated from the worker mobile web app)
+  clockInAt   DateTime?
+  clockInLat  Float?
+  clockInLng  Float?
+  clockOutAt  DateTime?
+  clockOutLat Float?
+  clockOutLng Float?
+
+  // Break tracking — one row per pause; net worked time excludes these.
+  pauses     ShiftPause[]
+  // Transport trips (e.g. taking the participant to the doctor/shops).
+  transports Transport[]
+
+  // Publish / acceptance lifecycle.
+  // publishState ∈ DRAFT | PUBLISHED | ACCEPTED | REJECTED
+  //   DRAFT     – created by admin, not yet sent to the worker
+  //   PUBLISHED – sent to the worker, awaiting their response
+  //   ACCEPTED  – worker accepted the shift
+  //   REJECTED  – worker declined (see rejectionReason); admin reassigns
+  publishState    String    @default("DRAFT")
+  rejectionReason String?
+  publishedAt     DateTime?
+  respondedAt     DateTime?
+
+  // Live-tracking alerts (set once when fired, so reminders don't repeat).
+  lateAlertedAt    DateTime? // worker hadn't clocked in past the grace window
+  overrunAlertedAt DateTime? // still clocked in after the shift ended
+
+  // Timesheet approval
+  approval     String  @default("PENDING")
+  progressNote String?
+
+  // Set true when this shift was rostered beyond the participant's agreed
+  // weekly hours and a manager authorised the overrun. `authorisedBy` records
+  // the manager's name for the audit trail.
+  overAgreement Boolean @default(false)
+  authorisedBy  String?
+
+  createdAt DateTime @default(now())
+
+  swaps       ShiftSwap[]
+  lateNotices LateNotice[]
+
+  @@index([tenantId])
+  @@index([staffId])
+  @@index([clientId])
+  @@index([priceItemId])
+  @@index([branchId])
+}
+
+/// A break within a shift. Open while `endAt` is null (worker on break).
+/// Net worked hours = (clockOut − clockIn) − Σ break durations.
+model ShiftPause {
+  id      String    @id @default(cuid())
+  shiftId String
+  shift   Shift     @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  startAt DateTime  @default(now())
+  endAt   DateTime?
+
+  @@index([shiftId])
+}
+
+/// A transport trip during a shift (participant transport, e.g. to the doctor
+/// or shops). Distance is tracked automatically: while the trip is open, the
+/// worker's phone pings its GPS periodically and `km` accumulates the distance
+/// between consecutive points. `lastLat/lastLng` hold the previous ping so the
+/// next delta can be computed. Open while `endAt` is null.
+model Transport {
+  id       String    @id @default(cuid())
+  shiftId  String
+  shift    Shift     @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  purpose  String? // e.g. "Doctor", "Shops"
+  startAt  DateTime  @default(now())
+  endAt    DateTime?
+  km       Float     @default(0)
+
+  startLat Float?
+  startLng Float?
+  lastLat  Float?
+  lastLng  Float?
+  endLat   Float?
+  endLng   Float?
+
+  // The GPS trail of the trip, so the route can be drawn on a map.
+  points TransportPoint[]
+  speedEvents SpeedEvent[]
+
+  @@index([shiftId])
+}
+
+/// One GPS sample along a transport trip (builds the route polyline).
+model TransportPoint {
+  id          String    @id @default(cuid())
+  transportId String
+  transport   Transport @relation(fields: [transportId], references: [id], onDelete: Cascade)
+  lat         Float
+  lng         Float
+  /// Speed at this point in km/h (from the device GPS, or computed from the
+  /// previous point when the device doesn't report speed).
+  speedKmh    Float?
+  at          DateTime  @default(now())
+
+  @@index([transportId])
+}
+
+/// A recorded instance of a worker driving over the street speed limit during
+/// a trip. We only store EVENTS (over the limit) — normal driving isn't kept.
+/// Limits come from OpenStreetMap (best-effort); roads with no limit data are
+/// never flagged. For admin safety review on the shift record.
+model SpeedEvent {
+  id          String    @id @default(cuid())
+  tenantId    String
+  transportId String
+  transport   Transport @relation(fields: [transportId], references: [id], onDelete: Cascade)
+  at          DateTime
+  lat         Float
+  lng         Float
+  speedKmh    Float
+  limitKmh    Int
+  overByKmh   Float
+  roadName    String?
+
+  @@index([tenantId])
+  @@index([transportId])
+}

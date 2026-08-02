@@ -1,26 +1,71 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Plan Partners-inspired warm palette */
+  --background: #faf8f5;           /* warm parchment */
+  --foreground: #1c1917;           /* warm near-black */
+  --brand: #2563a8;                /* overridden per-tenant at runtime */
+
+  /* Surfaces */
+  --surface: #ffffff;
+  --surface-warm: #fef9f0;
+  --border: #e8e2d9;
+
+  /* Pastel accents */
+  --pastel-blue:   #dbeafe;
+  --pastel-green:  #dcfce7;
+  --pastel-yellow: #fef9c3;
+  --pastel-rose:   #ffe4e6;
+
+  /* Text hierarchy */
+  --text-primary:   #1c1917;
+  --text-secondary: #78716c;
+  --text-muted:     #a8a29e;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-brand: var(--brand);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.card-hover {
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+.card-hover:hover {
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
+  transform: translateY(-1px);
+}
+
+/* Print / Save-as-PDF for the payroll report */
+@media print {
+  /* Hide the app chrome (sidebar, header bar) so only the report prints. */
+  aside,
+  main > header,
+  .no-print {
+    display: none !important;
+  }
+  main {
+    overflow: visible !important;
+  }
+  .print-report {
+    max-width: none !important;
+    padding: 0 !important;
+  }
+  /* Keep worker rows from splitting across pages. */
+  tr {
+    break-inside: avoid;
+  }
+  @page {
+    margin: 14mm;
+  }
 }
