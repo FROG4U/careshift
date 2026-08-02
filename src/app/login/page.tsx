@@ -40,7 +40,6 @@ export default function LoginPage() {
                 type="email"
                 required
                 autoComplete="email"
-                defaultValue="admin@careshift.test"
                 className="rounded-xl border border-[var(--border)] bg-[var(--background)] px-3.5 py-2.5 text-sm outline-none transition focus:border-[var(--brand)] focus:ring-2 focus:ring-blue-100"
               />
             </label>
@@ -52,7 +51,6 @@ export default function LoginPage() {
                 type="password"
                 required
                 autoComplete="current-password"
-                defaultValue="password123"
                 className="rounded-xl border border-[var(--border)] bg-[var(--background)] px-3.5 py-2.5 text-sm outline-none transition focus:border-[var(--brand)] focus:ring-2 focus:ring-blue-100"
               />
             </label>
@@ -80,15 +78,6 @@ export default function LoginPage() {
             </a>
           </p>
 
-          {/* Demo credentials */}
-          <div className="mt-5 rounded-2xl bg-[var(--background)] p-4">
-            <p className="text-xs font-bold text-[var(--text-secondary)] mb-2">Demo credentials</p>
-            <div className="space-y-0.5 text-xs text-[var(--text-muted)]">
-              <p><span className="font-medium text-[var(--text-secondary)]">Admin:</span> admin@careshift.test</p>
-              <p><span className="font-medium text-[var(--text-secondary)]">Worker:</span> bianca@careshift.test</p>
-              <p><span className="font-medium text-[var(--text-secondary)]">Password:</span> password123</p>
-            </div>
-          </div>
         </div>
 
         <p className="mt-6 text-center text-xs text-[var(--text-muted)]">

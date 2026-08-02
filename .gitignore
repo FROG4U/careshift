@@ -37,6 +37,7 @@ yarn-error.log*
 *.db
 *.db-journal
 prisma/setup-pcg.mjs
+prisma/add-admin.mjs
 
 # Passenger restart trigger
 /tmp
