@@ -4,7 +4,14 @@ import { prisma } from "@/lib/prisma";
 import { isSuperAdmin } from "@/lib/roles";
 import { loadPricedShifts, groupTotals } from "@/lib/salesData";
 import { aud, aud2 } from "@/lib/billing";
-import { parsePeriod, periodLabel, rangeFor, type PeriodKind } from "@/lib/period";
+import {
+  parsePeriod,
+  parseRange,
+  periodLabel,
+  rangeFor,
+  rangeLabel,
+  type PeriodKind,
+} from "@/lib/period";
 import { AutoPrint } from "../payroll-doc/[id]/AutoPrint";
 
 export const dynamic = "force-dynamic";
@@ -16,7 +23,14 @@ export const dynamic = "force-dynamic";
 export default async function SalesDoc({
   searchParams,
 }: {
-  searchParams: Promise<{ period?: string; offset?: string; client?: string }>;
+  searchParams: Promise<{
+    period?: string;
+    offset?: string;
+    client?: string;
+    branch?: string;
+    from?: string;
+    to?: string;
+  }>;
 }) {
   // These standalone doc pages sit outside the (app) layout, so a thrown
   // "Not authenticated" would surface as a 500 rather than a login prompt.
@@ -29,14 +43,22 @@ export default async function SalesDoc({
   const period: PeriodKind = parsePeriod(sp.period);
   const offset = Math.max(0, Math.min(24, Number(sp.offset ?? 0) || 0));
   const clientId = sp.client || undefined;
-  const { from, to } = rangeFor(period, offset);
+  const branchId = sp.branch || undefined;
+  const custom = parseRange(sp.from, sp.to);
+  const { from, to } = custom ?? rangeFor(period, offset);
 
-  const [{ shifts, totals }, client] = await Promise.all([
-    loadPricedShifts({ tenantId: tenant.id, from, to, clientId }),
+  const [{ shifts, totals }, client, branch] = await Promise.all([
+    loadPricedShifts({ tenantId: tenant.id, from, to, clientId, branchId }),
     clientId
       ? prisma.client.findFirst({
           where: { id: clientId, tenantId: tenant.id },
           select: { firstName: true, lastName: true, agreementType: true },
+        })
+      : Promise.resolve(null),
+    branchId
+      ? prisma.branch.findFirst({
+          where: { id: branchId, tenantId: tenant.id },
+          select: { name: true },
         })
       : Promise.resolve(null),
   ]);
@@ -107,13 +129,14 @@ export default async function SalesDoc({
 
       <div className="mb-5">
         <h1 className="text-2xl font-bold tracking-tight">
-          {periodLabel(period, from, to)}
+          {custom ? rangeLabel(from, to) : periodLabel(period, from, to)}
         </h1>
         <p className="text-sm text-slate-600">
           {client
             ? `${client.firstName} ${client.lastName} · ${client.agreementType}`
             : "All participants"}{" "}
-          · {totals.shifts} completed shift{totals.shifts === 1 ? "" : "s"} ·{" "}
+          · {branch ? `${branch.name} branch` : "All branches"} ·{" "}
+          {totals.shifts} completed shift{totals.shifts === 1 ? "" : "s"} ·{" "}
           {totals.hours.toFixed(1)} hours
         </p>
       </div>

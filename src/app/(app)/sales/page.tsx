@@ -6,10 +6,13 @@ import { isSuperAdmin } from "@/lib/roles";
 import { loadPricedShifts, groupTotals } from "@/lib/salesData";
 import { aud, emptyTotals, addMargin, type MarginTotals } from "@/lib/billing";
 import {
+  autoBuckets,
   bucketsFor,
   parsePeriod,
+  parseRange,
   periodLabel,
   rangeFor,
+  rangeLabel,
   type PeriodKind,
 } from "@/lib/period";
 
@@ -25,7 +28,14 @@ export const dynamic = "force-dynamic";
 export default async function SalesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ period?: string; offset?: string; client?: string }>;
+  searchParams: Promise<{
+    period?: string;
+    offset?: string;
+    client?: string;
+    branch?: string;
+    from?: string;
+    to?: string;
+  }>;
 }) {
   const { tenant, session } = await requireTenant();
   if (!isSuperAdmin(session.role)) redirect("/dashboard");
@@ -34,21 +44,33 @@ export default async function SalesPage({
   const period: PeriodKind = parsePeriod(sp.period);
   const offset = Math.max(0, Math.min(24, Number(sp.offset ?? 0) || 0));
   const clientId = sp.client || undefined;
-  const { from, to } = rangeFor(period, offset);
+  const branchId = sp.branch || undefined;
 
-  const [{ shifts, totals }, clients] = await Promise.all([
-    loadPricedShifts({ tenantId: tenant.id, from, to, clientId }),
+  // A typed from/to wins over the week/month/year presets.
+  const custom = parseRange(sp.from, sp.to);
+  const { from, to } = custom ?? rangeFor(period, offset);
+
+  const [{ shifts, totals }, clients, branches] = await Promise.all([
+    loadPricedShifts({ tenantId: tenant.id, from, to, clientId, branchId }),
     prisma.client.findMany({
       where: { tenantId: tenant.id },
       select: { id: true, firstName: true, lastName: true },
       orderBy: { firstName: "asc" },
+    }),
+    prisma.branch.findMany({
+      where: { tenantId: tenant.id },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
     }),
   ]);
 
   const superPct = Math.round(tenant.superRate * 100);
 
   // ── chart buckets ──
-  const buckets = bucketsFor(period, from, to).map((b) => {
+  const bucketDefs = custom
+    ? autoBuckets(from, to)
+    : bucketsFor(period, from, to);
+  const buckets = bucketDefs.map((b) => {
     let t = emptyTotals();
     for (const s of shifts) {
       if (s.start >= b.from && s.start <= b.to) t = addMargin(t, s.margin);
@@ -69,10 +91,20 @@ export default async function SalesPage({
 
   const qs = (over: Record<string, string | number | undefined>) => {
     const p = new URLSearchParams();
-    p.set("period", String(over.period ?? period));
-    if ((over.offset ?? offset) !== 0) p.set("offset", String(over.offset ?? offset));
+    // Choosing a preset clears any custom range, and vice versa.
+    const usingCustom = over.custom === "keep" && custom;
+    if (usingCustom) {
+      p.set("from", sp.from!);
+      p.set("to", sp.to!);
+    } else {
+      p.set("period", String(over.period ?? period));
+      if ((over.offset ?? offset) !== 0)
+        p.set("offset", String(over.offset ?? offset));
+    }
     const c = over.client === "" ? undefined : (over.client ?? clientId);
     if (c) p.set("client", String(c));
+    const b = over.branch === "" ? undefined : (over.branch ?? branchId);
+    if (b) p.set("branch", String(b));
     return `?${p.toString()}`;
   };
 
@@ -132,11 +164,12 @@ export default async function SalesPage({
             Sales &amp; Profit
           </h1>
           <p className="text-sm text-[var(--text-secondary)]">
-            {periodLabel(period, from, to)} · cost includes {superPct}% super
+            {custom ? rangeLabel(from, to) : periodLabel(period, from, to)} ·
+            cost includes {superPct}% super
           </p>
         </div>
         <a
-          href={`/sales-doc${qs({})}`}
+          href={`/sales-doc${qs({ custom: "keep" })}`}
           target="_blank"
           rel="noreferrer"
           className="flex items-center gap-2 rounded-xl bg-[var(--brand)] px-4 py-2.5 text-sm font-semibold text-white shadow-sm"
@@ -146,57 +179,124 @@ export default async function SalesPage({
         </a>
       </header>
 
-      {/* Period + client filters */}
-      <div className="mb-5 flex flex-wrap items-center gap-2">
-        {(["week", "month", "year"] as PeriodKind[]).map((p) => (
-          <Link
-            key={p}
-            href={qs({ period: p, offset: 0 })}
-            className={`rounded-full px-3.5 py-1.5 text-sm font-semibold transition ${
-              period === p
-                ? "bg-[var(--brand)] text-white"
-                : "bg-white text-[var(--text-secondary)] hover:bg-[var(--background)]"
-            }`}
-          >
-            {p === "week" ? "Weekly" : p === "month" ? "Monthly" : "Yearly"}
-          </Link>
-        ))}
+      {/* Filters */}
+      <div className="mb-5 space-y-3">
+        {/* Presets + step back/forward */}
+        <div className="flex flex-wrap items-center gap-2">
+          {(["week", "month", "year"] as PeriodKind[]).map((p) => (
+            <Link
+              key={p}
+              href={qs({ period: p, offset: 0 })}
+              className={`rounded-full px-3.5 py-1.5 text-sm font-semibold transition ${
+                !custom && period === p
+                  ? "bg-[var(--brand)] text-white"
+                  : "bg-white text-[var(--text-secondary)] hover:bg-[var(--background)]"
+              }`}
+            >
+              {p === "week" ? "Weekly" : p === "month" ? "Monthly" : "Yearly"}
+            </Link>
+          ))}
 
-        <span className="mx-1 h-5 w-px bg-[var(--border)]" />
+          {!custom && (
+            <>
+              <span className="mx-1 h-5 w-px bg-[var(--border)]" />
+              <Link
+                href={qs({ offset: offset + 1 })}
+                className="rounded-full bg-white px-3 py-1.5 text-sm font-semibold text-[var(--text-secondary)]"
+              >
+                ← Previous
+              </Link>
+              {offset > 0 && (
+                <Link
+                  href={qs({ offset: offset - 1 })}
+                  className="rounded-full bg-white px-3 py-1.5 text-sm font-semibold text-[var(--text-secondary)]"
+                >
+                  Next →
+                </Link>
+              )}
+            </>
+          )}
 
-        <Link
-          href={qs({ offset: offset + 1 })}
-          className="rounded-full bg-white px-3 py-1.5 text-sm font-semibold text-[var(--text-secondary)]"
+          {custom && (
+            <>
+              <span className="rounded-full bg-[var(--brand)] px-3.5 py-1.5 text-sm font-semibold text-white">
+                {rangeLabel(from, to)}
+              </span>
+              <Link
+                href={qs({ period: "month", offset: 0 })}
+                className="rounded-full bg-white px-3 py-1.5 text-sm font-semibold text-[var(--text-secondary)]"
+              >
+                Clear dates
+              </Link>
+            </>
+          )}
+        </div>
+
+        {/* Custom range + participant + branch */}
+        <form
+          method="get"
+          className="flex flex-wrap items-end gap-2 rounded-2xl border border-[var(--border)] bg-white p-3"
         >
-          ← Previous
-        </Link>
-        {offset > 0 && (
-          <Link
-            href={qs({ offset: offset - 1 })}
-            className="rounded-full bg-white px-3 py-1.5 text-sm font-semibold text-[var(--text-secondary)]"
-          >
-            Next →
-          </Link>
-        )}
+          <label className="text-xs font-semibold text-[var(--text-secondary)]">
+            From
+            <input
+              type="date"
+              name="from"
+              defaultValue={sp.from ?? ""}
+              className="mt-1 block rounded-xl border border-[var(--border)] px-3 py-2 text-sm"
+            />
+          </label>
+          <label className="text-xs font-semibold text-[var(--text-secondary)]">
+            To
+            <input
+              type="date"
+              name="to"
+              defaultValue={sp.to ?? ""}
+              className="mt-1 block rounded-xl border border-[var(--border)] px-3 py-2 text-sm"
+            />
+          </label>
 
-        <span className="mx-1 h-5 w-px bg-[var(--border)]" />
+          <label className="text-xs font-semibold text-[var(--text-secondary)]">
+            Participant
+            <select
+              name="client"
+              defaultValue={clientId ?? ""}
+              className="mt-1 block rounded-xl border border-[var(--border)] px-3 py-2 text-sm"
+            >
+              <option value="">All participants</option>
+              {clients.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.firstName} {c.lastName}
+                </option>
+              ))}
+            </select>
+          </label>
 
-        <form method="get" className="flex items-center gap-2">
-          <input type="hidden" name="period" value={period} />
-          {offset > 0 && <input type="hidden" name="offset" value={offset} />}
-          <select
-            name="client"
-            defaultValue={clientId ?? ""}
-            className="rounded-xl border border-[var(--border)] bg-white px-3 py-2 text-sm"
-          >
-            <option value="">All participants</option>
-            {clients.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.firstName} {c.lastName}
-              </option>
-            ))}
-          </select>
-          <button className="rounded-xl border border-[var(--border)] bg-white px-3 py-2 text-sm font-semibold">
+          {branches.length > 0 && (
+            <label className="text-xs font-semibold text-[var(--text-secondary)]">
+              Branch
+              <select
+                name="branch"
+                defaultValue={branchId ?? ""}
+                className="mt-1 block rounded-xl border border-[var(--border)] px-3 py-2 text-sm"
+              >
+                <option value="">All branches</option>
+                {branches.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+
+          {/* Keep the preset when only the participant/branch changes. */}
+          {!custom && <input type="hidden" name="period" value={period} />}
+          {!custom && offset > 0 && (
+            <input type="hidden" name="offset" value={offset} />
+          )}
+
+          <button className="rounded-xl bg-[var(--brand)] px-4 py-2 text-sm font-semibold text-white">
             Apply
           </button>
         </form>
