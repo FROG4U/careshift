@@ -246,8 +246,31 @@ model User {
   chatMemberships ConversationMember[]
   messages      Message[]
   reactions     MessageReaction[]
+  pushSubscriptions PushSubscription[]
 
   @@unique([tenantId, email])
+  @@index([tenantId])
+}
+
+/// A single browser/device that has opted in to push notifications. One user
+/// can have several (work phone + desktop). Rows are deleted automatically
+/// when the push service reports the subscription as gone (expired, app
+/// uninstalled, notifications turned off).
+model PushSubscription {
+  id         String   @id @default(cuid())
+  tenantId   String
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// The push service URL — unique per device/browser.
+  endpoint   String   @unique
+  /// Encryption keys handed to us by the browser.
+  p256dh     String
+  auth       String
+  userAgent  String?
+  createdAt  DateTime @default(now())
+  lastUsedAt DateTime?
+
+  @@index([userId])
   @@index([tenantId])
 }
 

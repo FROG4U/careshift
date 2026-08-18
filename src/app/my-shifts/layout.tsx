@@ -7,6 +7,7 @@ import { WorkerShell } from "@/components/worker/WorkerShell";
 import { NotesGuard } from "@/components/worker/NotesGuard";
 import { LocationPinger } from "@/components/worker/LocationPinger";
 import { InstallPrompt } from "@/components/InstallPrompt";
+import { PushRegistrar } from "@/components/PushRegistrar";
 import { PresenceHeartbeat } from "@/components/PresenceHeartbeat";
 
 export default async function WorkerLayout({
@@ -83,6 +84,7 @@ export default async function WorkerLayout({
       </WorkerShell>
       <NotesGuard dues={notesDue} />
       <InstallPrompt />
+      <PushRegistrar />
       <PresenceHeartbeat />
     </>
   );

@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "./prisma";
+import { sendPushToUsers } from "./push";
 
 type NotifyInput = {
   tenantId: string;
@@ -7,9 +8,38 @@ type NotifyInput = {
   title: string;
   body?: string | null;
   shiftId?: string | null;
+  /** Where tapping the phone notification should land. Defaults by type. */
+  url?: string;
 };
 
-/** Notify a single user. */
+/**
+ * Where a notification should take you when tapped. Workers land in the
+ * worker app, managers in the admin screens.
+ */
+function urlFor(n: NotifyInput): string {
+  if (n.url) return n.url;
+  switch (n.type) {
+    case "SHIFT_PUBLISHED":
+      return "/my-shifts/pending";
+    case "SHIFT_ACCEPTED":
+    case "SHIFT_REJECTED":
+    case "SHIFT_REASSIGNED":
+      return "/schedule";
+    case "MESSAGE":
+    case "MENTION":
+      return "/messages";
+    case "SWAP_REQUESTED":
+      return "/swaps";
+    case "WORKER_REGISTERED":
+      return "/approvals";
+    case "LEAVE_REQUESTED":
+      return "/leave";
+    default:
+      return "/";
+  }
+}
+
+/** Notify a single user — saved in-app, and pushed to their devices. */
 export async function notifyUser(userId: string, n: NotifyInput) {
   await prisma.notification.create({
     data: {
@@ -20,6 +50,11 @@ export async function notifyUser(userId: string, n: NotifyInput) {
       body: n.body ?? null,
       shiftId: n.shiftId ?? null,
     },
+  });
+  await sendPushToUsers([userId], {
+    title: n.title,
+    body: n.body,
+    url: urlFor(n),
   });
 }
 
@@ -48,6 +83,10 @@ async function notifyRoles(roles: string[], n: NotifyInput) {
       shiftId: n.shiftId ?? null,
     })),
   });
+  await sendPushToUsers(
+    users.map((m) => m.id),
+    { title: n.title, body: n.body, url: urlFor(n) },
+  );
 }
 
 /** Notify every super admin / admin / coordinator in the tenant. */
