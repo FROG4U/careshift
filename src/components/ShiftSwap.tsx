@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { Sheet } from "@/components/ui/Sheet";
 import { requestSwap, cancelSwap } from "@/app/my-shifts/actions";
 
 export type SwapCandidate = { id: string; name: string };
@@ -75,17 +76,9 @@ export function ShiftSwap({
         Request swap
       </button>
 
-      {open && (
-        <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/50 p-0 sm:items-center sm:p-4"
-          onClick={() => setOpen(false)}
-        >
-          <div
-            className="w-full max-w-md rounded-t-3xl bg-white p-5 shadow-xl sm:rounded-3xl"
-            onClick={(e) => e.stopPropagation()}
-          >
+      <Sheet open={open} onClose={() => setOpen(false)} labelledBy="swap-title">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-bold text-slate-900">Request a swap</h2>
+              <h2 id="swap-title" className="text-lg font-bold text-slate-900">Request a swap</h2>
               <button
                 onClick={() => setOpen(false)}
                 className="text-slate-400 hover:text-slate-600"
@@ -141,9 +134,7 @@ export function ShiftSwap({
                 Send request
               </button>
             </form>
-          </div>
-        </div>
-      )}
+      </Sheet>
     </>
   );
 }

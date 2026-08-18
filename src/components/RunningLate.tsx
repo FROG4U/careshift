@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { reportRunningLate } from "@/app/my-shifts/actions";
+import { Sheet } from "@/components/ui/Sheet";
 
 const REASONS = [
   "Traffic / delay",
@@ -43,17 +44,11 @@ export function RunningLate({
         Running late
       </button>
 
-      {open && (
-        <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/50 sm:items-center sm:p-4"
-          onClick={() => setOpen(false)}
-        >
-          <div
-            className="w-full max-w-md rounded-t-3xl bg-white p-5 shadow-xl sm:rounded-3xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-bold text-slate-900">Running late?</h2>
+      <Sheet open={open} onClose={() => setOpen(false)} labelledBy="running-late-title">
+        <div className="mb-4 flex items-center justify-between">
+              <h2 id="running-late-title" className="text-lg font-bold text-slate-900">
+                Running late?
+              </h2>
               <button
                 onClick={() => setOpen(false)}
                 className="text-slate-400 hover:text-slate-600"
@@ -113,10 +108,8 @@ export function RunningLate({
               >
                 Tell the office
               </button>
-            </form>
-          </div>
-        </div>
-      )}
+        </form>
+      </Sheet>
     </>
   );
 }
