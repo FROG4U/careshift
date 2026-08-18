@@ -132,3 +132,68 @@ export const EMPLOYMENT_LABELS: Record<EmploymentType, string> = {
 /// SCHADS casual loading (25%) added on top of a level's rates for casual
 /// staff. Pay levels store permanent base rates; casual = base × (1 + loading).
 export const CASUAL_LOADING = 0.25;
+
+// ── Incident reporting ────────────────────────────────────────────────────
+//
+// The first six are the NDIS Commission's *reportable incidents*: a provider
+// must notify the Commission (24 hours, or 5 business days depending on the
+// category), so choosing one flags the report and warns the worker that it
+// escalates immediately. The rest are recorded in the provider's own register.
+export const INCIDENT_TYPES = [
+  { value: "DEATH", label: "Death of a participant", reportable: true },
+  { value: "SERIOUS_INJURY", label: "Serious injury of a participant", reportable: true },
+  { value: "ABUSE_NEGLECT", label: "Abuse or neglect of a participant", reportable: true },
+  {
+    value: "UNLAWFUL_CONTACT",
+    label: "Unlawful sexual or physical contact, or assault",
+    reportable: true,
+  },
+  {
+    value: "SEXUAL_MISCONDUCT",
+    label: "Sexual misconduct against, or in front of, a participant",
+    reportable: true,
+  },
+  {
+    value: "RESTRICTIVE_PRACTICE",
+    label: "Unauthorised use of a restrictive practice",
+    reportable: true,
+  },
+  { value: "FALL", label: "Fall", reportable: false },
+  { value: "MEDICATION", label: "Medication error", reportable: false },
+  { value: "BEHAVIOUR", label: "Behaviour of concern", reportable: false },
+  { value: "MINOR_INJURY", label: "Minor injury", reportable: false },
+  { value: "ILLNESS", label: "Illness or medical episode", reportable: false },
+  { value: "PROPERTY", label: "Property damage", reportable: false },
+  { value: "NEAR_MISS", label: "Near miss (no harm caused)", reportable: false },
+  { value: "OTHER", label: "Other", reportable: false },
+] as const;
+
+export type IncidentType = (typeof INCIDENT_TYPES)[number]["value"];
+
+/** True when this category must be notified to the NDIS Commission. */
+export function isReportableIncident(type: string): boolean {
+  return INCIDENT_TYPES.some((t) => t.value === type && t.reportable);
+}
+
+export function incidentLabel(type: string): string {
+  return INCIDENT_TYPES.find((t) => t.value === type)?.label ?? type;
+}
+
+export const INCIDENT_SEVERITIES = ["LOW", "MEDIUM", "HIGH", "CRITICAL"] as const;
+export type IncidentSeverity = (typeof INCIDENT_SEVERITIES)[number];
+
+export const INCIDENT_SEVERITY_LABELS: Record<IncidentSeverity, string> = {
+  LOW: "Low — no harm, no follow-up needed",
+  MEDIUM: "Medium — minor harm or follow-up needed",
+  HIGH: "High — significant harm or risk",
+  CRITICAL: "Critical — serious harm or danger to life",
+};
+
+export const INCIDENT_STATUSES = ["SUBMITTED", "UNDER_REVIEW", "CLOSED"] as const;
+export type IncidentStatus = (typeof INCIDENT_STATUSES)[number];
+
+export const INCIDENT_STATUS_LABELS: Record<IncidentStatus, string> = {
+  SUBMITTED: "New",
+  UNDER_REVIEW: "Under review",
+  CLOSED: "Closed",
+};

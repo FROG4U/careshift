@@ -21,5 +21,5 @@ export async function loginAction(
   if (session.status === "PENDING") {
     redirect("/pending");
   }
-  redirect(session.role === "WORKER" ? "/my-shifts" : "/dashboard");
+  redirect(session.role === "WORKER" ? "/my-shifts/profile" : "/dashboard");
 }

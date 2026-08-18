@@ -61,6 +61,18 @@ body {
 .splash-logo { animation: splashPop 0.5s cubic-bezier(0.16, 1, 0.3, 1) both; }
 .splash-text { animation: splashRise 0.5s ease 0.2s both; }
 
+/* iOS Safari zooms the whole page in when you focus a field whose font-size
+   is below 16px — which is every `text-sm` input in the app. Forcing 16px on
+   small screens stops the jump. (Fixing it with maximum-scale on the viewport
+   would also block genuine pinch-zoom, which breaks accessibility.) */
+@media (max-width: 767px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
 .card-hover {
   transition: box-shadow 0.2s ease, transform 0.2s ease;
 }

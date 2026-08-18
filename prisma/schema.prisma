@@ -74,6 +74,7 @@ model Tenant {
   conversations  Conversation[]
   availabilities Availability[]
   adminInvites   AdminInvite[]
+  incidents      Incident[]
 }
 
 /// A worker tapping "Running late" on a shift, with their reason. Managers see
@@ -194,6 +195,7 @@ model Branch {
   clients Client[]
   shifts  Shift[]
   payrollPeriods PayrollPeriod[]
+  incidents Incident[]
 
   @@index([tenantId])
 }
@@ -247,9 +249,85 @@ model User {
   messages      Message[]
   reactions     MessageReaction[]
   pushSubscriptions PushSubscription[]
+  incidentsReported Incident[] @relation("IncidentReporter")
 
   @@unique([tenantId, email])
   @@index([tenantId])
+}
+
+/// An incident report raised by a worker. Field set follows the NDIS Quality
+/// and Safeguards Commission's incident-reporting requirements so a report can
+/// be escalated to the Commission without re-keying it.
+///
+/// `reportable` marks the five-day/24-hour reportable categories (death,
+/// serious injury, abuse or neglect, unlawful sexual or physical contact,
+/// sexual misconduct, unauthorised restrictive practice).
+model Incident {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  /// Who filed it, and (if they're a support worker) their staff record.
+  reportedById String
+  reportedBy   User   @relation("IncidentReporter", fields: [reportedById], references: [id], onDelete: Cascade)
+  staffId      String?
+  staff        Staff? @relation(fields: [staffId], references: [id], onDelete: SetNull)
+
+  /// Participant involved, and the shift it happened on (both optional — an
+  /// incident can involve staff only, or happen outside a rostered shift).
+  clientId String?
+  client   Client? @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  shiftId  String?
+  shift    Shift?  @relation(fields: [shiftId], references: [id], onDelete: SetNull)
+  branchId String?
+  branch   Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
+
+  occurredAt DateTime
+  location   String?
+
+  /// Category — see INCIDENT_TYPES in src/lib/constants.ts.
+  type       String
+  /// LOW | MEDIUM | HIGH | CRITICAL
+  severity   String  @default("MEDIUM")
+  /// True when the category is an NDIS reportable incident.
+  reportable Boolean @default(false)
+
+  description     String
+  immediateAction String?
+  injuries        String?
+  medicalTreatment Boolean @default(false)
+  medicalDetail    String?
+  witnesses        String?
+
+  policeNotified  Boolean @default(false)
+  policeReference String?
+  familyNotified  Boolean @default(false)
+
+  /// SUBMITTED | UNDER_REVIEW | CLOSED
+  status       String    @default("SUBMITTED")
+  reviewNotes  String?
+  reviewedById String?
+  reviewedAt   DateTime?
+
+  createdAt DateTime @default(now())
+
+  photos IncidentPhoto[]
+
+  @@index([tenantId])
+  @@index([staffId])
+  @@index([clientId])
+  @@index([status])
+}
+
+/// A photo attached to an incident report.
+model IncidentPhoto {
+  id         String   @id @default(cuid())
+  incidentId String
+  incident   Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  url        String
+  createdAt  DateTime @default(now())
+
+  @@index([incidentId])
 }
 
 /// A single browser/device that has opted in to push notifications. One user
@@ -383,6 +461,7 @@ model Client {
   carePlan  CarePlan?
   careGoals CareGoal[]
   workers   ClientWorker[]
+  incidents Incident[]
 
   @@index([tenantId])
   @@index([branchId])
@@ -545,6 +624,7 @@ model Staff {
   swapsTo     ShiftSwap[] @relation("SwapTo")
   lateNotices LateNotice[]
   availabilities Availability[]
+  incidents   Incident[]
 
   @@index([tenantId])
   @@index([branchId])
@@ -685,6 +765,7 @@ model Shift {
 
   swaps       ShiftSwap[]
   lateNotices LateNotice[]
+  incidents   Incident[]
 
   @@index([tenantId])
   @@index([staffId])

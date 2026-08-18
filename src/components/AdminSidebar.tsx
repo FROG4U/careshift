@@ -11,6 +11,7 @@ export type SidebarCounts = {
   pendingTimesheets: number;
   pendingApprovals: number;
   pendingAdmins: number;
+  openIncidents: number;
 };
 
 type Item = {
@@ -48,6 +49,7 @@ const GROUPS: Group[] = [
       { href: "/timesheets", label: "Timesheets", icon: "receipt_long", badgeKey: "pendingTimesheets" },
       { href: "/swaps", label: "Shift Swaps", icon: "swap_horiz", badgeKey: "pendingSwaps" },
       { href: "/leave", label: "Availability", icon: "event_busy", badgeKey: "pendingLeave" },
+      { href: "/incidents", label: "Incident Records", icon: "report", badgeKey: "openIncidents", managerOnly: true },
       { href: "/attendance", label: "Attendance", icon: "fact_check", managerOnly: true },
       { href: "/payroll", label: "Payroll Period", icon: "payments", managerOnly: true },
     ],

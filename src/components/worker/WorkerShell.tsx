@@ -16,7 +16,7 @@ type Tab = {
 };
 
 const TABS: Tab[] = [
-  { href: "/my-shifts", label: "Shifts", icon: "punch_clock", match: (p) => p === "/my-shifts" },
+  { href: "/my-shifts", label: "Shifts", icon: "punch_clock", match: (p) => p === "/my-shifts" || p.startsWith("/my-shifts/shift/") },
   { href: "/my-shifts/pending", label: "Pending", icon: "pending_actions", match: (p) => p.startsWith("/my-shifts/pending"), pending: true },
   { href: "/my-shifts/calendar", label: "Calendar", icon: "calendar_month", match: (p) => p.startsWith("/my-shifts/calendar") },
   { href: "/my-shifts/chat", label: "Chat", icon: "chat_bubble", match: (p) => p.startsWith("/my-shifts/chat"), chat: true },
@@ -24,13 +24,15 @@ const TABS: Tab[] = [
 ];
 
 function titleFor(path: string) {
+  if (path.startsWith("/my-shifts/shift/")) return "Shift";
+  if (path.startsWith("/my-shifts/incidents")) return "Incident Report";
   if (path.startsWith("/my-shifts/calendar")) return "My Calendar";
   if (path.startsWith("/my-shifts/availability")) return "My Availability";
   if (path.startsWith("/my-shifts/chat")) return "Chat";
   if (path.startsWith("/my-shifts/completed")) return "Completed Shifts";
   if (path.startsWith("/my-shifts/profile")) return "Profile";
   if (path.startsWith("/my-shifts/summary")) return "My Hours";
-  return "Time Clock";
+  return "My Shifts";
 }
 
 export function WorkerShell({
@@ -139,16 +141,20 @@ export function WorkerShell({
             </div>
 
             <nav className="flex-1 overflow-y-auto p-3">
+              <DrawerLink href="/my-shifts/profile" icon="badge" label="My profile" onClick={() => setMenuOpen(false)} />
               <DrawerLink href="/my-shifts/availability" icon="event_busy" label="My availability" onClick={() => setMenuOpen(false)} />
               <DrawerLink href="/my-shifts/summary" icon="schedule" label="My hours & mileage" onClick={() => setMenuOpen(false)} />
-              <DrawerLink href="/my-shifts/profile" icon="badge" label="My profile" onClick={() => setMenuOpen(false)} />
-              <DrawerLink href="/install" icon="install_mobile" label="Get the app" onClick={() => setMenuOpen(false)} />
+
               <p className="px-3 pb-1 pt-4 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                More coming soon
+                Safety
               </p>
-              <div className="rounded-xl bg-slate-50 px-3 py-3 text-xs text-slate-400">
-                Tell me what else to put in this menu and I'll add it.
-              </div>
+              <DrawerLink href="/my-shifts/incidents/new" icon="report" label="Report an incident" onClick={() => setMenuOpen(false)} />
+              <DrawerLink href="/my-shifts/incidents" icon="folder_shared" label="My incident reports" onClick={() => setMenuOpen(false)} />
+
+              <p className="px-3 pb-1 pt-4 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                App
+              </p>
+              <DrawerLink href="/install" icon="install_mobile" label="Get the app" onClick={() => setMenuOpen(false)} />
             </nav>
 
             <form action={logoutAction} className="border-t border-slate-100 p-3">

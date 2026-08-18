@@ -44,6 +44,7 @@ export default async function AppLayout({
     unreadChat,
     pendingApprovals,
     pendingAdmins,
+    openIncidents,
   ] = await Promise.all([
     prisma.tenant.findUnique({ where: { id: session.tenantId } }),
     prisma.notification.findMany({
@@ -83,6 +84,14 @@ export default async function AppLayout({
           },
         })
       : Promise.resolve(0),
+    isManager
+      ? prisma.incident.count({
+          where: {
+            tenantId: session.tenantId,
+            status: { in: ["SUBMITTED", "UNDER_REVIEW"] },
+          },
+        })
+      : Promise.resolve(0),
   ]);
   if (!tenant) redirect("/login");
 
@@ -112,6 +121,7 @@ export default async function AppLayout({
           pendingTimesheets,
           pendingApprovals,
           pendingAdmins,
+          openIncidents,
         }}
         logout={logoutAction}
       />
