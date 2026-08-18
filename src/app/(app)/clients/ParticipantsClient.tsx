@@ -20,6 +20,13 @@ export type ParticipantRow = {
   ndisNumber: string;
   budget: number | null;
   weeklyHours: number | null;
+  chargeWeekdayDay: number | null;
+  chargeWeekdayEvening: number | null;
+  chargeWeekdayNight: number | null;
+  chargeSaturday: number | null;
+  chargeSunday: number | null;
+  chargePublicHoliday: number | null;
+  chargeMileageRate: number | null;
   planStart: string;
   planEnd: string;
   address: string;
@@ -45,6 +52,13 @@ const EMPTY: ParticipantRow = {
   ndisNumber: "",
   budget: null,
   weeklyHours: null,
+  chargeWeekdayDay: null,
+  chargeWeekdayEvening: null,
+  chargeWeekdayNight: null,
+  chargeSaturday: null,
+  chargeSunday: null,
+  chargePublicHoliday: null,
+  chargeMileageRate: null,
   planStart: "",
   planEnd: "",
   address: "",
@@ -273,6 +287,7 @@ export function ParticipantsClient({
   const [editing, setEditing] = useState<ParticipantRow | null>(null);
   const [status, setStatus] = useState<"ACTIVE" | "ARCHIVED">("ACTIVE");
   const [filter, setFilter] = useState<"ALL" | AgreementType>("ALL");
+  const [query, setQuery] = useState("");
 
   // Close the dialog on Escape. We deliberately do NOT close on background
   // click — native date/time pickers can emit stray clicks on the backdrop
@@ -298,8 +313,25 @@ export function ParticipantsClient({
     AGED_CARE: base.filter((r) => r.agreementType === "AGED_CARE").length,
     DVA: base.filter((r) => r.agreementType === "DVA").length,
   };
-  const visible =
+  const byAgreement =
     filter === "ALL" ? base : base.filter((r) => r.agreementType === filter);
+
+  // Search across name, NDIS number, address and phone — whatever the office
+  // happens to have to hand when they're looking someone up.
+  const q = query.trim().toLowerCase();
+  const visible = q
+    ? byAgreement.filter((r) =>
+        [
+          `${r.firstName} ${r.lastName}`,
+          r.ndisNumber ?? "",
+          r.address ?? "",
+          r.phone ?? "",
+        ]
+          .join(" ")
+          .toLowerCase()
+          .includes(q),
+      )
+    : byAgreement;
 
   const tabs: ("ALL" | AgreementType)[] = ["ALL", ...AGREEMENT_TYPES];
 
@@ -321,6 +353,28 @@ export function ParticipantsClient({
           + Add participant
         </button>
       </header>
+
+      {/* Search */}
+      <div className="mb-4 relative max-w-md">
+        <span className="material-symbols-rounded pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[20px] text-[var(--text-muted)]">
+          search
+        </span>
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search name, NDIS number, address or phone…"
+          className="w-full rounded-xl border border-[var(--border)] bg-white py-2.5 pl-10 pr-9 text-sm outline-none transition focus:border-[var(--brand)] focus:ring-2 focus:ring-[var(--brand)]/15"
+        />
+        {query && (
+          <button
+            onClick={() => setQuery("")}
+            aria-label="Clear search"
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-lg p-1 text-[var(--text-muted)] hover:bg-[var(--background)]"
+          >
+            <span className="material-symbols-rounded text-[18px]">close</span>
+          </button>
+        )}
+      </div>
 
       {/* Active / Archived tabs */}
       <div className="mb-4 inline-flex rounded-xl border border-[var(--border)] bg-white p-1">
@@ -394,9 +448,12 @@ export function ParticipantsClient({
                         {initials(c.firstName, c.lastName)}
                       </span>
                       <div>
-                        <div className="font-medium text-[var(--text-primary)]">
+                        <Link
+                          href={`/clients/${c.id}`}
+                          className="font-medium text-[var(--text-primary)] hover:text-[var(--brand)] hover:underline"
+                        >
                           {c.firstName} {c.lastName}
-                        </div>
+                        </Link>
                         {c.ndisNumber && (
                           <div className="text-xs text-[var(--text-muted)]">
                             {c.ndisNumber}
@@ -699,6 +756,70 @@ export function ParticipantsClient({
                     placeholder="20"
                   />
                 </label>
+              </div>
+
+              {/* ── Charge rates ── */}
+              <div className="rounded-xl border border-[var(--border)] bg-[var(--background)] p-3">
+                <div className="text-sm font-semibold text-[var(--text-primary)]">
+                  Charge rates for this participant
+                </div>
+                <p className="mt-0.5 text-xs text-[var(--text-secondary)]">
+                  Leave blank to use the{" "}
+                  {AGREEMENT_LABELS[editing.agreementType as AgreementType] ??
+                    editing.agreementType}{" "}
+                  rates from Settings. Fill a box in only to charge this
+                  participant differently.
+                </p>
+                <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  {(
+                    [
+                      ["chargeWeekdayDay", "Weekday day", editing.chargeWeekdayDay],
+                      ["chargeWeekdayEvening", "Weekday evening", editing.chargeWeekdayEvening],
+                      ["chargeWeekdayNight", "Weekday night", editing.chargeWeekdayNight],
+                      ["chargeSaturday", "Saturday", editing.chargeSaturday],
+                      ["chargeSunday", "Sunday", editing.chargeSunday],
+                      ["chargePublicHoliday", "Public holiday", editing.chargePublicHoliday],
+                    ] as const
+                  ).map(([name, labelText, value]) => (
+                    <label
+                      key={name}
+                      className="block text-xs font-medium text-[var(--text-secondary)]"
+                    >
+                      {labelText}
+                      <div className="relative mt-1">
+                        <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-[var(--text-muted)]">
+                          $
+                        </span>
+                        <input
+                          name={name}
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          defaultValue={value ?? ""}
+                          placeholder="default"
+                          className={`${field} pl-6`}
+                        />
+                      </div>
+                    </label>
+                  ))}
+                  <label className="block text-xs font-medium text-[var(--text-secondary)]">
+                    Mileage /km
+                    <div className="relative mt-1">
+                      <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-[var(--text-muted)]">
+                        $
+                      </span>
+                      <input
+                        name="chargeMileageRate"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        defaultValue={editing.chargeMileageRate ?? ""}
+                        placeholder="default"
+                        className={`${field} pl-6`}
+                      />
+                    </div>
+                  </label>
+                </div>
               </div>
               <p className="-mt-1 text-xs text-[var(--text-muted)]">
                 Weekly hours come from the service agreement. The roster will not

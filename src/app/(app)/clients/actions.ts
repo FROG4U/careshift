@@ -52,6 +52,14 @@ export async function createClient(formData: FormData) {
       lng: num(formData.get("lng")),
       geofenceFt: Math.round(num(formData.get("geofenceFt")) ?? 150),
       branchId: str(formData.get("branchId")),
+      // Charge-rate overrides. Blank = inherit the agreement's default.
+      chargeWeekdayDay: num(formData.get("chargeWeekdayDay")),
+      chargeWeekdayEvening: num(formData.get("chargeWeekdayEvening")),
+      chargeWeekdayNight: num(formData.get("chargeWeekdayNight")),
+      chargeSaturday: num(formData.get("chargeSaturday")),
+      chargeSunday: num(formData.get("chargeSunday")),
+      chargePublicHoliday: num(formData.get("chargePublicHoliday")),
+      chargeMileageRate: num(formData.get("chargeMileageRate")),
     },
   });
 
@@ -84,6 +92,14 @@ export async function updateClient(formData: FormData) {
       lng: num(formData.get("lng")),
       geofenceFt: Math.round(num(formData.get("geofenceFt")) ?? 150),
       branchId: str(formData.get("branchId")),
+      // Charge-rate overrides. Blank = inherit the agreement's default.
+      chargeWeekdayDay: num(formData.get("chargeWeekdayDay")),
+      chargeWeekdayEvening: num(formData.get("chargeWeekdayEvening")),
+      chargeWeekdayNight: num(formData.get("chargeWeekdayNight")),
+      chargeSaturday: num(formData.get("chargeSaturday")),
+      chargeSunday: num(formData.get("chargeSunday")),
+      chargePublicHoliday: num(formData.get("chargePublicHoliday")),
+      chargeMileageRate: num(formData.get("chargeMileageRate")),
     },
   });
 

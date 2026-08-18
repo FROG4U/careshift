@@ -53,6 +53,14 @@ model Tenant {
   /// When on, workers see their leave/sick balance on their profile.
   showLeaveBalance Boolean @default(false)
 
+  /// Superannuation guarantee applied to wages when costing a shift, so the
+  /// Sales figures show true profit. 0.12 = 12% (the AU rate from 1 Jul 2025).
+  /// Applied to WAGES only — mileage is an allowance, not ordinary time
+  /// earnings, so super isn't payable on it.
+  superRate Float @default(0.12)
+
+  chargeDefaults ChargeDefault[]
+
   users      User[]
   clients    Client[]
   staff      Staff[]
@@ -255,6 +263,32 @@ model User {
   @@index([tenantId])
 }
 
+/// What the provider CHARGES per hour, by funding agreement — the income
+/// side, as opposed to PayLevel/PayRate which are what the worker is paid.
+/// One row per agreement type; a participant inherits these unless their own
+/// profile overrides a band (see the charge* fields on Client).
+model ChargeDefault {
+  id            String @id @default(cuid())
+  tenantId      String
+  tenant        Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  /// NDIS | AGED_CARE | DVA
+  agreementType String
+
+  weekdayDay     Float @default(0)
+  weekdayEvening Float @default(0)
+  weekdayNight   Float @default(0)
+  saturday       Float @default(0)
+  sunday         Float @default(0)
+  publicHoliday  Float @default(0)
+  /// Charged per km of participant transport.
+  mileageRate    Float @default(0)
+
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, agreementType])
+  @@index([tenantId])
+}
+
 /// An incident report raised by a worker. Field set follows the NDIS Quality
 /// and Safeguards Commission's incident-reporting requirements so a report can
 /// be escalated to the Commission without re-keying it.
@@ -451,6 +485,17 @@ model Client {
 
   active     Boolean   @default(true)
   createdAt  DateTime  @default(now())
+
+  // ── Charge rates ($/hr) ──
+  // What THIS participant is billed, overriding the agreement-type defaults
+  // in ChargeDefault. Null on a band = use the default for their agreement.
+  chargeWeekdayDay     Float?
+  chargeWeekdayEvening Float?
+  chargeWeekdayNight   Float?
+  chargeSaturday       Float?
+  chargeSunday         Float?
+  chargePublicHoliday  Float?
+  chargeMileageRate    Float?
 
   // Home branch / location this participant is served from.
   branchId String?

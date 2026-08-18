@@ -4,7 +4,7 @@ import { randomInt } from "crypto";
 import { revalidatePath } from "next/cache";
 import { requireTenant } from "@/lib/tenant";
 import { prisma } from "@/lib/prisma";
-import { AU_STATES } from "@/lib/constants";
+import { AU_STATES, AGREEMENT_TYPES } from "@/lib/constants";
 import { isAdmin, isManager } from "@/lib/roles";
 
 /** Human-friendly code, no ambiguous chars (0/O, 1/I). e.g. PCG-7K3M. */
@@ -146,6 +146,60 @@ export async function updateAttendanceSettings(formData: FormData) {
   revalidatePath("/attendance");
   revalidatePath("/staff");
   revalidatePath("/my-shifts");
+}
+
+/**
+ * Charge rates per funding agreement — what the provider bills. These
+ * prefill every participant on that agreement; a participant can override
+ * any band on their own profile.
+ */
+export async function updateChargeDefaults(formData: FormData) {
+  const { tenant, session } = await requireTenant();
+  if (!isAdmin(session.role)) return;
+
+  const agreementType = String(formData.get("agreementType") ?? "").trim();
+  if (!(AGREEMENT_TYPES as readonly string[]).includes(agreementType)) return;
+
+  const rate = (key: string) => {
+    const n = Number(String(formData.get(key) ?? "").trim());
+    return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : 0;
+  };
+
+  const data = {
+    weekdayDay: rate("weekdayDay"),
+    weekdayEvening: rate("weekdayEvening"),
+    weekdayNight: rate("weekdayNight"),
+    saturday: rate("saturday"),
+    sunday: rate("sunday"),
+    publicHoliday: rate("publicHoliday"),
+    mileageRate: rate("mileageRate"),
+  };
+
+  await prisma.chargeDefault.upsert({
+    where: {
+      tenantId_agreementType: { tenantId: tenant.id, agreementType },
+    },
+    update: data,
+    create: { tenantId: tenant.id, agreementType, ...data },
+  });
+
+  revalidatePath("/settings");
+  revalidatePath("/clients");
+  revalidatePath("/sales");
+}
+
+/** Superannuation rate used when costing shifts on the Sales screens. */
+export async function updateSuperRate(formData: FormData) {
+  const { tenant, session } = await requireTenant();
+  if (!isAdmin(session.role)) return;
+  const pct = Number(String(formData.get("superPct") ?? "").trim());
+  if (!Number.isFinite(pct) || pct < 0 || pct > 50) return;
+  await prisma.tenant.update({
+    where: { id: tenant.id },
+    data: { superRate: Math.round(pct) / 100 },
+  });
+  revalidatePath("/settings");
+  revalidatePath("/sales");
 }
 
 /** Leave & time-off allowances + whether workers see their balance. */

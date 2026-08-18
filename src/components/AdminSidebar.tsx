@@ -52,6 +52,7 @@ const GROUPS: Group[] = [
       { href: "/incidents", label: "Incident Records", icon: "report", badgeKey: "openIncidents", managerOnly: true },
       { href: "/attendance", label: "Attendance", icon: "fact_check", managerOnly: true },
       { href: "/payroll", label: "Payroll Period", icon: "payments", managerOnly: true },
+      { href: "/sales", label: "Sales & Profit", icon: "trending_up", superAdminOnly: true },
     ],
   },
   {

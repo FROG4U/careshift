@@ -10,6 +10,10 @@ import {
   clearJoinCode,
 } from "./actions";
 import { BranchesManager, type BranchRow } from "./BranchesManager";
+import {
+  ChargeRatesManager,
+  type ChargeDefaultRow,
+} from "./ChargeRatesManager";
 import { CopyButton } from "./CopyButton";
 
 const field =
@@ -33,6 +37,10 @@ export default async function SettingsPage() {
         include: { _count: { select: { staff: true, clients: true } } },
       })
     : [];
+  const chargeDefaults: ChargeDefaultRow[] = isAdmin
+    ? await prisma.chargeDefault.findMany({ where: { tenantId: tenant.id } })
+    : [];
+
   const branches: BranchRow[] = branchRecords.map((b) => ({
     id: b.id,
     name: b.name,
@@ -155,6 +163,15 @@ export default async function SettingsPage() {
       {isAdmin && (
         <div className="mt-6">
           <BranchesManager branches={branches} />
+        </div>
+      )}
+
+      {isAdmin && (
+        <div className="mt-6 max-w-3xl">
+          <ChargeRatesManager
+            defaults={chargeDefaults}
+            superPct={tenant.superRate}
+          />
         </div>
       )}
 
