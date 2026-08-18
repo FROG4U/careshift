@@ -146,7 +146,15 @@ export default async function SalesDoc({
         <table className="w-full border-collapse text-sm">
           <tbody>
             <tr>
-              <Cell>Income charged to participants</Cell>
+              <Cell>Support hours charged ({totals.hours.toFixed(1)}h)</Cell>
+              <Cell align="right">{aud2(totals.supportRevenue)}</Cell>
+            </tr>
+            <tr>
+              <Cell>Mileage charged ({totals.km.toFixed(1)} km)</Cell>
+              <Cell align="right">{aud2(totals.mileageRevenue)}</Cell>
+            </tr>
+            <tr className="bg-slate-50">
+              <Cell bold>Total income</Cell>
               <Cell align="right" bold>
                 {aud2(totals.revenue)}
               </Cell>
@@ -171,6 +179,17 @@ export default async function SalesDoc({
             </tr>
           </tbody>
         </table>
+
+        {totals.km > 0 && (
+          <p className="mt-2 text-[11px] text-slate-600">
+            Mileage sits on both sides: {totals.km.toFixed(1)} km charged at{" "}
+            {aud2(totals.mileageRevenue)} and reimbursed at{" "}
+            {aud2(totals.mileageCost)} — a{" "}
+            {totals.mileageRevenue - totals.mileageCost >= 0 ? "margin" : "shortfall"}{" "}
+            of {aud2(Math.abs(totals.mileageRevenue - totals.mileageCost))}.
+          </p>
+        )}
+
         <p className="mt-2 text-[11px] text-slate-500">
           Superannuation is applied to wages only — mileage is an allowance and
           is not ordinary time earnings. Figures cover completed shifts in the

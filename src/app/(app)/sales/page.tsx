@@ -207,13 +207,19 @@ export default async function SalesPage({
         <Kpi
           label="Income"
           value={aud(totals.revenue)}
-          sub={`${totals.shifts} shifts · ${totals.hours.toFixed(0)}h`}
+          sub={
+            totals.mileageRevenue > 0
+              ? `support ${aud(totals.supportRevenue)} + mileage ${aud(totals.mileageRevenue)}`
+              : `${totals.shifts} shifts · ${totals.hours.toFixed(0)}h`
+          }
           tone="revenue"
         />
         <Kpi
           label="Cost"
           value={aud(totals.cost)}
-          sub={`wages ${aud(totals.wages)} + super ${aud(totals.super)}`}
+          sub={`wages ${aud(totals.wages)} + super ${aud(totals.super)}${
+            totals.mileageCost > 0 ? ` + mileage ${aud(totals.mileageCost)}` : ""
+          }`}
           tone="cost"
         />
         <Kpi

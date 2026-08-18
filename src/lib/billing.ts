@@ -83,8 +83,12 @@ export type ShiftMargin = {
   dayType: DayType;
   hours: number;
   km: number;
-  /** Charged to the participant. */
+  /** Charged to the participant — support hours plus mileage. */
   revenue: number;
+  /** The support-hours part of revenue. */
+  supportRevenue: number;
+  /** The mileage part of revenue (charged to the participant). */
+  mileageRevenue: number;
   chargeRate: number;
   /** Worker wages (excluding super). */
   wages: number;
@@ -138,7 +142,11 @@ export function marginFor(
   const km = kmOf(shift);
 
   const chargeRate = opts.chargeGrid[dayType] ?? 0;
-  const revenue = hours * chargeRate + km * opts.chargeMileageRate;
+  // Mileage is billed to the participant as well as reimbursed to the worker,
+  // so it appears on both sides of the margin.
+  const supportRevenue = hours * chargeRate;
+  const mileageRevenue = km * opts.chargeMileageRate;
+  const revenue = supportRevenue + mileageRevenue;
 
   const wages = pay.hours * pay.rate;
   const superAmount = wages * opts.superRate;
@@ -151,6 +159,8 @@ export function marginFor(
     hours,
     km,
     revenue,
+    supportRevenue,
+    mileageRevenue,
     chargeRate,
     wages,
     super: superAmount,
@@ -166,6 +176,8 @@ export type MarginTotals = {
   hours: number;
   km: number;
   revenue: number;
+  supportRevenue: number;
+  mileageRevenue: number;
   wages: number;
   super: number;
   mileageCost: number;
@@ -179,6 +191,8 @@ export const emptyTotals = (): MarginTotals => ({
   hours: 0,
   km: 0,
   revenue: 0,
+  supportRevenue: 0,
+  mileageRevenue: 0,
   wages: 0,
   super: 0,
   mileageCost: 0,
@@ -193,6 +207,8 @@ export function addMargin(t: MarginTotals, m: ShiftMargin): MarginTotals {
     hours: t.hours + m.hours,
     km: t.km + m.km,
     revenue: t.revenue + m.revenue,
+    supportRevenue: t.supportRevenue + m.supportRevenue,
+    mileageRevenue: t.mileageRevenue + m.mileageRevenue,
     wages: t.wages + m.wages,
     super: t.super + m.super,
     mileageCost: t.mileageCost + m.mileageCost,
