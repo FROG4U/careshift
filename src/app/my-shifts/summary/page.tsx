@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { netHoursOf } from "@/lib/payroll";
 
 type Period = "day" | "week" | "month";
 
@@ -59,7 +60,8 @@ export default async function SummaryPage({
     include: { client: true, pauses: true, transports: true },
   });
 
-  // Net worked hours = (out − in) − breaks. Mileage = Σ transport km.
+  // Paid hours, same rule as payroll (overlap of clocked and rostered time,
+  // minus breaks) so this agrees with My Pay. Mileage = Σ transport km.
   type Agg = { name: string; hours: number; km: number; shifts: number };
   const byClient = new Map<string, Agg>();
   let totalHours = 0;
@@ -67,18 +69,7 @@ export default async function SummaryPage({
 
   for (const s of shifts) {
     if (!s.clockInAt || !s.clockOutAt) continue;
-    const gross =
-      (new Date(s.clockOutAt).getTime() - new Date(s.clockInAt).getTime()) /
-      3_600_000;
-    const breakHrs = s.pauses.reduce((sum, p) => {
-      if (!p.endAt) return sum;
-      return (
-        sum +
-        (new Date(p.endAt).getTime() - new Date(p.startAt).getTime()) /
-          3_600_000
-      );
-    }, 0);
-    const worked = Math.max(0, gross - breakHrs);
+    const worked = netHoursOf(s);
     const km = s.transports.reduce((sum, t) => sum + t.km, 0);
 
     totalHours += worked;

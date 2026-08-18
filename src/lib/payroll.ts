@@ -79,17 +79,55 @@ export type ShiftForPay = {
   transports: { km: number }[];
 };
 
-/** Net paid hours: clocked time minus breaks, falling back to rostered time. */
-export function netHoursOf(s: ShiftForPay): number {
-  const hrs = (a: Date, b: Date) => (b.getTime() - a.getTime()) / 3_600_000;
-  const gross =
-    s.clockInAt && s.clockOutAt
-      ? hrs(s.clockInAt, s.clockOutAt)
-      : hrs(s.start, s.end);
-  const breaks = s.pauses.reduce(
-    (sum, p) => sum + (p.endAt ? hrs(p.startAt, p.endAt) : 0),
-    0,
-  );
+const hrsBetween = (a: Date, b: Date) => (b.getTime() - a.getTime()) / 3_600_000;
+
+/**
+ * The window a worker is actually PAID for.
+ *
+ * Pay follows the roster, not the clock, at both ends:
+ *   - Clocking in EARLY doesn't start the pay clock — a 9am shift started at
+ *     8:50 is paid from 9:00.
+ *   - Clocking out LATE doesn't extend it — finishing at 12:12 on a shift
+ *     rostered to 12:00 is paid to 12:00.
+ *   - Clocking in LATE does count against the worker — starting at 9:15 is
+ *     paid from 9:15, not 9:00.
+ *   - Clocking out EARLY likewise — leaving at 11:45 is paid to 11:45.
+ *
+ * In short: paid time is the OVERLAP of clocked time and rostered time.
+ * If the worker never clocked in or out we fall back to the rostered window.
+ *
+ * Genuine approved overtime is handled by an admin editing the shift's times
+ * in Timesheets, which moves the rostered window itself.
+ */
+export type ShiftHours = {
+  start: Date;
+  end: Date;
+  clockInAt: Date | null;
+  clockOutAt: Date | null;
+  pauses: { startAt: Date; endAt: Date | null }[];
+};
+
+export function paidWindowOf(s: ShiftHours): { from: Date; to: Date } {
+  if (!s.clockInAt || !s.clockOutAt) return { from: s.start, to: s.end };
+  const from = s.clockInAt > s.start ? s.clockInAt : s.start;
+  const to = s.clockOutAt < s.end ? s.clockOutAt : s.end;
+  return { from, to };
+}
+
+/** Net paid hours: the paid window, minus any breaks taken. */
+export function netHoursOf(s: ShiftHours): number {
+  const { from, to } = paidWindowOf(s);
+  const gross = Math.max(0, hrsBetween(from, to));
+
+  // Only count break time that falls inside the paid window — a break taken
+  // during unpaid overrun would otherwise be deducted twice.
+  const breaks = s.pauses.reduce((sum, p) => {
+    if (!p.endAt) return sum;
+    const bStart = p.startAt > from ? p.startAt : from;
+    const bEnd = p.endAt < to ? p.endAt : to;
+    return sum + Math.max(0, hrsBetween(bStart, bEnd));
+  }, 0);
+
   return Math.max(0, gross - breaks);
 }
 

@@ -1,6 +1,7 @@
 import { requireTenant } from "@/lib/tenant";
 import { prisma } from "@/lib/prisma";
 import { fmtDate, fmtTime, initials } from "@/lib/format";
+import { netHoursOf } from "@/lib/payroll";
 import { setApproval } from "./actions";
 import { ShiftDetail, type ShiftDetailData } from "./ShiftDetail";
 import type { LatLng } from "@/components/ShiftMap";
@@ -175,12 +176,17 @@ export default async function TimesheetsPage({
           </thead>
           <tbody className="divide-y divide-slate-100">
             {shifts.map((s) => {
+              // What they actually clocked, vs what's payable. They differ
+              // when a worker starts early or runs past the rostered end —
+              // pay follows the roster at both ends (see paidWindowOf).
               const gross = grossHours(s.clockInAt, s.clockOutAt);
               const breakHrs = s.pauses.reduce(
                 (sum, p) => sum + grossHours(p.startAt, p.endAt),
                 0,
               );
-              const net = Math.max(0, gross - breakHrs);
+              const net = netHoursOf(s);
+              const clockedNet = Math.max(0, gross - breakHrs);
+              const trimmed = clockedNet - net > 0.01;
               const km = s.transports.reduce((sum, t) => sum + t.km, 0);
               // A completed shift isn't payable until the worker adds notes.
               const needsNotes = !s.progressNote?.trim();
@@ -314,6 +320,14 @@ export default async function TimesheetsPage({
                     {breakHrs > 0 && (
                       <div className="text-xs font-normal text-amber-600">
                         −{breakHrs.toFixed(2)}h break
+                      </div>
+                    )}
+                    {trimmed && (
+                      <div
+                        className="text-xs font-normal text-slate-400"
+                        title="Pay follows the rostered times. Edit the shift times to pay the extra."
+                      >
+                        clocked {clockedNet.toFixed(2)}h
                       </div>
                     )}
                   </td>

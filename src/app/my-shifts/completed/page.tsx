@@ -3,6 +3,7 @@ import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { fmtDate, fmtTime } from "@/lib/format";
 import { ShiftNotes } from "@/components/ShiftNotes";
+import { netHoursOf } from "@/lib/payroll";
 
 export default async function CompletedShiftsPage() {
   const session = await getSession();
@@ -33,21 +34,12 @@ export default async function CompletedShiftsPage() {
     take: 100,
   });
 
+  // Paid hours, using the same rule as payroll (the overlap of clocked and
+  // rostered time, minus breaks). Showing raw clocked time here would
+  // contradict what the worker sees on My Pay.
   const workedHours = (s: (typeof shifts)[number]) => {
     if (!s.clockInAt || !s.clockOutAt) return 0;
-    const gross =
-      (new Date(s.clockOutAt).getTime() - new Date(s.clockInAt).getTime()) /
-      3_600_000;
-    const breaks = s.pauses.reduce(
-      (sum, p) =>
-        p.endAt
-          ? sum +
-            (new Date(p.endAt).getTime() - new Date(p.startAt).getTime()) /
-              3_600_000
-          : sum,
-      0,
-    );
-    return Math.max(0, gross - breaks);
+    return netHoursOf(s);
   };
   const kmOf = (s: (typeof shifts)[number]) =>
     s.transports.reduce((sum, t) => sum + t.km, 0);
