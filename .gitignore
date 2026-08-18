@@ -48,3 +48,7 @@ prisma/add-admin.mjs
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Uploaded files (chat images, incident photos) live on the server disk.
+# They must never be committed — incident photos are participant care data.
+/public/uploads/
