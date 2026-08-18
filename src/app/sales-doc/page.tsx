@@ -18,7 +18,11 @@ export default async function SalesDoc({
 }: {
   searchParams: Promise<{ period?: string; offset?: string; client?: string }>;
 }) {
-  const { tenant, session } = await requireTenant();
+  // These standalone doc pages sit outside the (app) layout, so a thrown
+  // "Not authenticated" would surface as a 500 rather than a login prompt.
+  const ctx = await requireTenant().catch(() => null);
+  if (!ctx) redirect("/login");
+  const { tenant, session } = ctx;
   if (!isSuperAdmin(session.role)) redirect("/dashboard");
 
   const sp = await searchParams;

@@ -21,7 +21,11 @@ export default async function PayrollDoc({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ staff?: string }>;
 }) {
-  const { tenant, session } = await requireTenant();
+  // Outside the (app) layout, so an auth failure would surface as a 500
+  // rather than a login prompt.
+  const ctx = await requireTenant().catch(() => null);
+  if (!ctx) redirect("/login");
+  const { tenant, session } = ctx;
   if (!isManager(session.role)) {
     redirect("/dashboard");
   }
