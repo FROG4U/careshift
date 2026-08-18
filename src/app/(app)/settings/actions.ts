@@ -4,6 +4,8 @@ import { randomInt } from "crypto";
 import { revalidatePath } from "next/cache";
 import { requireTenant } from "@/lib/tenant";
 import { prisma } from "@/lib/prisma";
+import { AU_STATES } from "@/lib/constants";
+import { isAdmin, isManager } from "@/lib/roles";
 
 /** Human-friendly code, no ambiguous chars (0/O, 1/I). e.g. PCG-7K3M. */
 function makeJoinCode(name: string) {
@@ -21,7 +23,7 @@ function makeJoinCode(name: string) {
  */
 export async function generateJoinCode() {
   const { tenant, session } = await requireTenant();
-  if (session.role !== "ADMIN") return;
+  if (!isAdmin(session.role)) return;
 
   // Retry on the (extremely unlikely) unique-collision.
   for (let attempt = 0; attempt < 5; attempt++) {
@@ -42,7 +44,7 @@ export async function generateJoinCode() {
 /** Turn off self sign-up by clearing the code. Admin-only. */
 export async function clearJoinCode() {
   const { tenant, session } = await requireTenant();
-  if (session.role !== "ADMIN") return;
+  if (!isAdmin(session.role)) return;
   await prisma.tenant.update({
     where: { id: tenant.id },
     data: { joinCode: null },
@@ -69,33 +71,48 @@ export async function updateBranding(formData: FormData) {
 }
 
 // Branch management is admin-only.
-export async function createBranch(formData: FormData) {
-  const { tenant, session } = await requireTenant();
-  if (session.role !== "ADMIN") return;
-  const name = String(formData.get("name") ?? "").trim();
-  if (!name) return;
-  await prisma.branch.create({ data: { tenantId: tenant.id, name } });
-  revalidatePath("/settings");
-  revalidatePath("/schedule");
+
+/**
+ * The branch's Australian state. It sets both the public-holiday calendar and
+ * the TIMEZONE the branch's shifts are costed in, so only accept a real state
+ * code — anything else means "not set" and falls back to Brisbane time.
+ */
+function branchState(formData: FormData): string | null {
+  const raw = String(formData.get("state") ?? "").trim().toUpperCase();
+  return (AU_STATES as readonly string[]).includes(raw) ? raw : null;
 }
 
-export async function renameBranch(formData: FormData) {
+export async function createBranch(formData: FormData) {
   const { tenant, session } = await requireTenant();
-  if (session.role !== "ADMIN") return;
-  const id = String(formData.get("id") ?? "");
+  if (!isAdmin(session.role)) return;
   const name = String(formData.get("name") ?? "").trim();
-  if (!id || !name) return;
-  await prisma.branch.updateMany({
-    where: { id, tenantId: tenant.id },
-    data: { name },
+  if (!name) return;
+  await prisma.branch.create({
+    data: { tenantId: tenant.id, name, state: branchState(formData) },
   });
   revalidatePath("/settings");
   revalidatePath("/schedule");
 }
 
+/** Rename a branch and/or set the state driving its timezone + holidays. */
+export async function renameBranch(formData: FormData) {
+  const { tenant, session } = await requireTenant();
+  if (!isAdmin(session.role)) return;
+  const id = String(formData.get("id") ?? "");
+  const name = String(formData.get("name") ?? "").trim();
+  if (!id || !name) return;
+  await prisma.branch.updateMany({
+    where: { id, tenantId: tenant.id },
+    data: { name, state: branchState(formData) },
+  });
+  revalidatePath("/settings");
+  revalidatePath("/schedule");
+  revalidatePath("/payroll");
+}
+
 export async function deleteBranch(formData: FormData) {
   const { tenant, session } = await requireTenant();
-  if (session.role !== "ADMIN") return;
+  if (!isAdmin(session.role)) return;
   const id = String(formData.get("id") ?? "");
   // Staff/participants/shifts keep their records; branchId is set null (SetNull).
   await prisma.branch.deleteMany({ where: { id, tenantId: tenant.id } });
@@ -106,7 +123,7 @@ export async function deleteBranch(formData: FormData) {
 /** Attendance thresholds that drive the worker reliability score. */
 export async function updateAttendanceSettings(formData: FormData) {
   const { tenant, session } = await requireTenant();
-  if (session.role !== "ADMIN" && session.role !== "COORDINATOR") return;
+  if (!isManager(session.role)) return;
 
   const num = (k: string, min: number, max: number, fallback: number) => {
     const n = Number(String(formData.get(k) ?? "").trim());
@@ -134,7 +151,7 @@ export async function updateAttendanceSettings(formData: FormData) {
 /** Leave & time-off allowances + whether workers see their balance. */
 export async function updateLeaveSettings(formData: FormData) {
   const { tenant, session } = await requireTenant();
-  if (session.role !== "ADMIN" && session.role !== "COORDINATOR") return;
+  if (!isManager(session.role)) return;
 
   const num = (k: string, fallback: number) => {
     const n = Number(String(formData.get(k) ?? "").trim());

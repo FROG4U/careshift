@@ -36,6 +36,7 @@ export default async function SettingsPage() {
   const branches: BranchRow[] = branchRecords.map((b) => ({
     id: b.id,
     name: b.name,
+    state: b.state,
     staff: b._count.staff,
     clients: b._count.clients,
   }));

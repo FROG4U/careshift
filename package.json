@@ -7,7 +7,8 @@
     "build": "prisma generate && next build",
     "start": "NODE_ENV=production node server.js",
     "lint": "eslint",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "tz-check": "tsx --tsconfig scripts/tsconfig.scripts.json scripts/tz-check.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",

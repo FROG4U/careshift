@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { fmtDate } from "@/lib/format";
 import { createPayrollPeriod, deletePayrollPeriod } from "./actions";
 
+import { isManager } from "@/lib/roles";
 export default async function PayrollPage({
   searchParams,
 }: {
@@ -12,7 +13,7 @@ export default async function PayrollPage({
 }) {
   const { tenant, session } = await requireTenant();
   // Managers only — workers never see payroll.
-  if (session.role !== "ADMIN" && session.role !== "COORDINATOR") {
+  if (!isManager(session.role)) {
     redirect("/dashboard");
   }
 

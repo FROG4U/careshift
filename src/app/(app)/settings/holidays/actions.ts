@@ -4,20 +4,27 @@ import { revalidatePath } from "next/cache";
 import { requireTenant } from "@/lib/tenant";
 import { prisma } from "@/lib/prisma";
 import { AU_STATES } from "@/lib/constants";
+import { calendarDateFromKey } from "@/lib/timezone";
+import { isManager } from "@/lib/roles";
 
 const str = (v: FormDataEntryValue | null) => String(v ?? "").trim();
 
 async function requireManager() {
   const ctx = await requireTenant();
-  if (ctx.session.role !== "ADMIN" && ctx.session.role !== "COORDINATOR") {
+  if (!isManager(ctx.session.role)) {
     throw new Error("Not authorised");
   }
   return ctx;
 }
 
-/** A holiday date is stored at local midnight so it matches shift dates. */
-function toLocalMidnight(iso: string) {
-  return new Date(`${iso}T00:00:00`);
+/**
+ * A holiday is a CALENDAR DATE, not an instant, so it is stored at UTC
+ * midnight. Storing it at *server* local midnight would make the stored value
+ * depend on where the server runs, and reading it back from a branch in a
+ * different Australian timezone could slide it onto the wrong day.
+ */
+function toCalendarDate(iso: string) {
+  return calendarDateFromKey(iso);
 }
 
 export async function createHoliday(formData: FormData) {
@@ -28,7 +35,7 @@ export async function createHoliday(formData: FormData) {
   if (!date || !name) return;
 
   await prisma.publicHoliday.create({
-    data: { tenantId: tenant.id, date: toLocalMidnight(date), name, state },
+    data: { tenantId: tenant.id, date: toCalendarDate(date), name, state },
   });
   revalidatePath("/settings/holidays");
 }
@@ -43,7 +50,7 @@ export async function updateHoliday(formData: FormData) {
 
   await prisma.publicHoliday.updateMany({
     where: { id, tenantId: tenant.id },
-    data: { date: toLocalMidnight(date), name, state },
+    data: { date: toCalendarDate(date), name, state },
   });
   revalidatePath("/settings/holidays");
 }
@@ -251,7 +258,7 @@ export async function importHolidaysFromUrl(
     await prisma.publicHoliday.createMany({
       data: unique.map((r) => ({
         tenantId: tenant.id,
-        date: toLocalMidnight(r.date),
+        date: toCalendarDate(r.date),
         name: r.name,
         state: r.state,
       })),

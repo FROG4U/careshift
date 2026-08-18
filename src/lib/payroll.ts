@@ -1,15 +1,19 @@
 import "server-only";
 import { CASUAL_LOADING, type DayType } from "./constants";
+import { DEFAULT_TIMEZONE, dateKeyInTz, zonedParts } from "./timezone";
 
-/** Local YYYY-MM-DD key, used to match a shift against the holiday calendar. */
-export function dateKey(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
-    d.getDate(),
-  ).padStart(2, "0")}`;
+/**
+ * YYYY-MM-DD key for a shift, in the LOCAL time of the branch it belongs to.
+ * Never use the server clock here: a 7am Perth shift is 9am in Brisbane, and
+ * a shift after 10pm in Perth has already rolled to the next date in Sydney.
+ */
+export function dateKey(d: Date, tz: string = DEFAULT_TIMEZONE): string {
+  return dateKeyInTz(d, tz);
 }
 
 /**
- * Which penalty band a shift falls into (SCHADS):
+ * Which penalty band a shift falls into (SCHADS), evaluated in `tz` — the
+ * timezone of the branch that owns the shift:
  *   Public holiday — outranks everything
  *   Saturday / Sunday — by the day
  *   Weekday Night   — starts at/before midnight and finishes after midnight
@@ -21,15 +25,16 @@ export function dayTypeFor(
   start: Date,
   end: Date,
   holidays?: Set<string>,
+  tz: string = DEFAULT_TIMEZONE,
 ): DayType {
-  if (holidays?.has(dateKey(start))) return "PUBLIC_HOLIDAY";
-  const day = start.getDay(); // 0 = Sunday
-  if (day === 0) return "SUNDAY";
-  if (day === 6) return "SATURDAY";
+  if (holidays?.has(dateKey(start, tz))) return "PUBLIC_HOLIDAY";
+  const local = zonedParts(start, tz);
+  if (local.weekday === 0) return "SUNDAY";
+  if (local.weekday === 6) return "SATURDAY";
 
-  const startHour = start.getHours() + start.getMinutes() / 60;
+  const startHour = local.hour + local.minute / 60;
   // Active night: runs past midnight into the next day, or begins before 6am.
-  const crossesMidnight = dateKey(end) !== dateKey(start) && end > start;
+  const crossesMidnight = dateKey(end, tz) !== dateKey(start, tz) && end > start;
   if (crossesMidnight || startHour < 6) return "WEEKDAY_NIGHT";
   // Evening band starts at 8pm.
   if (startHour >= 20) return "WEEKDAY_EVENING";
@@ -103,15 +108,20 @@ export type ShiftLine = {
   pay: number;
 };
 
-/** Cost a single shift for a worker on a given pay level. */
+/**
+ * Cost a single shift for a worker on a given pay level. `tz` is the branch's
+ * timezone — it decides the penalty band, so passing the wrong one changes
+ * what the worker gets paid.
+ */
 export function costShift(
   s: ShiftForPay,
   grid: RateGrid,
   employmentType: string,
   mileageRate: number,
   holidays?: Set<string>,
+  tz: string = DEFAULT_TIMEZONE,
 ): ShiftLine {
-  const dayType = dayTypeFor(new Date(s.start), new Date(s.end), holidays);
+  const dayType = dayTypeFor(new Date(s.start), new Date(s.end), holidays, tz);
   const stream = streamFor(s.client.agreementType);
   const hours = netHoursOf(s);
   const km = kmOf(s);

@@ -4,6 +4,7 @@ import { requireTenant } from "@/lib/tenant";
 import { prisma } from "@/lib/prisma";
 import { fmtDate } from "@/lib/format";
 import { costShift, dateKey, money, type RateGrid } from "@/lib/payroll";
+import { calendarDateKey, fmtInTz, tzForState } from "@/lib/timezone";
 import { approvePayrollPeriod, reopenPayrollPeriod } from "../actions";
 import {
   PayrollTable,
@@ -12,6 +13,7 @@ import {
 } from "./PayrollTable";
 import { ExportMenu, PrintTrigger } from "./ExportMenu";
 
+import { isManager } from "@/lib/roles";
 export default async function PayrollReportPage({
   params,
   searchParams,
@@ -20,7 +22,7 @@ export default async function PayrollReportPage({
   searchParams: Promise<{ print?: string }>;
 }) {
   const { tenant, session } = await requireTenant();
-  if (session.role !== "ADMIN" && session.role !== "COORDINATOR") {
+  if (!isManager(session.role)) {
     redirect("/dashboard");
   }
 
@@ -69,19 +71,19 @@ export default async function PayrollReportPage({
       ],
     },
   });
-  const holidays = new Set(holidayRows.map((h) => dateKey(new Date(h.date))));
+  // Every date decision below — penalty band, weekend, holiday match, and the
+  // times shown on the payslip — is made in this branch's local time, not the
+  // server's.
+  const tz = tzForState(branchState);
+  const holidays = new Set(holidayRows.map((h) => calendarDateKey(h.date)));
   const holidayName = new Map(
-    holidayRows.map((h) => [dateKey(new Date(h.date)), h.name]),
+    holidayRows.map((h) => [calendarDateKey(h.date), h.name]),
   );
 
   const dayLabel = (d: Date) =>
-    d.toLocaleDateString("en-AU", {
-      weekday: "short",
-      day: "numeric",
-      month: "short",
-    });
+    fmtInTz(d, tz, { weekday: "short", day: "numeric", month: "short" });
   const timeLabel = (a: Date, b: Date) =>
-    `${a.toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" })} – ${b.toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" })}`;
+    `${fmtInTz(a, tz, { hour: "numeric", minute: "2-digit" })} – ${fmtInTz(b, tz, { hour: "numeric", minute: "2-digit" })}`;
 
   // Roll up per worker.
   const rows = new Map<string, WorkerRow>();
@@ -108,6 +110,7 @@ export default async function PayrollReportPage({
       s.staff.employmentType,
       mileageRate,
       holidays,
+      tz,
     );
 
     const key = s.staff.id;
@@ -135,7 +138,7 @@ export default async function PayrollReportPage({
       timeLabel: timeLabel(new Date(s.start), new Date(s.end)),
       clientName: `${s.client.firstName} ${s.client.lastName}`,
       dayType: line.dayType,
-      holidayName: holidayName.get(dateKey(new Date(s.start))) ?? null,
+      holidayName: holidayName.get(dateKey(new Date(s.start), tz)) ?? null,
       hours: line.hours,
       rate: line.rate,
       km: line.km,

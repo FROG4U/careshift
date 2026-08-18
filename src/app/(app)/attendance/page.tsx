@@ -10,9 +10,10 @@ import {
 } from "@/lib/reliability";
 import { AttendanceTable, type WorkerRow } from "./AttendanceTable";
 
+import { isManager } from "@/lib/roles";
 export default async function AttendancePage() {
   const { tenant, session } = await requireTenant();
-  if (session.role !== "ADMIN" && session.role !== "COORDINATOR") {
+  if (!isManager(session.role)) {
     redirect("/dashboard");
   }
 

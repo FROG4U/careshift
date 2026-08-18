@@ -5,6 +5,7 @@ import { requireTenant } from "@/lib/tenant";
 import { prisma } from "@/lib/prisma";
 import { notifyWorker } from "@/lib/notify";
 
+import { isManager } from "@/lib/roles";
 const str = (v: FormDataEntryValue | null) => String(v ?? "").trim();
 
 function fmtWhen(d: Date) {
@@ -20,7 +21,7 @@ function fmtWhen(d: Date) {
 /** Approve a swap: reassign the shift to the requested worker. */
 export async function approveSwap(formData: FormData) {
   const { tenant, session } = await requireTenant();
-  if (session.role !== "ADMIN" && session.role !== "COORDINATOR") return;
+  if (!isManager(session.role)) return;
 
   const id = str(formData.get("id"));
   const swap = await prisma.shiftSwap.findFirst({
@@ -82,7 +83,7 @@ export async function approveSwap(formData: FormData) {
 /** Reject a swap: the shift stays with the original worker. */
 export async function rejectSwap(formData: FormData) {
   const { tenant, session } = await requireTenant();
-  if (session.role !== "ADMIN" && session.role !== "COORDINATOR") return;
+  if (!isManager(session.role)) return;
 
   const id = str(formData.get("id"));
   const swap = await prisma.shiftSwap.findFirst({

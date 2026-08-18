@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { notifyWorker, notifyManagers } from "@/lib/notify";
 import { isStaffUnavailable } from "@/lib/availability";
 
+import { isAdmin } from "@/lib/roles";
 function fmtWhen(d: Date) {
   return d.toLocaleString("en-AU", {
     weekday: "short",
@@ -296,7 +297,7 @@ export async function addScheduleBranch(
   name: string,
 ): Promise<{ id: string } | { error: string }> {
   const { tenant, session } = await requireTenant();
-  if (session.role !== "ADMIN")
+  if (!isAdmin(session.role))
     return { error: "Only admins can add a schedule." };
   const clean = name.trim();
   if (!clean) return { error: "Please enter a name." };
@@ -311,7 +312,7 @@ export async function addScheduleBranch(
 /** Rename a branch schedule (admin-only). */
 export async function renameScheduleBranch(formData: FormData) {
   const { tenant, session } = await requireTenant();
-  if (session.role !== "ADMIN") return;
+  if (!isAdmin(session.role)) return;
   const id = String(formData.get("branchId") ?? "");
   const name = String(formData.get("name") ?? "").trim();
   if (!id || !name) return;
@@ -326,7 +327,7 @@ export async function renameScheduleBranch(formData: FormData) {
 /** Delete a branch schedule and its shifts (admin-only). */
 export async function deleteScheduleBranch(formData: FormData) {
   const { tenant, session } = await requireTenant();
-  if (session.role !== "ADMIN") return;
+  if (!isAdmin(session.role)) return;
   const id = String(formData.get("branchId") ?? "");
   if (!id) return;
   // Remove the branch's shifts, then the branch itself.

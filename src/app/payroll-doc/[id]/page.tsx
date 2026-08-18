@@ -4,8 +4,10 @@ import { prisma } from "@/lib/prisma";
 import { fmtDate } from "@/lib/format";
 import { costShift, dateKey, money, type RateGrid } from "@/lib/payroll";
 import { DAY_TYPE_LABELS, type DayType } from "@/lib/constants";
+import { calendarDateKey, tzForState } from "@/lib/timezone";
 import { AutoPrint } from "./AutoPrint";
 
+import { isManager } from "@/lib/roles";
 /**
  * Standalone, print-ready payroll document. Lives OUTSIDE the (app) layout, so
  * there is no sidebar or notification bar — what you see is the whole page,
@@ -19,7 +21,7 @@ export default async function PayrollDoc({
   searchParams: Promise<{ staff?: string }>;
 }) {
   const { tenant, session } = await requireTenant();
-  if (session.role !== "ADMIN" && session.role !== "COORDINATOR") {
+  if (!isManager(session.role)) {
     redirect("/dashboard");
   }
 
@@ -63,7 +65,9 @@ export default async function PayrollDoc({
       },
     }),
   ]);
-  const holidays = new Set(holidayRows.map((h) => dateKey(new Date(h.date))));
+  // Penalty bands are decided in this branch's local time, not the server's.
+  const tz = tzForState(branchState);
+  const holidays = new Set(holidayRows.map((h) => calendarDateKey(h.date)));
 
   type Row = {
     name: string;
@@ -99,6 +103,7 @@ export default async function PayrollDoc({
       s.staff.employmentType,
       mileageRate,
       holidays,
+      tz,
     );
     const key = s.staff.id;
     const r =

@@ -4,12 +4,13 @@ import { revalidatePath } from "next/cache";
 import { requireTenant } from "@/lib/tenant";
 import { prisma } from "@/lib/prisma";
 
+import { isManager } from "@/lib/roles";
 const str = (v: FormDataEntryValue | null) => String(v ?? "").trim();
 
 /** Payroll is manager-only — workers must never reach these actions. */
 async function requireManager() {
   const ctx = await requireTenant();
-  if (ctx.session.role !== "ADMIN" && ctx.session.role !== "COORDINATOR") {
+  if (!isManager(ctx.session.role)) {
     throw new Error("Not authorised");
   }
   return ctx;

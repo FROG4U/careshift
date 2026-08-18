@@ -3,7 +3,9 @@ import { requireTenant } from "@/lib/tenant";
 import { prisma } from "@/lib/prisma";
 import { costShift, dateKey, type RateGrid } from "@/lib/payroll";
 import { DAY_TYPE_LABELS, type DayType } from "@/lib/constants";
+import { calendarDateKey, fmtInTz, tzForState } from "@/lib/timezone";
 
+import { isManager } from "@/lib/roles";
 /** Escape a CSV cell (quote if it contains comma, quote or newline). */
 function cell(v: string | number): string {
   const s = String(v ?? "");
@@ -21,7 +23,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { tenant, session } = await requireTenant();
-  if (session.role !== "ADMIN" && session.role !== "COORDINATOR") {
+  if (!isManager(session.role)) {
     return new NextResponse("Not authorised", { status: 403 });
   }
 
@@ -65,17 +67,19 @@ export async function GET(
       ],
     },
   });
-  const holidays = new Set(holidayRows.map((h) => dateKey(new Date(h.date))));
+  // Branch-local time drives the bands and the times printed in the export.
+  const tz = tzForState(branchState);
+  const holidays = new Set(holidayRows.map((h) => calendarDateKey(h.date)));
 
   const money = (n: number) => n.toFixed(2);
   const dstr = (d: Date) =>
-    new Date(d).toLocaleDateString("en-AU", {
+    fmtInTz(new Date(d), tz, {
       day: "2-digit",
       month: "short",
       year: "numeric",
     });
   const tstr = (d: Date) =>
-    new Date(d).toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" });
+    fmtInTz(new Date(d), tz, { hour: "numeric", minute: "2-digit" });
 
   const lines: string[] = [];
   lines.push(
@@ -163,6 +167,7 @@ export async function GET(
       s.staff.employmentType,
       mileageRate,
       holidays,
+      tz,
     );
     const name = `${s.staff.firstName} ${s.staff.lastName}`;
     const level = s.staff.payLevel?.name ?? "No level";
@@ -271,7 +276,7 @@ export async function GET(
   const who = staffFilter
     ? ([...agg.values()][0]?.name ?? "worker").replace(/\s+/g, "-").toLowerCase()
     : "all";
-  const fname = `payroll_${dateKey(new Date(period.startDate))}_${who}${detail ? "_detail" : ""}.csv`;
+  const fname = `payroll_${dateKey(new Date(period.startDate), tz)}_${who}${detail ? "_detail" : ""}.csv`;
 
   // BOM so Excel opens UTF-8 cleanly.
   return new NextResponse("﻿" + lines.join("\n"), {

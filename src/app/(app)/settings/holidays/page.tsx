@@ -4,13 +4,14 @@ import { requireTenant } from "@/lib/tenant";
 import { prisma } from "@/lib/prisma";
 import { HolidaysClient, type HolidayRow } from "./HolidaysClient";
 
+import { isManager } from "@/lib/roles";
 export default async function HolidaysPage({
   searchParams,
 }: {
   searchParams: Promise<{ year?: string; state?: string }>;
 }) {
   const { tenant, session } = await requireTenant();
-  if (session.role !== "ADMIN" && session.role !== "COORDINATOR") {
+  if (!isManager(session.role)) {
     redirect("/dashboard");
   }
 
