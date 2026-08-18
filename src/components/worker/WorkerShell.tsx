@@ -32,6 +32,8 @@ function titleFor(path: string) {
   if (path.startsWith("/my-shifts/completed")) return "Completed Shifts";
   if (path.startsWith("/my-shifts/profile")) return "Profile";
   if (path.startsWith("/my-shifts/summary")) return "My Hours";
+  if (path.startsWith("/my-shifts/pay")) return "My Pay";
+  if (path.startsWith("/my-shifts/rates")) return "My Rates";
   return "My Shifts";
 }
 
@@ -144,6 +146,12 @@ export function WorkerShell({
               <DrawerLink href="/my-shifts/profile" icon="badge" label="My profile" onClick={() => setMenuOpen(false)} />
               <DrawerLink href="/my-shifts/availability" icon="event_busy" label="My availability" onClick={() => setMenuOpen(false)} />
               <DrawerLink href="/my-shifts/summary" icon="schedule" label="My hours & mileage" onClick={() => setMenuOpen(false)} />
+
+              <p className="px-3 pb-1 pt-4 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                Pay
+              </p>
+              <DrawerLink href="/my-shifts/pay" icon="payments" label="My pay" onClick={() => setMenuOpen(false)} />
+              <DrawerLink href="/my-shifts/rates" icon="request_quote" label="My rates" onClick={() => setMenuOpen(false)} />
 
               <p className="px-3 pb-1 pt-4 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
                 Safety

@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireTenant } from "@/lib/tenant";
 import { prisma } from "@/lib/prisma";
-import { costShift, dateKey, type RateGrid } from "@/lib/payroll";
+import { costShift, dateKey } from "@/lib/payroll";
+import { effectiveRates } from "@/lib/rates";
 import { DAY_TYPE_LABELS, type DayType } from "@/lib/constants";
 import { calendarDateKey, fmtInTz, tzForState } from "@/lib/timezone";
 
@@ -147,10 +148,8 @@ export async function GET(
 
   for (const s of shifts) {
     if (!s.staff) continue;
-    const grid: RateGrid = {};
-    for (const r of s.staff.payLevel?.rates ?? [])
-      grid[`${r.stream}_${r.dayType}`] = r.rate;
-    const mileageRate = s.staff.payLevel?.mileageRate ?? 0;
+    // Award level, with any manual per-worker override applied.
+    const { grid, mileageRate } = effectiveRates(s.staff);
 
     const line = costShift(
       {

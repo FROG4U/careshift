@@ -79,6 +79,11 @@ export default async function StaffPage() {
       wkAgedCare: load(grid["AGED_CARE_WEEKDAY_DAY"]),
       wkDva: load(grid["DVA_WEEKDAY_DAY"]),
       wkCleaning: load(grid["CLEANING_WEEKDAY_DAY"]),
+      // Manual overrides, so the edit form can show what's actually set.
+      rateNdis: s.rateNdis,
+      rateAgedCare: s.rateAgedCare,
+      rateDva: s.rateDva,
+      rateCleaning: s.rateCleaning,
     };
   });
 

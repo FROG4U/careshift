@@ -2,7 +2,8 @@ import { notFound, redirect } from "next/navigation";
 import { requireTenant } from "@/lib/tenant";
 import { prisma } from "@/lib/prisma";
 import { fmtDate } from "@/lib/format";
-import { costShift, dateKey, money, type RateGrid } from "@/lib/payroll";
+import { costShift, dateKey, money } from "@/lib/payroll";
+import { effectiveRates } from "@/lib/rates";
 import { DAY_TYPE_LABELS, type DayType } from "@/lib/constants";
 import { calendarDateKey, tzForState } from "@/lib/timezone";
 import { AutoPrint } from "./AutoPrint";
@@ -84,10 +85,8 @@ export default async function PayrollDoc({
   const rows = new Map<string, Row>();
   for (const s of shifts) {
     if (!s.staff) continue;
-    const grid: RateGrid = {};
-    for (const r of s.staff.payLevel?.rates ?? [])
-      grid[`${r.stream}_${r.dayType}`] = r.rate;
-    const mileageRate = s.staff.payLevel?.mileageRate ?? 0;
+    // Award level, with any manual per-worker override applied.
+    const { grid, mileageRate } = effectiveRates(s.staff);
     const line = costShift(
       {
         start: s.start,

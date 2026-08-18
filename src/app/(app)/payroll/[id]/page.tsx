@@ -3,7 +3,8 @@ import { notFound, redirect } from "next/navigation";
 import { requireTenant } from "@/lib/tenant";
 import { prisma } from "@/lib/prisma";
 import { fmtDate } from "@/lib/format";
-import { costShift, dateKey, money, type RateGrid } from "@/lib/payroll";
+import { costShift, dateKey, money } from "@/lib/payroll";
+import { effectiveRates } from "@/lib/rates";
 import { calendarDateKey, fmtInTz, tzForState } from "@/lib/timezone";
 import { approvePayrollPeriod, reopenPayrollPeriod } from "../actions";
 import {
@@ -90,10 +91,8 @@ export default async function PayrollReportPage({
 
   for (const s of shifts) {
     if (!s.staff) continue;
-    const grid: RateGrid = {};
-    for (const r of s.staff.payLevel?.rates ?? [])
-      grid[`${r.stream}_${r.dayType}`] = r.rate;
-    const mileageRate = s.staff.payLevel?.mileageRate ?? 0;
+    // Award level, with any manual per-worker override applied.
+    const { grid, mileageRate } = effectiveRates(s.staff);
 
     const line = costShift(
       {
