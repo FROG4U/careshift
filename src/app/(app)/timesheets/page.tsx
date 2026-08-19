@@ -32,10 +32,12 @@ export default async function TimesheetsPage({
     from?: string;
     to?: string;
     month?: string;
+    client?: string;
+    staff?: string;
   }>;
 }) {
   const { tenant } = await requireTenant();
-  const { q, from, to, month } = await searchParams;
+  const { q, from, to, month, client, staff } = await searchParams;
   const query = (q ?? "").trim().toLowerCase();
 
   // Date window: a chosen month takes precedence, else the from/to range.
@@ -57,6 +59,8 @@ export default async function TimesheetsPage({
     where: {
       tenantId: tenant.id,
       status: "COMPLETED",
+      ...(client ? { clientId: client } : {}),
+      ...(staff ? { staffId: staff } : {}),
       ...(start || end
         ? {
             start: {
@@ -99,7 +103,31 @@ export default async function TimesheetsPage({
       label: d.toLocaleDateString("en-AU", { month: "long", year: "numeric" }),
     };
   });
-  const hasFilter = !!(query || from || to || month);
+  const hasFilter = !!(query || from || to || month || client || staff);
+
+  // Dropdown options for the participant / worker filters.
+  const [clientOptions, staffOptions] = await Promise.all([
+    prisma.client.findMany({
+      where: { tenantId: tenant.id },
+      select: { id: true, firstName: true, lastName: true },
+      orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
+    }),
+    prisma.staff.findMany({
+      where: { tenantId: tenant.id },
+      select: { id: true, firstName: true, lastName: true },
+      orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
+    }),
+  ]);
+
+  // The shift-notes PDF inherits whatever the page is currently filtered to.
+  const notesParams = new URLSearchParams();
+  if (client) notesParams.set("client", client);
+  if (staff) notesParams.set("staff", staff);
+  if (month) notesParams.set("month", month);
+  if (from) notesParams.set("from", from);
+  if (to) notesParams.set("to", to);
+  if (query) notesParams.set("q", query);
+  const notesQs = notesParams.toString() ? `?${notesParams}` : "";
 
   return (
     <div className="p-6 lg:p-8">
@@ -150,6 +178,38 @@ export default async function TimesheetsPage({
           <label className="block text-xs font-medium text-slate-500">To</label>
           <input type="date" name="to" defaultValue={to ?? ""} className="mt-1 rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[var(--brand)]" />
         </div>
+        <div>
+          <label className="block text-xs font-medium text-slate-500">
+            Participant
+          </label>
+          <select
+            name="client"
+            defaultValue={client ?? ""}
+            className="mt-1 rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[var(--brand)]"
+          >
+            <option value="">All participants</option>
+            {clientOptions.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.firstName} {c.lastName}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-slate-500">Worker</label>
+          <select
+            name="staff"
+            defaultValue={staff ?? ""}
+            className="mt-1 rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[var(--brand)]"
+          >
+            <option value="">All workers</option>
+            {staffOptions.map((w) => (
+              <option key={w.id} value={w.id}>
+                {w.firstName} {w.lastName}
+              </option>
+            ))}
+          </select>
+        </div>
         <button className="rounded-lg bg-[var(--brand)] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:opacity-90">
           Filter
         </button>
@@ -158,6 +218,15 @@ export default async function TimesheetsPage({
             Clear
           </a>
         )}
+        <a
+          href={`/timesheets-doc${notesQs}`}
+          target="_blank"
+          rel="noreferrer"
+          className="flex items-center gap-2 rounded-lg border border-[var(--brand)] px-4 py-2 text-sm font-semibold text-[var(--brand)] transition hover:bg-blue-50"
+        >
+          <span className="material-symbols-rounded text-[18px]">picture_as_pdf</span>
+          Shift notes PDF
+        </a>
       </form>
 
       <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
