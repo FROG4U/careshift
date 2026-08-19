@@ -396,44 +396,6 @@ export function StaffClient({
                     Select a level and the full rate grid (weekday → public holiday) + mileage fills in automatically.
                   </p>
                 )}
-
-                {/* ── Manual rate override ── */}
-                <div className="mt-4 rounded-lg border border-[var(--border)] bg-[var(--background)] p-3">
-                  <div className="text-sm font-semibold text-[var(--text-primary)]">
-                    Agreed rate (overrides the level)
-                  </div>
-                  <p className="mt-0.5 text-xs text-[var(--text-secondary)]">
-                    Only fill these in if this worker is paid something other
-                    than their level. The figure you enter is their{" "}
-                    <strong>weekday base</strong> — evening, night, weekend and
-                    public-holiday penalties are still added on top, and casual
-                    loading still applies. Leave blank to use the level.
-                  </p>
-                  <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                    {([
-                      ["rateNdis", "NDIS", editing.rateNdis],
-                      ["rateAgedCare", "Aged Care", editing.rateAgedCare],
-                      ["rateDva", "DVA", editing.rateDva],
-                      ["rateCleaning", "Cleaning", editing.rateCleaning],
-                    ] as const).map(([name, labelText, value]) => (
-                      <label key={name} className="block text-xs font-medium text-[var(--text-secondary)]">
-                        {labelText}
-                        <div className="relative mt-1">
-                          <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-[var(--text-muted)]">$</span>
-                          <input
-                            name={name}
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            defaultValue={value ?? ""}
-                            placeholder="—"
-                            className={`${field} pl-6`}
-                          />
-                        </div>
-                      </label>
-                    ))}
-                  </div>
-                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">

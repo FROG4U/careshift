@@ -56,11 +56,6 @@ function staffData(formData: FormData) {
     clearanceType: str(formData.get("clearanceType")),
     clearanceExpiry: date(formData.get("clearanceExpiry")),
     branchId: str(formData.get("branchId")),
-    // Optional manual overrides (only present if the form sends them).
-    rateNdis: num(formData.get("rateNdis")),
-    rateAgedCare: num(formData.get("rateAgedCare")),
-    rateDva: num(formData.get("rateDva")),
-    rateCleaning: num(formData.get("rateCleaning")),
   };
 }
 
