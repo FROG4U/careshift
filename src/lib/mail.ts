@@ -53,6 +53,11 @@ export async function sendMail(opts: {
   try {
     await getTransporter().sendMail({
       from: process.env.SMTP_FROM ?? process.env.SMTP_USER,
+      // Sending happens from a dedicated mail subdomain, which is not a real
+      // mailbox. Point replies at one someone actually reads.
+      ...(process.env.SMTP_REPLY_TO
+        ? { replyTo: process.env.SMTP_REPLY_TO }
+        : {}),
       to: opts.to,
       subject: opts.subject,
       text: opts.text,
