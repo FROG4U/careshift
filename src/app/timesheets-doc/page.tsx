@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { isManager } from "@/lib/roles";
 import { netHoursOf } from "@/lib/payroll";
 import { fmtInTz, tzForState } from "@/lib/timezone";
-import { AutoPrint } from "../payroll-doc/[id]/AutoPrint";
+import { PrintButton } from "@/components/PrintButton";
 
 export const dynamic = "force-dynamic";
 
@@ -140,7 +140,7 @@ export default async function TimesheetNotesDoc({
 
   return (
     <div className="mx-auto max-w-[900px] bg-white px-10 py-8 text-slate-900">
-      <AutoPrint />
+      <PrintButton backHref="/timesheets" />
 
       <header
         className="mb-6 flex items-start justify-between border-b-2 pb-5"
@@ -192,61 +192,43 @@ export default async function TimesheetNotesDoc({
           No completed shifts match these filters.
         </p>
       ) : (
-        <div className="space-y-3">
+        <div>
           {shifts.map((s) => {
             const tz = tzForState(s.branch?.state);
             const t = (d: Date) =>
               fmtInTz(d, tz, { hour: "numeric", minute: "2-digit" });
-            const hours = netHoursOf(s);
 
             return (
               <article
                 key={s.id}
-                className="break-inside-avoid rounded border border-slate-200 p-3"
+                className="break-inside-avoid border-b border-slate-200 py-3"
               >
-                <div className="mb-1.5 flex flex-wrap items-baseline justify-between gap-2 border-b border-slate-100 pb-1.5">
-                  <div className="text-sm font-bold">
-                    {fmtInTz(s.start, tz, {
-                      weekday: "short",
-                      day: "numeric",
-                      month: "short",
-                      year: "numeric",
-                    })}
-                    <span className="ml-2 font-normal text-slate-600">
-                      {t(s.start)} – {t(s.end)}
-                      {s.clockInAt && s.clockOutAt && (
-                        <span className="text-slate-400">
-                          {" "}
-                          (clocked {t(s.clockInAt)} – {t(s.clockOutAt)})
-                        </span>
-                      )}
-                    </span>
-                  </div>
-                  <div className="text-xs text-slate-600">
-                    {hours.toFixed(2)} h paid
-                  </div>
+                <div className="text-sm font-bold">
+                  {fmtInTz(s.start, tz, {
+                    weekday: "short",
+                    day: "numeric",
+                    month: "short",
+                    year: "numeric",
+                  })}
+                  {"  "}
+                  {t(s.start)} – {t(s.end)}
                 </div>
 
-                <div className="mb-1.5 text-xs text-slate-600">
-                  <strong className="text-slate-800">
-                    {s.client.firstName} {s.client.lastName}
-                  </strong>
-                  {" · support worker "}
-                  <strong className="text-slate-800">
-                    {s.staff
-                      ? `${s.staff.firstName} ${s.staff.lastName}`
-                      : "Unassigned"}
-                  </strong>
-                  {s.approval !== "PENDING" && ` · ${s.approval.toLowerCase()}`}
+                <div className="text-xs text-slate-600">
+                  {s.client.firstName} {s.client.lastName} ·{" "}
+                  {s.staff
+                    ? `${s.staff.firstName} ${s.staff.lastName}`
+                    : "Unassigned"}{" "}
+                  · {netHoursOf(s).toFixed(2)} h
                 </div>
 
                 {s.progressNote?.trim() ? (
-                  <p className="whitespace-pre-wrap text-sm leading-relaxed">
+                  <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed">
                     {s.progressNote}
                   </p>
                 ) : (
-                  <p className="text-sm italic text-amber-700">
-                    No shift notes were recorded for this visit.
+                  <p className="mt-1.5 text-sm italic text-slate-500">
+                    No notes recorded.
                   </p>
                 )}
               </article>

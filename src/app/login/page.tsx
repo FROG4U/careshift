@@ -103,7 +103,16 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <p className="mt-5 text-sm text-slate-500">
+          <p className="mt-4 text-sm">
+            <a
+              href="/forgot-password"
+              className="font-semibold text-slate-500 hover:underline"
+            >
+              Forgot your password?
+            </a>
+          </p>
+
+          <p className="mt-3 text-sm text-slate-500">
             New support worker?{" "}
             <a
               href="/register"

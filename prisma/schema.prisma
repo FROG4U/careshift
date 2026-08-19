@@ -258,6 +258,7 @@ model User {
   reactions     MessageReaction[]
   pushSubscriptions PushSubscription[]
   incidentsReported Incident[] @relation("IncidentReporter")
+  passwordResets    PasswordReset[]
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -362,6 +363,25 @@ model IncidentPhoto {
   createdAt  DateTime @default(now())
 
   @@index([incidentId])
+}
+
+/// A one-time password-reset link.
+///
+/// Only a HASH of the token is stored — anyone with database access still
+/// can't mint a working reset link. Tokens are single use and short-lived.
+model PasswordReset {
+  id        String    @id @default(cuid())
+  tenantId  String
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// SHA-256 of the token that was emailed.
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 /// A single browser/device that has opted in to push notifications. One user
