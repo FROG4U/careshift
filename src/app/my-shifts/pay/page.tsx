@@ -26,6 +26,7 @@ export default async function MyPayPage() {
     where: { id: session.staffId },
     include: {
       payLevel: { include: { rates: true } },
+      rateOverrides: true,
       branch: { select: { id: true, state: true, name: true } },
     },
   });

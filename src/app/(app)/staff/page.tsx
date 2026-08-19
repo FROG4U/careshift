@@ -20,7 +20,7 @@ export default async function StaffPage() {
   const [staff, levels, branchRecords] = await Promise.all([
     prisma.staff.findMany({
       where: { tenantId: tenant.id },
-      include: { payLevel: { include: { rates: true } }, branch: true },
+      include: { payLevel: { include: { rates: true } }, branch: true, rateOverrides: true },
       orderBy: { createdAt: "desc" },
     }),
     prisma.payLevel.findMany({
@@ -79,11 +79,10 @@ export default async function StaffPage() {
       wkAgedCare: load(grid["AGED_CARE_WEEKDAY_DAY"]),
       wkDva: load(grid["DVA_WEEKDAY_DAY"]),
       wkCleaning: load(grid["CLEANING_WEEKDAY_DAY"]),
-      // Manual overrides, so the edit form can show what's actually set.
-      rateNdis: s.rateNdis,
-      rateAgedCare: s.rateAgedCare,
-      rateDva: s.rateDva,
-      rateCleaning: s.rateCleaning,
+      // Admin-typed rate overrides, so the grid shows what's actually paid.
+      overrides: Object.fromEntries(
+        s.rateOverrides.map((o) => [`${o.stream}_${o.dayType}`, o.rate]),
+      ),
     };
   });
 

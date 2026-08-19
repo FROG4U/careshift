@@ -50,7 +50,7 @@ export async function GET(
       client: true,
       pauses: true,
       transports: true,
-      staff: { include: { payLevel: { include: { rates: true } } } },
+      staff: { include: { payLevel: { include: { rates: true } }, rateOverrides: true } },
     },
     orderBy: [{ staffId: "asc" }, { start: "asc" }],
   });

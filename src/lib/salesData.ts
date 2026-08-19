@@ -61,7 +61,7 @@ export async function loadPricedShifts(opts: {
         pauses: true,
         transports: true,
         branch: { select: { name: true, state: true } },
-        staff: { include: { payLevel: { include: { rates: true } } } },
+        staff: { include: { payLevel: { include: { rates: true } }, rateOverrides: true } },
       },
       orderBy: { start: "asc" },
     }),

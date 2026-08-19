@@ -27,11 +27,11 @@ export default async function MyRatesPage() {
 
   const staff = await prisma.staff.findUnique({
     where: { id: session.staffId },
-    include: { payLevel: { include: { rates: true } } },
+    include: { payLevel: { include: { rates: true } }, rateOverrides: true },
   });
   if (!staff) redirect("/my-shifts");
 
-  const { grid, overriddenStreams, levelName, mileageRate } =
+  const { grid, overriddenKeys, levelName, mileageRate } =
     effectiveRates(staff);
   const casual = staff.employmentType === "CASUAL";
 
@@ -87,7 +87,7 @@ export default async function MyRatesPage() {
               <h2 className="font-semibold text-slate-900">
                 {STREAM_LABELS[stream]}
               </h2>
-              {overriddenStreams.includes(stream) && (
+              {DAY_TYPES.some((d) => overriddenKeys.has(`${stream}_${d}`)) && (
                 <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-bold text-blue-700">
                   Agreed rate
                 </span>
@@ -95,12 +95,7 @@ export default async function MyRatesPage() {
             </div>
             <ul className="divide-y divide-slate-50">
               {DAY_TYPES.map((d) => {
-                const rate = hourlyRate(
-                  grid,
-                  stream,
-                  d as DayType,
-                  staff.employmentType,
-                );
+                const rate = hourlyRate(grid, stream, d as DayType);
                 if (!rate) return null;
                 return (
                   <li

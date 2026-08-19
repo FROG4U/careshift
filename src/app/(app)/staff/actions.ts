@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { requireTenant } from "@/lib/tenant";
 import { prisma } from "@/lib/prisma";
+import { effectiveRates } from "@/lib/rates";
+import { DAY_TYPES, STAFF_STREAMS } from "@/lib/constants";
 
 const str = (v: FormDataEntryValue | null) => String(v ?? "").trim() || null;
 const num = (v: FormDataEntryValue | null) => {
@@ -80,6 +82,63 @@ export async function createStaff(formData: FormData) {
   revalidatePath("/staff");
 }
 
+/**
+ * Save the rate grid an admin typed on the staff form.
+ *
+ * A cell is stored as an override only when it DIFFERS from what the pay
+ * level would give (casual loading included). Typing back the number the
+ * level already produces leaves no override, so a later change of level
+ * still flows through. Clearing a cell removes its override.
+ *
+ * The stored value is the FINAL rate — no loading is added on top of it.
+ */
+async function saveRateOverrides(
+  tenantId: string,
+  staffId: string,
+  formData: FormData,
+) {
+  const staff = await prisma.staff.findFirst({
+    where: { id: staffId, tenantId },
+    include: { payLevel: { include: { rates: true } }, rateOverrides: true },
+  });
+  if (!staff) return;
+
+  // What the level alone pays, so a real override is distinguishable from
+  // an untouched cell.
+  const levelOnly = effectiveRates({
+    employmentType: staff.employmentType,
+    payLevel: staff.payLevel,
+    rateOverrides: [],
+  }).grid;
+
+  const keep: { stream: string; dayType: string; rate: number }[] = [];
+
+  for (const stream of STAFF_STREAMS) {
+    for (const dayType of DAY_TYPES) {
+      const raw = String(formData.get(`rate_${stream}_${dayType}`) ?? "").trim();
+      if (!raw) continue;
+      const value = Math.round(Number(raw) * 100) / 100;
+      if (!Number.isFinite(value) || value <= 0) continue;
+
+      const fromLevel = levelOnly[`${stream}_${dayType}`] ?? 0;
+      if (Math.abs(value - fromLevel) < 0.005) continue; // unchanged
+      keep.push({ stream, dayType, rate: value });
+    }
+  }
+
+  // Replaced wholesale, so anything the admin cleared disappears.
+  await prisma.$transaction([
+    prisma.staffRate.deleteMany({ where: { staffId } }),
+    ...(keep.length
+      ? [
+          prisma.staffRate.createMany({
+            data: keep.map((k) => ({ ...k, tenantId, staffId })),
+          }),
+        ]
+      : []),
+  ]);
+}
+
 export async function updateStaff(formData: FormData) {
   const { tenant } = await requireTenant();
   const id = String(formData.get("id") ?? "");
@@ -100,5 +159,10 @@ export async function updateStaff(formData: FormData) {
     },
   });
 
+  // After the level/employment change has landed, so the comparison is
+  // against the level they're actually on now.
+  await saveRateOverrides(tenant.id, id, formData);
+
   revalidatePath("/staff");
+  revalidatePath("/payroll");
 }

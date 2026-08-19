@@ -52,7 +52,7 @@ export default async function PayrollReportPage({
       client: true,
       pauses: true,
       transports: true,
-      staff: { include: { payLevel: { include: { rates: true } } } },
+      staff: { include: { payLevel: { include: { rates: true } }, rateOverrides: true } },
     },
     orderBy: { start: "asc" },
   });

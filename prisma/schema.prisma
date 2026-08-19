@@ -365,6 +365,29 @@ model IncidentPhoto {
   @@index([incidentId])
 }
 
+/// An admin-set hourly rate for one worker, for one stream and day-type,
+/// overriding whatever their pay level says.
+///
+/// IMPORTANT: this is the FINAL rate the worker is paid for that cell —
+/// casual loading is NOT applied on top. The admin types what they see in
+/// the grid, and that is exactly what gets paid. Anything else invites
+/// someone to enter $45 and have the worker paid $56.
+model StaffRate {
+  id       String @id @default(cuid())
+  tenantId String
+  staffId  String
+  staff    Staff  @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  stream   String
+  dayType  String
+  rate     Float
+
+  updatedAt DateTime @updatedAt
+
+  @@unique([staffId, stream, dayType])
+  @@index([tenantId])
+  @@index([staffId])
+}
+
 /// A one-time password-reset link.
 ///
 /// Only a HASH of the token is stored — anyone with database access still
@@ -690,6 +713,7 @@ model Staff {
   lateNotices LateNotice[]
   availabilities Availability[]
   incidents   Incident[]
+  rateOverrides StaffRate[]
 
   @@index([tenantId])
   @@index([branchId])

@@ -46,11 +46,8 @@ export type StaffRow = {
   wkAgedCare: number | null;
   wkDva: number | null;
   wkCleaning: number | null;
-  // Manual per-worker overrides. Null = use the pay level.
-  rateNdis: number | null;
-  rateAgedCare: number | null;
-  rateDva: number | null;
-  rateCleaning: number | null;
+  /** Admin-typed rate overrides, keyed `${stream}_${dayType}`. */
+  overrides: Record<string, number>;
 };
 
 const field =
@@ -62,7 +59,7 @@ const EMPTY: StaffRow = {
   employmentType: "PERMANENT",
   clearanceType: "", clearanceExpiry: "", payLevelId: "", payLevelName: "",
   mileageRate: null, wkNdis: null, wkAgedCare: null, wkDva: null, wkCleaning: null,
-  rateNdis: null, rateAgedCare: null, rateDva: null, rateCleaning: null,
+  overrides: {},
 };
 
 function ClearanceBadge({ expiry }: { expiry: string }) {
@@ -353,9 +350,15 @@ export function StaffClient({
                 </div>
                 {selEmp === "CASUAL" && (
                   <p className="mt-2 text-xs font-medium text-orange-700">
-                    Casual loading +{Math.round(CASUAL_LOADING * 100)}% applied to all rates below.
+                    Casual loading +{Math.round(CASUAL_LOADING * 100)}% is already included in the rates below.
                   </p>
                 )}
+                <p className="mt-1 text-xs text-[var(--text-secondary)]">
+                  These are the rates this worker is actually paid. Type over
+                  any box to agree a different rate — what you enter is exactly
+                  what they get, nothing is added on top. Changed boxes are
+                  highlighted; clear one to go back to the level&apos;s rate.
+                </p>
 
                 {levels.length === 0 ? (
                   <p className="mt-2 text-xs text-amber-600">
@@ -378,11 +381,35 @@ export function StaffClient({
                         {STAFF_STREAMS.map((s) => (
                           <tr key={s} className="border-t border-[var(--border)]">
                             <td className="px-2 py-1.5 font-medium text-[var(--text-primary)]">{STREAM_LABELS[s as StaffStream]}</td>
-                            {DAY_TYPES.map((d) => (
-                              <td key={d} className="px-2 py-1.5 text-right tabular-nums text-[var(--text-secondary)]">
-                                {money(cellRate(s, d))}
-                              </td>
-                            ))}
+                            {DAY_TYPES.map((d) => {
+                              const key = `${s}_${d}`;
+                              const fromLevel = cellRate(s, d);
+                              const current = editing.overrides[key] ?? fromLevel;
+                              const isOverride =
+                                editing.overrides[key] != null &&
+                                Math.abs(editing.overrides[key] - (fromLevel ?? 0)) >= 0.005;
+                              return (
+                                <td key={d} className="px-1 py-1">
+                                  <input
+                                    // Remount when the level or employment
+                                    // basis changes so the box shows that
+                                    // level's rate rather than a stale one.
+                                    key={`${key}-${selLevel}-${selEmp}`}
+                                    name={`rate_${key}`}
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    defaultValue={current != null ? current.toFixed(2) : ""}
+                                    placeholder={fromLevel != null ? fromLevel.toFixed(2) : "—"}
+                                    className={`w-20 rounded-md border px-1.5 py-1 text-right text-xs tabular-nums outline-none focus:border-[var(--brand)] ${
+                                      isOverride
+                                        ? "border-blue-300 bg-blue-50 font-semibold text-blue-800"
+                                        : "border-[var(--border)] bg-white text-[var(--text-secondary)]"
+                                    }`}
+                                  />
+                                </td>
+                              );
+                            })}
                           </tr>
                         ))}
                       </tbody>
@@ -393,7 +420,7 @@ export function StaffClient({
                   </div>
                 ) : (
                   <p className="mt-2 text-xs text-[var(--text-muted)]">
-                    Select a level and the full rate grid (weekday → public holiday) + mileage fills in automatically.
+                    Select a level and the full rate grid (weekday → public holiday) + mileage fills in automatically. You can then edit any rate.
                   </p>
                 )}
               </div>

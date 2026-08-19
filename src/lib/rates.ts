@@ -1,92 +1,100 @@
 import {
+  CASUAL_LOADING,
   DAY_TYPES,
-  DAY_TYPE_MULTIPLIER,
   STAFF_STREAMS,
   type DayType,
 } from "./constants";
 import type { RateGrid } from "./payroll";
 
 /**
- * A worker's effective pay rates.
+ * A worker's effective pay rates — the FINAL dollars-per-hour for every
+ * stream and day-type combination.
  *
- * Rates normally come from the award Pay Level assigned to the worker. An
- * admin can also set a manual override per stream on the worker's profile —
- * useful for someone paid above award, or a stream the level doesn't cover.
+ * Two inputs, in order:
+ *   1. The award Pay Level assigned to them. Levels store PERMANENT rates,
+ *      so casual loading is added here using the award's additive method:
+ *      base x (multiplier + loading), i.e. the permanent cell plus the
+ *      loading applied to the weekday base.
+ *   2. Any per-worker override an admin has typed into the rate grid on the
+ *      staff profile. An override is taken LITERALLY — it is the rate paid,
+ *      with no loading added on top. The admin types what they see in the
+ *      grid, and that is what the worker gets.
  *
- * An override sets the worker's WEEKDAY BASE for that stream. The SCHADS
- * penalty multipliers still apply on top (evening +12.5%, night +15%,
- * Saturday ×1.5, Sunday ×2, public holiday ×2.5), because those are legal
- * entitlements — an override raises someone's pay, it must not quietly strip
- * their penalty rates. Casual loading is applied later, in hourlyRate().
+ * Everything downstream (payroll, the CSV, the PDF, the worker's own rate
+ * and pay screens) reads this one function, so there is a single answer to
+ * "what is this person paid".
  */
 
 export type StaffRateSource = {
   employmentType: string;
-  rateNdis: number | null;
-  rateAgedCare: number | null;
-  rateDva: number | null;
-  rateCleaning: number | null;
   payLevel: {
     name: string;
     mileageRate: number;
     rates: { stream: string; dayType: string; rate: number }[];
   } | null;
+  /**
+   * Admin overrides. REQUIRED on purpose — if this were optional, a query
+   * that forgot `rateOverrides: true` would compile fine and silently pay
+   * the level rate instead of the agreed one. Better a build error.
+   */
+  rateOverrides: { stream: string; dayType: string; rate: number }[];
 };
-
-/** Which profile field overrides which stream. */
-const OVERRIDE_FIELD: Record<string, keyof StaffRateSource> = {
-  NDIS: "rateNdis",
-  AGED_CARE: "rateAgedCare",
-  DVA: "rateDva",
-  CLEANING: "rateCleaning",
-};
-
-const round2 = (n: number) => Math.round(n * 100) / 100;
-
-export function overrideFor(
-  staff: StaffRateSource,
-  stream: string,
-): number | null {
-  const field = OVERRIDE_FIELD[stream];
-  if (!field) return null;
-  const value = staff[field];
-  return typeof value === "number" && value > 0 ? value : null;
-}
 
 export type EffectiveRates = {
+  /** Final $/hr per `${stream}_${dayType}` — loading already included. */
   grid: RateGrid;
-  /** Streams currently driven by a manual override rather than the level. */
-  overriddenStreams: string[];
+  /** Keys an admin has overridden, so the UI can mark them. */
+  overriddenKeys: Set<string>;
   levelName: string | null;
   mileageRate: number;
 };
 
-/** The rate grid actually used to pay this worker. */
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
 export function effectiveRates(staff: StaffRateSource): EffectiveRates {
   const grid: RateGrid = {};
+  const casual = staff.employmentType === "CASUAL";
 
-  // Start from the assigned award level.
+  // 1. The level's permanent rates.
   for (const r of staff.payLevel?.rates ?? []) {
     grid[`${r.stream}_${r.dayType}`] = r.rate;
   }
 
-  // Manual overrides win, expanded across the penalty bands.
-  const overriddenStreams: string[] = [];
-  for (const stream of STAFF_STREAMS) {
-    const base = overrideFor(staff, stream);
-    if (base == null) continue;
-    overriddenStreams.push(stream);
-    for (const dayType of DAY_TYPES) {
-      grid[`${stream}_${dayType}`] = round2(
-        base * DAY_TYPE_MULTIPLIER[dayType as DayType],
-      );
+  // 2. Casual loading, additive on the weekday base for that stream.
+  if (casual) {
+    for (const stream of STAFF_STREAMS) {
+      const base = grid[`${stream}_WEEKDAY_DAY`] ?? 0;
+      if (base === 0) continue;
+      for (const dayType of DAY_TYPES) {
+        const key = `${stream}_${dayType}`;
+        if (grid[key] == null) continue;
+        grid[key] = round2(grid[key] + CASUAL_LOADING * base);
+      }
     }
+  }
+
+  // 3. Admin overrides — taken exactly as typed.
+  const overriddenKeys = new Set<string>();
+  for (const o of staff.rateOverrides ?? []) {
+    if (!(o.rate > 0)) continue;
+    const key = `${o.stream}_${o.dayType}`;
+    grid[key] = o.rate;
+    overriddenKeys.add(key);
   }
 
   return {
     grid,
-    overriddenStreams,
+    overriddenKeys,
     levelName: staff.payLevel?.name ?? null,
     mileageRate: staff.payLevel?.mileageRate ?? 0,
   };
+}
+
+/** The final rate for one cell. */
+export function rateFor(
+  grid: RateGrid,
+  stream: string,
+  dayType: DayType,
+): number {
+  return grid[`${stream}_${dayType}`] ?? 0;
 }

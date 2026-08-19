@@ -51,21 +51,15 @@ export function streamFor(agreementType: string): string {
 export type RateGrid = Record<string, number>; // `${stream}_${dayType}` → $/hr
 
 /**
- * Hourly rate for a shift. Pay levels store PERMANENT rates; casual staff use
- * the award's additive method: base × (multiplier + loading), i.e. the
- * permanent cell plus the loading applied to the weekday base.
+ * Hourly rate for a shift.
+ *
+ * The grid handed in comes from `effectiveRates`, which has ALREADY applied
+ * casual loading and any admin override — so this is a plain lookup. Loading
+ * lives in one place on purpose: when it was applied here as well, an admin
+ * override typed as $45 would have been paid at $56.
  */
-export function hourlyRate(
-  grid: RateGrid,
-  stream: string,
-  dayType: DayType,
-  employmentType: string,
-): number {
-  const cell = grid[`${stream}_${dayType}`];
-  if (cell == null) return 0;
-  if (employmentType !== "CASUAL") return cell;
-  const base = grid[`${stream}_WEEKDAY_DAY`] ?? 0;
-  return cell + CASUAL_LOADING * base;
+export function hourlyRate(grid: RateGrid, stream: string, dayType: DayType): number {
+  return grid[`${stream}_${dayType}`] ?? 0;
 }
 
 export type ShiftForPay = {
@@ -163,7 +157,7 @@ export function costShift(
   const stream = streamFor(s.client.agreementType);
   const hours = netHoursOf(s);
   const km = kmOf(s);
-  const rate = hourlyRate(grid, stream, dayType, employmentType);
+  const rate = hourlyRate(grid, stream, dayType);
   const pay = hours * rate + km * mileageRate;
   return { hours, km, rate, dayType, stream, pay };
 }
