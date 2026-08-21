@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { initials } from "@/lib/format";
+import { initialsFromName } from "@/lib/format";
 import { startDirect, createGroup } from "./actions";
 
 export type ConvoSummary = {
@@ -84,7 +84,7 @@ export function MessagesShell({
                   {c.type === "GROUP" ? (
                     <span className="material-symbols-rounded text-[22px]">group</span>
                   ) : (
-                    initials(...(c.title.split(" ") as [string, string]))
+                    initialsFromName(c.title)
                   )}
                 </span>
                 {c.online && (
@@ -250,7 +250,7 @@ function NewChat({
                 }`}
               >
                 <span className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-600">
-                  {initials(...(u.name.split(" ") as [string, string]))}
+                  {initialsFromName(u.name)}
                 </span>
                 <span className="flex-1">
                   <span className="block text-sm font-medium text-[var(--text-primary)]">{u.name}</span>

@@ -47,10 +47,6 @@ export default async function ThreadPage({
   // A conversation you're not a member of (or one that's been deleted) used
   // to render a bare 404, which is a dead end with no way back. Send them to
   // the list with an explanation instead.
-  // TEMPORARY TRACE — remove once the pencil-button 404 is understood.
-  console.log(
-    `[trace] thread id=${id} user=${session.name} found=${Boolean(convo)}`,
-  );
   if (!convo) redirect("/messages?missing=1");
 
   // Opening the thread clears its unread badge (direct write — no revalidate

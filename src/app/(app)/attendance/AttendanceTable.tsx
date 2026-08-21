@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useState } from "react";
-import { initials } from "@/lib/format";
+import { initialsFromName } from "@/lib/format";
 import { RatingBar, type Band } from "@/components/RatingBar";
 
 export type ShiftLine = {
@@ -109,7 +109,7 @@ export function AttendanceTable({ rows }: { rows: WorkerRow[] }) {
                         chevron_right
                       </span>
                       <span className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-600">
-                        {initials(...(r.name.split(" ") as [string, string]))}
+                        {initialsFromName(r.name)}
                       </span>
                       <div>
                         <div className="font-medium text-[var(--text-primary)]">

@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useState } from "react";
-import { initials } from "@/lib/format";
+import { initialsFromName } from "@/lib/format";
 import { DAY_TYPE_LABELS, type DayType } from "@/lib/constants";
 
 export type DayLine = {
@@ -98,7 +98,7 @@ export function PayrollTable({
                         chevron_right
                       </span>
                       <span className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-600">
-                        {initials(...(r.name.split(" ") as [string, string]))}
+                        {initialsFromName(r.name)}
                       </span>
                       <div>
                         <div className="font-medium text-[var(--text-primary)]">

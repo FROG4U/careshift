@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { initials } from "@/lib/format";
+import { initialsFromName } from "@/lib/format";
 import {
   sendMessage,
   toggleReaction,
@@ -285,7 +285,7 @@ export function Thread({
             {isGroup ? (
               <span className="material-symbols-rounded text-[18px]">group</span>
             ) : (
-              initials(...(title.split(" ") as [string, string]))
+              initialsFromName(title)
             )}
           </span>
           {!isGroup && online && (
@@ -507,7 +507,7 @@ export function Thread({
                 className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-[var(--background)]"
               >
                 <span className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-100 text-[10px] font-semibold text-slate-600">
-                  {initials(...(mm.name.split(" ") as [string, string]))}
+                  {initialsFromName(mm.name)}
                 </span>
                 {mm.name}
               </button>

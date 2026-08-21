@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { initials } from "@/lib/format";
+import { initialsFromName } from "@/lib/format";
 import { addClientWorker, removeClientWorker } from "./actions";
 
 export type TeamMember = { id: string; staffId: string; name: string; title: string };
@@ -80,7 +80,7 @@ export function TeamClient({
             {allocated.map((m) => (
               <li key={m.id} className="flex items-center gap-3 px-5 py-3">
                 <span className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-600">
-                  {initials(...(m.name.split(" ") as [string, string]))}
+                  {initialsFromName(m.name)}
                 </span>
                 <div className="flex-1 min-w-0">
                   <div className="font-medium text-[var(--text-primary)]">{m.name}</div>
@@ -148,7 +148,7 @@ export function TeamClient({
                       <input type="hidden" name="staffId" value={s.id} />
                       <button className="flex w-full items-center gap-3 px-1 py-3 text-left hover:bg-[var(--background)]">
                         <span className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-600">
-                          {initials(...(s.name.split(" ") as [string, string]))}
+                          {initialsFromName(s.name)}
                         </span>
                         <span className="flex-1">
                           <span className="block font-medium text-[var(--text-primary)]">
