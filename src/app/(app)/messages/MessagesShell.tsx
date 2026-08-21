@@ -165,14 +165,14 @@ function NewChat({
           return;
         }
         fd.set("userId", picked[0]);
-        const res = await startDirect(fd);
-        if ("error" in res) {
-          setError(res.error);
+        // You only ever get one direct chat per person, so if one already
+        // exists this returns it rather than making a duplicate.
+        const id = await startDirect(fd);
+        if (typeof id !== "string" || !id) {
+          setError("Couldn't start that chat. Please try again.");
           return;
         }
-        // You only ever get one direct chat per person, so if one already
-        // exists we open it rather than making a duplicate.
-        onCreated(res.id);
+        onCreated(id);
       } else {
         if (!groupName.trim()) {
           setError("Give the group a name.");

@@ -31,13 +31,13 @@ export function NewChatButton({ contacts }: { contacts: ChatContact[] }) {
     try {
       const fd = new FormData();
       fd.set("userId", userId);
-      const res = await startDirect(fd);
-      if ("error" in res) {
-        setError(res.error);
+      const id = await startDirect(fd);
+      if (typeof id !== "string" || !id) {
+        setError("Couldn't start that chat. Please try again.");
         return;
       }
       setOpen(false);
-      router.push(`/my-shifts/chat/${res.id}`);
+      router.push(`/my-shifts/chat/${id}`);
     } catch {
       setError("Couldn't start that chat. Please try again.");
     } finally {
