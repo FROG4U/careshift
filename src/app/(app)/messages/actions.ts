@@ -23,7 +23,14 @@ export async function startDirect(
 ): Promise<string | null> {
   const { tenant, session } = await requireTenant();
   const otherId = str(formData.get("userId"));
-  if (!otherId || otherId === session.id) return null;
+  // TEMPORARY TRACE — remove once the pencil-button 404 is understood.
+  console.log(
+    `[trace] startDirect caller=${session.name}<${session.email}> picked=${otherId || "(none)"}`,
+  );
+  if (!otherId || otherId === session.id) {
+    console.log("[trace] startDirect -> null (no pick, or picked self)");
+    return null;
+  }
 
   const other = await prisma.user.findFirst({
     where: { id: otherId, tenantId: tenant.id },
@@ -42,7 +49,10 @@ export async function startDirect(
       ],
     },
   });
-  if (existing) return existing.id;
+  if (existing) {
+    console.log(`[trace] startDirect -> reusing existing ${existing.id}`);
+    return existing.id;
+  }
 
   const convo = await prisma.conversation.create({
     data: {
@@ -55,6 +65,7 @@ export async function startDirect(
     },
   });
   revalidatePath("/messages");
+  console.log(`[trace] startDirect -> created ${convo.id}`);
   return convo.id;
 }
 
