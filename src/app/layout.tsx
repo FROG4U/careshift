@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { SplashScreen } from "@/components/SplashScreen";
 
+import { StaleBuildRecovery } from "@/components/StaleBuildRecovery";
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -53,6 +54,7 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-full flex flex-col">
+        <StaleBuildRecovery />
         <SplashScreen />
         {children}
       </body>
