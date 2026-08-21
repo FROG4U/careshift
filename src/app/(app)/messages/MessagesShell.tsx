@@ -149,26 +149,53 @@ function NewChat({
   const [picked, setPicked] = useState<string[]>([]);
   const [groupName, setGroupName] = useState("");
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const toggle = (id: string) =>
     setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
 
   async function go() {
+    setError(null);
     setBusy(true);
     const fd = new FormData();
-    if (mode === "DIRECT") {
-      if (!picked[0]) return setBusy(false);
-      fd.set("userId", picked[0]);
-      const id = await startDirect(fd);
-      if (id) onCreated(id);
-    } else {
-      if (!groupName.trim() || picked.length === 0) return setBusy(false);
-      fd.set("name", groupName.trim());
-      picked.forEach((p) => fd.append("members", p));
-      const id = await createGroup(fd);
-      if (id) onCreated(id);
+    try {
+      if (mode === "DIRECT") {
+        if (!picked[0]) {
+          setError("Pick someone to message.");
+          return;
+        }
+        fd.set("userId", picked[0]);
+        const res = await startDirect(fd);
+        if ("error" in res) {
+          setError(res.error);
+          return;
+        }
+        // You only ever get one direct chat per person, so if one already
+        // exists we open it rather than making a duplicate.
+        onCreated(res.id);
+      } else {
+        if (!groupName.trim()) {
+          setError("Give the group a name.");
+          return;
+        }
+        if (picked.length === 0) {
+          setError("Add at least one person to the group.");
+          return;
+        }
+        fd.set("name", groupName.trim());
+        picked.forEach((p) => fd.append("members", p));
+        const id = await createGroup(fd);
+        if (!id) {
+          setError("Couldn't create that group. Please try again.");
+          return;
+        }
+        onCreated(id);
+      }
+    } catch {
+      setError("Something went wrong. Please try again.");
+    } finally {
+      setBusy(false);
     }
-    setBusy(false);
   }
 
   return (
@@ -239,15 +266,30 @@ function NewChat({
           })}
         </div>
 
+        {error && (
+          <p className="mt-3 rounded-xl bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
+            {error}
+          </p>
+        )}
+
         <button
           onClick={go}
           disabled={busy || (mode === "DIRECT" ? picked.length === 0 : !groupName.trim() || picked.length === 0)}
           className="mt-4 w-full rounded-xl bg-[var(--brand)] px-4 py-3 text-sm font-bold text-white disabled:opacity-50"
         >
-          {mode === "DIRECT"
-            ? "Start chat"
-            : `Create group${picked.length ? ` · ${picked.length + 1} people` : ""}`}
+          {busy
+            ? "Opening…"
+            : mode === "DIRECT"
+              ? "Start chat"
+              : `Create group${picked.length ? ` · ${picked.length + 1} people` : ""}`}
         </button>
+
+        {mode === "DIRECT" && (
+          <p className="mt-2 text-center text-[11px] text-[var(--text-muted)]">
+            You get one direct chat per person — if you already have one with
+            them, this opens it rather than starting a second.
+          </p>
+        )}
       </div>
     </div>
   );

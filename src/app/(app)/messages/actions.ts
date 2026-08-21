@@ -10,15 +10,23 @@ import { notifyUser } from "@/lib/notify";
 const str = (v: FormDataEntryValue | null) => String(v ?? "").trim();
 
 /** Start (or reuse) a 1:1 DM with another user. Returns the conversation id. */
-export async function startDirect(formData: FormData): Promise<string | null> {
+export type StartDirectResult =
+  | { id: string; existed: boolean }
+  | { error: string };
+
+export async function startDirect(
+  formData: FormData,
+): Promise<StartDirectResult> {
   const { tenant, session } = await requireTenant();
   const otherId = str(formData.get("userId"));
-  if (!otherId || otherId === session.id) return null;
+  if (!otherId) return { error: "Pick someone to message." };
+  if (otherId === session.id)
+    return { error: "You can't start a chat with yourself." };
 
   const other = await prisma.user.findFirst({
     where: { id: otherId, tenantId: tenant.id },
   });
-  if (!other) return null;
+  if (!other) return { error: "That person is no longer in your team." };
 
   // Reuse an existing DM between exactly these two.
   const existing = await prisma.conversation.findFirst({
@@ -32,7 +40,7 @@ export async function startDirect(formData: FormData): Promise<string | null> {
       ],
     },
   });
-  if (existing) return existing.id;
+  if (existing) return { id: existing.id, existed: true };
 
   const convo = await prisma.conversation.create({
     data: {
@@ -45,7 +53,7 @@ export async function startDirect(formData: FormData): Promise<string | null> {
     },
   });
   revalidatePath("/messages");
-  return convo.id;
+  return { id: convo.id, existed: false };
 }
 
 /** Create a named group with the chosen members (plus me). */

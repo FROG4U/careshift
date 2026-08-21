@@ -5,6 +5,8 @@ import { prisma } from "@/lib/prisma";
 import { conversationTitle } from "@/lib/chat";
 import { isOnline } from "@/lib/presence";
 import { initials } from "@/lib/format";
+import { NewChatButton, type ChatContact } from "@/components/worker/NewChatButton";
+import { ROLE_LABELS, type Role } from "@/lib/constants";
 
 function ago(iso: string) {
   const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
@@ -28,6 +30,22 @@ export default async function WorkerChatPage() {
     select: { status: true },
   });
   if (!account || account.status !== "APPROVED") redirect("/pending");
+
+  // Everyone else in the tenant they could message.
+  const contactRows = await prisma.user.findMany({
+    where: {
+      tenantId: session.tenantId,
+      id: { not: session.id },
+      status: "APPROVED",
+    },
+    select: { id: true, name: true, role: true },
+    orderBy: { name: "asc" },
+  });
+  const contacts: ChatContact[] = contactRows.map((u) => ({
+    id: u.id,
+    name: u.name,
+    role: ROLE_LABELS[u.role as Role] ?? u.role,
+  }));
 
   const memberships = await prisma.conversationMember.findMany({
     where: { userId: session.id, conversation: { tenantId: session.tenantId } },
@@ -83,9 +101,14 @@ export default async function WorkerChatPage() {
 
   return (
     <div className="p-4">
+      <div className="mb-3 flex items-center justify-between">
+        <h1 className="text-lg font-bold text-slate-900">Chat</h1>
+        <NewChatButton contacts={contacts} />
+      </div>
+
       {convos.length === 0 ? (
         <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-400">
-          No conversations yet. Your team's messages appear here.
+          No conversations yet. Tap the pencil to message someone in your team.
         </div>
       ) : (
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">

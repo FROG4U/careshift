@@ -1,4 +1,4 @@
-import { notFound, redirect } from "next/navigation";
+import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { conversationTitle } from "@/lib/chat";
@@ -44,7 +44,10 @@ export default async function ThreadPage({
       },
     },
   });
-  if (!convo) notFound();
+  // A conversation you're not a member of (or one that's been deleted) used
+  // to render a bare 404, which is a dead end with no way back. Send them to
+  // the list with an explanation instead.
+  if (!convo) redirect("/messages?missing=1");
 
   // Opening the thread clears its unread badge (direct write — no revalidate
   // during render).
