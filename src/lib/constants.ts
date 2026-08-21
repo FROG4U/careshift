@@ -86,9 +86,9 @@ export const DAY_TYPE_LABELS: Record<DayType, string> = {
 
 /// The hours each weekday band covers, for display.
 export const DAY_TYPE_HINTS: Record<DayType, string> = {
-  WEEKDAY_DAY: "6am – 8pm",
-  WEEKDAY_EVENING: "8pm – midnight",
-  WEEKDAY_NIGHT: "past midnight / before 6am",
+  WEEKDAY_DAY: "6am to 8pm",
+  WEEKDAY_EVENING: "8pm to midnight",
+  WEEKDAY_NIGHT: "finishes after midnight, or starts before 6am",
   SATURDAY: "all day",
   SUNDAY: "all day",
   PUBLIC_HOLIDAY: "all day",

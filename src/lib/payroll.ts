@@ -16,10 +16,10 @@ export function dateKey(d: Date, tz: string = DEFAULT_TIMEZONE): string {
  * timezone of the branch that owns the shift:
  *   Public holiday — outranks everything
  *   Saturday / Sunday — by the day
- *   Weekday Night   — starts at/before midnight and finishes after midnight
- *                     (crosses the date), or starts before 6:00am
- *   Weekday Evening — starts at/after 8:00pm and ends by midnight
- *   Weekday Daytime — 6:00am to 8:00pm
+ *   Weekday Night   — starts at/before midnight and finishes AFTER midnight,
+ *                     or starts before 6:00am
+ *   Weekday Evening — 8:00pm to midnight, finishing AT OR BEFORE midnight
+ *   Weekday Daytime — 6:00am to 8:00pm on a single weekday
  */
 export function dayTypeFor(
   start: Date,
@@ -33,9 +33,19 @@ export function dayTypeFor(
   if (local.weekday === 6) return "SATURDAY";
 
   const startHour = local.hour + local.minute / 60;
-  // Active night: runs past midnight into the next day, or begins before 6am.
-  const crossesMidnight = dateKey(end, tz) !== dateKey(start, tz) && end > start;
-  if (crossesMidnight || startHour < 6) return "WEEKDAY_NIGHT";
+
+  // "Finishes after midnight" means STRICTLY past 00:00. A shift ending at
+  // exactly midnight finishes *at* midnight, which is still Evening — but
+  // its end timestamp falls on the next calendar date, so comparing dates
+  // alone would wrongly read it as an active overnight and pay night rates.
+  const endLocal = zonedParts(end, tz);
+  const endsExactlyAtMidnight = endLocal.hour === 0 && endLocal.minute === 0;
+  const finishesAfterMidnight =
+    end > start &&
+    dateKey(end, tz) !== dateKey(start, tz) &&
+    !endsExactlyAtMidnight;
+
+  if (finishesAfterMidnight || startHour < 6) return "WEEKDAY_NIGHT";
   // Evening band starts at 8pm.
   if (startHour >= 20) return "WEEKDAY_EVENING";
   return "WEEKDAY_DAY";
