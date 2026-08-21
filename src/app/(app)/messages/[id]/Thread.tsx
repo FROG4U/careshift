@@ -77,19 +77,75 @@ export function Thread({
   const [attach, setAttach] = useState<{ url: string; type: string } | null>(null);
   const [sending, setSending] = useState(false);
   const [mention, setMention] = useState<Member[] | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  /** Messages typed but not yet confirmed by the server. */
+  const [pending, setPending] = useState<
+    { key: string; body: string; attachmentUrl: string | null }[]
+  >([]);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const camRef = useRef<HTMLInputElement>(null);
+  const atBottomRef = useRef(true);
 
-  // Auto-scroll to newest.
+  // Anything the server has now confirmed can stop being shown optimistically.
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (pending.length === 0) return;
+    setPending((p) =>
+      p.filter(
+        (o) =>
+          !messages.some(
+            (m) => m.body === o.body && m.senderId === meId,
+          ),
+      ),
+    );
+    // Only reconcile when the server list actually changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages.length]);
 
-  // Poll for new messages while the thread is open (near real-time).
+  /**
+   * Scroll to the newest message — but only if the reader was already at the
+   * bottom. Yanking someone back down while they're reading history is the
+   * quickest way to make a chat feel broken.
+   */
   useEffect(() => {
-    const t = setInterval(() => router.refresh(), 5000);
-    return () => clearInterval(t);
+    if (!atBottomRef.current) return;
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages.length, pending.length]);
+
+  /**
+   * Poll for new messages, but only while the tab is actually visible —
+   * a backgrounded thread refreshing every 5s wastes the worker's data and
+   * battery for nothing. Refresh immediately when it regains focus so it is current.
+   */
+  useEffect(() => {
+    let timer: ReturnType<typeof setInterval> | null = null;
+
+    const start = () => {
+      if (timer) return;
+      timer = setInterval(() => router.refresh(), 5000);
+    };
+    const stop = () => {
+      if (timer) clearInterval(timer);
+      timer = null;
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        router.refresh();
+        start();
+      } else stop();
+    };
+
+    if (document.visibilityState === "visible") start();
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("focus", onVisibility);
+    return () => {
+      stop();
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("focus", onVisibility);
+    };
   }, [router]);
 
   function onType(v: string) {
@@ -107,34 +163,108 @@ export function Thread({
     setMention(null);
   }
 
-  async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
+  /**
+   * Shrink an image before upload.
+   *
+   * A photo straight off a phone or camera is routinely 5-15MB, which blew
+   * past the server's 8MB cap and failed silently — the commonest reason
+   * attaching "didn't work". Resizing to 1600px also makes it upload in a
+   * fraction of the time on mobile data.
+   */
+  async function compress(file: File): Promise<Blob> {
+    if (!file.type.startsWith("image/")) return file;
+    const bitmap = await createImageBitmap(file).catch(() => null);
+    if (!bitmap) return file;
+
+    const max = 1600;
+    const scale = Math.min(1, max / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return file;
+    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    return new Promise((resolve) =>
+      canvas.toBlob((b) => resolve(b ?? file), "image/jpeg", 0.8),
+    );
+  }
+
+  /** Shared by the file picker, the camera, drag-and-drop and paste. */
+  async function handleFile(file: File | null | undefined) {
     if (!file) return;
-    const fd = new FormData();
-    fd.set("file", file);
-    const res = await uploadAttachment(fd);
-    if (res) setAttach(res);
+    setUploadError(null);
+
+    if (!file.type.startsWith("image/")) {
+      setUploadError("Only images can be attached.");
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const blob = await compress(file);
+      if (blob.size > 8 * 1024 * 1024) {
+        setUploadError("That image is too large, even after shrinking.");
+        return;
+      }
+      const fd = new FormData();
+      fd.set(
+        "file",
+        new File([blob], file.name.replace(/\.\w+$/, ".jpg"), {
+          type: blob.type || "image/jpeg",
+        }),
+      );
+      const res = await uploadAttachment(fd);
+      if (res) setAttach(res);
+      else setUploadError("Couldn't upload that image. Please try again.");
+    } catch {
+      setUploadError("Couldn't read that image.");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
+    await handleFile(e.target.files?.[0]);
     e.target.value = "";
   }
 
   async function send() {
-    if ((!text.trim() && !attach) || sending) return;
+    const body = text.trim();
+    if ((!body && !attach) || sending) return;
+
     setSending(true);
     const fd = new FormData();
     fd.set("conversationId", conversationId);
-    fd.set("body", text.trim());
+    fd.set("body", body);
     if (replyTo) fd.set("parentId", replyTo.id);
     if (attach) {
       fd.set("attachmentUrl", attach.url);
       fd.set("attachmentType", attach.type);
     }
-    await sendMessage(fd);
+
+    // Show it straight away rather than after a server round-trip — a chat
+    // that pauses on every send feels broken on a poor connection.
+    const key = `${Date.now()}-${Math.random()}`;
+    setPending((p) => [...p, { key, body, attachmentUrl: attach?.url ?? null }]);
+
+    // Clear the composer immediately so they can keep typing.
     setText("");
     setReplyTo(null);
     setAttach(null);
     setMention(null);
-    setSending(false);
-    router.refresh();
+    atBottomRef.current = true;
+
+    try {
+      await sendMessage(fd);
+      router.refresh();
+    } catch {
+      // Put it back so nothing is silently lost.
+      setPending((p) => p.filter((o) => o.key !== key));
+      setText(body);
+      setUploadError("Message didn't send. Please try again.");
+    } finally {
+      setSending(false);
+    }
   }
 
   return (
@@ -188,7 +318,35 @@ export function Thread({
       </header>
 
       {/* Messages */}
-      <div className="flex-1 space-y-1 overflow-y-auto px-4 py-4">
+      <div
+        ref={scrollRef}
+        onScroll={(e) => {
+          const el = e.currentTarget;
+          // 80px of slack so "near enough" still counts as at the bottom.
+          atBottomRef.current =
+            el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+        }}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragOver(true);
+        }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragOver(false);
+          handleFile(e.dataTransfer.files?.[0]);
+        }}
+        className={`relative flex-1 space-y-1 overflow-y-auto px-4 py-4 ${
+          dragOver ? "bg-[var(--brand)]/5 ring-2 ring-inset ring-[var(--brand)]/30" : ""
+        }`}
+      >
+        {dragOver && (
+          <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
+            <span className="rounded-xl bg-[var(--brand)] px-4 py-2 text-sm font-semibold text-white shadow-lg">
+              Drop the image to attach it
+            </span>
+          </div>
+        )}
         {messages.length === 0 && (
           <p className="py-10 text-center text-sm text-[var(--text-muted)]">
             Say hello 👋
@@ -276,6 +434,26 @@ export function Thread({
             </div>
           );
         })}
+        {/* Sent, awaiting the server */}
+        {pending.map((o) => (
+          <div key={o.key} className="flex justify-end">
+            <div className="max-w-[75%] rounded-2xl rounded-br-md bg-[var(--brand)]/70 px-3.5 py-2 text-white">
+              {o.attachmentUrl && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={o.attachmentUrl}
+                  alt=""
+                  className="mb-1 max-h-52 rounded-lg object-cover opacity-80"
+                />
+              )}
+              {o.body && <p className="whitespace-pre-wrap text-sm">{o.body}</p>}
+              <span className="mt-0.5 block text-right text-[10px] text-white/70">
+                sending…
+              </span>
+            </div>
+          </div>
+        ))}
+
         <div ref={bottomRef} />
       </div>
 
@@ -289,6 +467,27 @@ export function Thread({
             <button onClick={() => setReplyTo(null)} className="text-[var(--text-muted)]">✕</button>
           </div>
         )}
+        {uploading && (
+          <div className="mb-2 flex items-center gap-2 rounded-xl bg-[var(--background)] px-3 py-2 text-xs text-[var(--text-secondary)]">
+            <span className="material-symbols-rounded animate-spin text-[16px]">
+              progress_activity
+            </span>
+            Preparing image…
+          </div>
+        )}
+
+        {uploadError && (
+          <div className="mb-2 flex items-center justify-between gap-2 rounded-xl bg-red-50 px-3 py-2 text-xs text-red-700">
+            <span>{uploadError}</span>
+            <button
+              onClick={() => setUploadError(null)}
+              className="font-semibold text-red-500"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+
         {attach && (
           <div className="mb-2 flex items-center gap-2 rounded-lg bg-[var(--background)] px-3 py-1.5 text-xs">
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -336,6 +535,17 @@ export function Thread({
           <textarea
             value={text}
             onChange={(e) => onType(e.target.value)}
+            onPaste={(e) => {
+              // Paste a screenshot straight into the chat — the way people
+              // actually share things on a desktop.
+              const item = Array.from(e.clipboardData.items).find((i) =>
+                i.type.startsWith("image/"),
+              );
+              if (item) {
+                e.preventDefault();
+                handleFile(item.getAsFile());
+              }
+            }}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
