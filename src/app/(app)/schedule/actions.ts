@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireTenant } from "@/lib/tenant";
 import { prisma } from "@/lib/prisma";
-import { syncShiftTasks } from "@/lib/tasks";
+import { syncShiftTasks, syncTemplateToFutureShifts } from "@/lib/tasks";
 import { notifyWorker, notifyManagers } from "@/lib/notify";
 import { isStaffUnavailable } from "@/lib/availability";
 
@@ -33,6 +33,102 @@ function weekStart(d: Date) {
 
 const hoursBetween = (a: Date, b: Date) =>
   (b.getTime() - a.getTime()) / 3_600_000;
+
+
+/**
+ * Persist the tasks entered in the New-shift dialog.
+ *
+ * ONCE  -> a ShiftTask on this shift only.
+ * EVERY / DAYS -> a TaskTemplate on the participant, which is then applied to
+ * this shift and to their future ones, so the admin never has to set the same
+ * task up twice.
+ */
+type DialogTask = {
+  title?: unknown;
+  recurrence?: unknown;
+  days?: unknown;
+  dueTime?: unknown;
+  reminder?: unknown;
+  reminderMinutesBefore?: unknown;
+};
+
+async function saveDialogTasks(
+  tenantId: string,
+  shiftId: string,
+  clientId: string,
+  formData: FormData,
+) {
+  const raw = String(formData.get("tasksJson") ?? "");
+  if (!raw) return;
+
+  let parsed: DialogTask[];
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return; // malformed payload — better to save no tasks than wrong ones
+  }
+  if (!Array.isArray(parsed) || parsed.length === 0) return;
+
+  const cleanTime = (v: unknown) => {
+    const t = String(v ?? "").trim();
+    return /^\d{1,2}:\d{2}$/.test(t) ? t : null;
+  };
+
+  let order = 100;
+  for (const item of parsed.slice(0, 20)) {
+    const title = String(item.title ?? "").trim();
+    if (!title) continue;
+
+    const dueTime = cleanTime(item.dueTime);
+    const reminder = item.reminder === true;
+    const minutes = Math.min(
+      180,
+      Math.max(0, Number(item.reminderMinutesBefore) || 15),
+    );
+    const days = Array.isArray(item.days)
+      ? item.days
+          .map((d) => Number(d))
+          .filter((d) => Number.isInteger(d) && d >= 0 && d <= 6)
+      : [];
+    const recurrence =
+      item.recurrence === "EVERY"
+        ? "EVERY"
+        : item.recurrence === "DAYS" && days.length > 0
+          ? "DAYS"
+          : "ONCE";
+
+    if (recurrence === "ONCE") {
+      await prisma.shiftTask.create({
+        data: {
+          tenantId,
+          shiftId,
+          title,
+          dueTime,
+          reminder,
+          reminderMinutesBefore: minutes,
+          sortOrder: order++,
+        },
+      });
+      continue;
+    }
+
+    const template = await prisma.taskTemplate.create({
+      data: {
+        tenantId,
+        clientId,
+        title,
+        recurrence,
+        days: recurrence === "DAYS" ? days : [],
+        dueTime,
+        reminder,
+        reminderMinutesBefore: minutes,
+        sortOrder: order++,
+      },
+    });
+    // Land it on this shift now, and on the participant's future shifts.
+    await syncTemplateToFutureShifts(template.id);
+  }
+}
 
 export async function createShift(
   formData: FormData,
@@ -142,23 +238,10 @@ export async function createShift(
   // Pull in whatever tasks this participant's templates call for.
   await syncShiftTasks(created.id);
 
-  // Plus any one-off tasks typed into the dialog, which belong to this shift
-  // alone (no template, so they never repeat).
-  const adHoc = formData
-    .getAll("taskTitle")
-    .map((t) => String(t).trim())
-    .filter(Boolean)
-    .slice(0, 20);
-  if (adHoc.length) {
-    await prisma.shiftTask.createMany({
-      data: adHoc.map((title, i) => ({
-        tenantId: tenant.id,
-        shiftId: created.id,
-        title,
-        sortOrder: 100 + i, // after the participant's regular tasks
-      })),
-    });
-  }
+  // Tasks typed into the dialog. A one-off lives on this shift alone; a
+  // repeating one is saved against the participant so it also lands on their
+  // future shifts.
+  await saveDialogTasks(tenant.id, created.id, clientId, formData);
 
   revalidatePath("/schedule");
   revalidatePath("/dashboard");
@@ -517,7 +600,12 @@ export async function copyWeek(formData: FormData) {
   revalidatePath("/dashboard");
 }
 
-/** Add a one-off task to an existing shift. */
+/**
+ * Add a task to an existing shift.
+ *
+ * Same choices as the New-shift dialog: this shift only, every shift, or
+ * certain weekdays — the repeating ones become a template on the participant.
+ */
 export async function addShiftTask(formData: FormData) {
   const { tenant, session } = await requireTenant();
   if (!hasManagerRole(session.role)) return;
@@ -528,14 +616,56 @@ export async function addShiftTask(formData: FormData) {
 
   const shift = await prisma.shift.findFirst({
     where: { id: shiftId, tenantId: tenant.id },
-    select: { id: true },
+    select: { id: true, clientId: true },
   });
   if (!shift) return;
 
+  const rawTime = String(formData.get("dueTime") ?? "").trim();
+  const dueTime = /^\d{1,2}:\d{2}$/.test(rawTime) ? rawTime : null;
+  const reminder = String(formData.get("reminder") ?? "") === "on";
+  const minutes = Math.min(
+    180,
+    Math.max(0, Number(formData.get("reminderMinutesBefore")) || 15),
+  );
+  const days = formData
+    .getAll("days")
+    .map((d) => Number(d))
+    .filter((d) => Number.isInteger(d) && d >= 0 && d <= 6);
+
+  const raw = String(formData.get("recurrence") ?? "ONCE");
+  const recurrence =
+    raw === "EVERY" ? "EVERY" : raw === "DAYS" && days.length > 0 ? "DAYS" : "ONCE";
+
   const count = await prisma.shiftTask.count({ where: { shiftId } });
-  await prisma.shiftTask.create({
-    data: { tenantId: tenant.id, shiftId, title, sortOrder: 100 + count },
-  });
+
+  if (recurrence === "ONCE") {
+    await prisma.shiftTask.create({
+      data: {
+        tenantId: tenant.id,
+        shiftId,
+        title,
+        dueTime,
+        reminder,
+        reminderMinutesBefore: minutes,
+        sortOrder: 100 + count,
+      },
+    });
+  } else {
+    const template = await prisma.taskTemplate.create({
+      data: {
+        tenantId: tenant.id,
+        clientId: shift.clientId,
+        title,
+        recurrence,
+        days: recurrence === "DAYS" ? days : [],
+        dueTime,
+        reminder,
+        reminderMinutesBefore: minutes,
+        sortOrder: 100 + count,
+      },
+    });
+    await syncTemplateToFutureShifts(template.id);
+  }
 
   revalidatePath("/schedule");
 }

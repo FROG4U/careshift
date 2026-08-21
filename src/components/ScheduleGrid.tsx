@@ -100,6 +100,7 @@ export function ScheduleGrid({
   const [modal, setModal] = useState<{ staffId: string; dayIso: string } | null>(
     null,
   );
+  const [taskRepeat, setTaskRepeat] = useState("ONCE");
   const [editShift, setEditShift] = useState<GridShift | null>(null);
   const [copyOpen, setCopyOpen] = useState(false);
   const [dragId, setDragId] = useState<string | null>(null);
@@ -785,17 +786,79 @@ export function ScheduleGrid({
                 </ul>
               )}
 
-              <form action={addShiftTask} className="flex gap-2">
+              <form
+                action={addShiftTask}
+                className="space-y-2 rounded-md border border-slate-200 bg-white p-2.5"
+              >
                 <input type="hidden" name="shiftId" value={editShift.id} />
                 <input
                   name="title"
                   required
-                  placeholder="Add a task for this shift"
-                  className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[var(--brand)]"
+                  placeholder="Add a task"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[var(--brand)]"
                 />
-                <button className="shrink-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700">
-                  Add
-                </button>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <select
+                    name="recurrence"
+                    value={taskRepeat}
+                    onChange={(e) => setTaskRepeat(e.target.value)}
+                    className="rounded-lg border border-slate-300 px-2 py-1.5 text-xs"
+                  >
+                    <option value="ONCE">This shift only</option>
+                    <option value="EVERY">Every shift</option>
+                    <option value="DAYS">Certain days</option>
+                  </select>
+                  <label className="flex items-center gap-1.5 text-xs text-slate-600">
+                    Due
+                    <input
+                      type="time"
+                      name="dueTime"
+                      className="rounded-lg border border-slate-300 px-2 py-1.5 text-xs"
+                    />
+                  </label>
+                </div>
+
+                {taskRepeat === "DAYS" && (
+                  <div className="flex flex-wrap gap-1">
+                    {[
+                      [1, "M"], [2, "T"], [3, "W"], [4, "T"],
+                      [5, "F"], [6, "S"], [0, "S"],
+                    ].map(([value, label], i) => (
+                      <label
+                        key={`${value}-${i}`}
+                        className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border border-slate-300 bg-white text-xs font-bold text-slate-500 has-[:checked]:border-[var(--brand)] has-[:checked]:bg-[var(--brand)] has-[:checked]:text-white"
+                      >
+                        <input
+                          type="checkbox"
+                          name="days"
+                          value={String(value)}
+                          className="sr-only"
+                        />
+                        {label}
+                      </label>
+                    ))}
+                  </div>
+                )}
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <label className="flex items-center gap-1.5 text-xs font-medium text-slate-700">
+                    <input type="checkbox" name="reminder" />
+                    Remind the worker
+                  </label>
+                  <input
+                    type="number"
+                    name="reminderMinutesBefore"
+                    min="0"
+                    max="180"
+                    defaultValue={15}
+                    className="w-16 rounded-lg border border-slate-300 px-2 py-1 text-xs"
+                  />
+                  <span className="text-xs text-slate-500">min before</span>
+                  <button className="ml-auto rounded-lg bg-[var(--brand)] px-3 py-1.5 text-xs font-semibold text-white">
+                    Add task
+                  </button>
+                </div>
               </form>
               <p className="mt-1.5 text-[11px] text-slate-400">
                 A task the worker has already ticked can&apos;t be removed — it&apos;s
