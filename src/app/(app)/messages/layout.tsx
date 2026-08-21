@@ -52,6 +52,7 @@ export default async function MessagesLayout({
       return {
         id: c.id,
         type: c.type,
+        archived: m.archivedAt != null,
         title,
         memberCount: c.members.length,
         online: otherMember ? isOnline(otherMember.user.lastSeenAt) : false,

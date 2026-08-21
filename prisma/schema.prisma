@@ -526,8 +526,15 @@ model ConversationMember {
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   userId         String
   user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  /// Last time this member opened the thread — drives unread counts.
+  /// Last time this member opened the thread — drives unread counts AND the
+  /// "Seen" receipt other members see against their own messages.
   lastReadAt     DateTime?
+  /// Stamped while this member is actively typing. Treated as "typing" only
+  /// for a few seconds after, so a closed tab stops showing it.
+  typingAt       DateTime?
+  /// Archived per member — one person hiding a conversation must not remove
+  /// it for everybody else in it.
+  archivedAt     DateTime?
   createdAt      DateTime     @default(now())
 
   @@unique([conversationId, userId])
@@ -549,6 +556,9 @@ model Message {
   /// Optional image/file attachment.
   attachmentUrl  String?
   attachmentType String?      // e.g. "image"
+  /// Soft delete: the row stays so replies quoting it still make sense, but
+  /// the content is replaced with "This message was deleted".
+  deletedAt      DateTime?
   createdAt      DateTime     @default(now())
 
   reactions MessageReaction[]

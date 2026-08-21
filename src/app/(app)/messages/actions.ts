@@ -3,6 +3,8 @@
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import { getSession } from "@/lib/auth";
 import { requireTenant } from "@/lib/tenant";
 import { prisma } from "@/lib/prisma";
 import { notifyUser } from "@/lib/notify";
@@ -223,4 +225,159 @@ export async function markConversationRead(conversationId: string) {
     data: { lastReadAt: new Date() },
   });
   revalidatePath("/messages");
+}
+
+// ── Typing, read receipts, archive, delete, group membership ──────────────
+
+/** Stamp that I'm typing. The reader treats it as live for a few seconds. */
+export async function setTyping(conversationId: string) {
+  const session = await getSession();
+  if (!session) return;
+  await prisma.conversationMember.updateMany({
+    where: { conversationId, userId: session.id },
+    data: { typingAt: new Date() },
+  });
+}
+
+/** Stop showing me as typing (message sent, or the box was cleared). */
+export async function clearTyping(conversationId: string) {
+  const session = await getSession();
+  if (!session) return;
+  await prisma.conversationMember.updateMany({
+    where: { conversationId, userId: session.id },
+    data: { typingAt: null },
+  });
+}
+
+/** Hide a conversation from my list without affecting anyone else's. */
+export async function toggleArchive(formData: FormData) {
+  const session = await getSession();
+  if (!session) return;
+  const conversationId = str(formData.get("conversationId"));
+  if (!conversationId) return;
+
+  const member = await prisma.conversationMember.findFirst({
+    where: { conversationId, userId: session.id },
+    select: { id: true, archivedAt: true },
+  });
+  if (!member) return;
+
+  await prisma.conversationMember.update({
+    where: { id: member.id },
+    data: { archivedAt: member.archivedAt ? null : new Date() },
+  });
+  revalidatePath("/messages");
+}
+
+/**
+ * Delete one of my own messages.
+ *
+ * Soft delete — the row survives so any reply quoting it still reads
+ * sensibly, but the content is gone. Only the sender can do it: letting
+ * anyone delete other people's messages would wreck the record of what was
+ * said about a participant's care.
+ */
+export async function deleteMessage(formData: FormData) {
+  const session = await getSession();
+  if (!session) return;
+  const id = str(formData.get("id"));
+  if (!id) return;
+
+  const msg = await prisma.message.findFirst({
+    where: { id, senderId: session.id, tenantId: session.tenantId },
+    select: { id: true, conversationId: true },
+  });
+  if (!msg) return;
+
+  await prisma.message.update({
+    where: { id: msg.id },
+    data: { deletedAt: new Date(), body: "", attachmentUrl: null, attachmentType: null },
+  });
+  revalidatePath(`/messages/${msg.conversationId}`);
+}
+
+/** Add people to a group. Direct chats always stay two people. */
+export async function addGroupMembers(formData: FormData) {
+  const { tenant, session } = await requireTenant();
+  const conversationId = str(formData.get("conversationId"));
+  const userIds = formData.getAll("userIds").map((u) => String(u));
+  if (!conversationId || userIds.length === 0) return;
+
+  const convo = await prisma.conversation.findFirst({
+    where: {
+      id: conversationId,
+      tenantId: tenant.id,
+      type: "GROUP",
+      members: { some: { userId: session.id } },
+    },
+    select: { id: true },
+  });
+  if (!convo) return;
+
+  const valid = await prisma.user.findMany({
+    where: { id: { in: userIds }, tenantId: tenant.id },
+    select: { id: true },
+  });
+
+  for (const u of valid) {
+    await prisma.conversationMember.upsert({
+      where: { conversationId_userId: { conversationId, userId: u.id } },
+      update: {},
+      create: { conversationId, userId: u.id },
+    });
+  }
+
+  revalidatePath(`/messages/${conversationId}`);
+  revalidatePath("/messages");
+}
+
+/** Remove someone from a group, or leave it yourself. */
+export async function removeGroupMember(formData: FormData) {
+  const { tenant, session } = await requireTenant();
+  const conversationId = str(formData.get("conversationId"));
+  const userId = str(formData.get("userId"));
+  if (!conversationId || !userId) return;
+
+  const convo = await prisma.conversation.findFirst({
+    where: {
+      id: conversationId,
+      tenantId: tenant.id,
+      type: "GROUP",
+      members: { some: { userId: session.id } },
+    },
+    select: { id: true, createdById: true },
+  });
+  if (!convo) return;
+
+  // Anyone can leave; only the group's creator can remove someone else.
+  const removingSelf = userId === session.id;
+  if (!removingSelf && convo.createdById !== session.id) return;
+
+  await prisma.conversationMember.deleteMany({ where: { conversationId, userId } });
+
+  revalidatePath("/messages");
+  if (removingSelf) redirect("/messages");
+  revalidatePath(`/messages/${conversationId}`);
+}
+
+/**
+ * Delete a group for everyone. Creator only.
+ *
+ * Direct chats can't be deleted — archiving hides them instead, so one person
+ * can't erase a two-way record of what was said.
+ */
+export async function deleteConversation(formData: FormData) {
+  const { tenant, session } = await requireTenant();
+  const conversationId = str(formData.get("conversationId"));
+  if (!conversationId) return;
+
+  const convo = await prisma.conversation.findFirst({
+    where: { id: conversationId, tenantId: tenant.id, type: "GROUP" },
+    select: { id: true, createdById: true },
+  });
+  if (!convo || convo.createdById !== session.id) return;
+
+  await prisma.conversation.delete({ where: { id: convo.id } });
+  revalidatePath("/messages");
+  redirect("/messages");
 }

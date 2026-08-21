@@ -9,6 +9,7 @@ import { startDirect, createGroup } from "./actions";
 export type ConvoSummary = {
   id: string;
   type: string;
+  archived: boolean;
   title: string;
   memberCount: number;
   lastBody: string;
@@ -39,7 +40,11 @@ export function MessagesShell({
   const pathname = usePathname();
   const router = useRouter();
   const [newOpen, setNewOpen] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
   const activeId = pathname.split("/")[2]; // /messages/<id>
+  const archivedCount = convos.filter((c) => c.archived).length;
+  // Archived conversations stay out of the way until asked for.
+  const visible = convos.filter((c) => (showArchived ? c.archived : !c.archived));
   const threadOpen = Boolean(activeId);
 
   return (
@@ -62,12 +67,25 @@ export function MessagesShell({
         </div>
 
         <div className="flex-1 overflow-y-auto">
-          {convos.length === 0 && (
+          {archivedCount > 0 && (
+            <button
+              onClick={() => setShowArchived((v) => !v)}
+              className="flex w-full items-center gap-2 border-b border-[var(--border)] px-4 py-2 text-left text-xs font-semibold text-[var(--text-secondary)] hover:bg-[var(--background)]"
+            >
+              <span className="material-symbols-rounded text-[16px]">
+                {showArchived ? "unarchive" : "archive"}
+              </span>
+              {showArchived
+                ? "Hide archived"
+                : `Archived (${archivedCount})`}
+            </button>
+          )}
+          {visible.length === 0 && (
             <p className="px-4 py-8 text-center text-sm text-[var(--text-muted)]">
               No conversations yet. Tap the pencil to start one.
             </p>
           )}
-          {convos.map((c) => (
+          {visible.map((c) => (
             <Link
               key={c.id}
               href={`/messages/${c.id}`}

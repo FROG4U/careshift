@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { conversationTitle } from "@/lib/chat";
+import { ROLE_LABELS, type Role } from "@/lib/constants";
 import { isOnline, presenceLabel } from "@/lib/presence";
 import { Thread, type ChatMessage, type Member } from "./Thread";
 
@@ -27,6 +28,7 @@ export default async function ThreadPage({
             select: {
               id: true,
               name: true,
+              role: true,
               phone: true,
               lastSeenAt: true,
               staff: { select: { phone: true } },
@@ -56,6 +58,14 @@ export default async function ThreadPage({
     data: { lastReadAt: new Date() },
   });
 
+  // Everyone in the tenant, for adding people to a group.
+  const directoryRows = await prisma.user.findMany({
+    where: { tenantId: session.tenantId, status: "APPROVED" },
+    select: { id: true, name: true, role: true },
+    orderBy: { name: "asc" },
+  });
+  const myMembership = convo.members.find((m) => m.user.id === session.id);
+
   const title = conversationTitle(convo, session.id, session.name);
   const members: Member[] = convo.members.map((m) => ({
     id: m.user.id,
@@ -79,6 +89,7 @@ export default async function ThreadPage({
     senderId: m.senderId,
     senderName: m.sender.name,
     body: m.body,
+    deleted: m.deletedAt != null,
     attachmentUrl: m.attachmentUrl,
     attachmentType: m.attachmentType,
     createdAt: m.createdAt.toISOString(),
@@ -98,6 +109,20 @@ export default async function ThreadPage({
       members={members}
       messages={messages}
       callNumber={callNumber}
+      panel={{
+        isOwner: convo.createdById === session.id,
+        archived: myMembership?.archivedAt != null,
+        members: convo.members.map((m) => ({
+          id: m.user.id,
+          name: m.user.name,
+          role: ROLE_LABELS[m.user.role as Role] ?? m.user.role,
+        })),
+        directory: directoryRows.map((u) => ({
+          id: u.id,
+          name: u.name,
+          role: ROLE_LABELS[u.role as Role] ?? u.role,
+        })),
+      }}
       online={online}
       presence={presence}
     />

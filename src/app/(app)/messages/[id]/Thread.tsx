@@ -4,14 +4,21 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { initialsFromName } from "@/lib/format";
+import { EmojiPicker } from "@/components/EmojiPicker";
+import { GroupPanel, type PanelMember } from "./GroupPanel";
 import {
   sendMessage,
   toggleReaction,
+  setTyping,
+  clearTyping,
+  deleteMessage,
   uploadAttachment,
 } from "../actions";
 
 export type Member = { id: string; name: string };
 export type ChatMessage = {
+  /** True once the sender has deleted it — content is gone, row remains. */
+  deleted?: boolean;
   id: string;
   senderId: string;
   senderName: string;
@@ -53,6 +60,7 @@ export function Thread({
   messages,
   backHref,
   callNumber,
+  panel,
   online,
   presence,
 }: {
@@ -67,6 +75,12 @@ export function Thread({
   backHref?: string;
   /** The other person's phone (DMs only) — shows a tap-to-call button. */
   callNumber?: string | null;
+  panel?: {
+    isOwner: boolean;
+    archived: boolean;
+    members: PanelMember[];
+    directory: PanelMember[];
+  };
   /** Presence (DMs only): whether the other person is online + a status label. */
   online?: boolean;
   presence?: string | null;
@@ -115,6 +129,46 @@ export function Thread({
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length, pending.length]);
 
+  // Who's typing, and who has seen the latest message.
+  const [typing, setTyping_] = useState<string[]>([]);
+  const [readers, setReaders] = useState<string[]>([]);
+  const [lastMine, setLastMine] = useState(false);
+  const countRef = useRef<number | null>(null);
+
+  /**
+   * Light poll for typing + read receipts. A full page refresh only happens
+   * when the message count actually changes, so the indicator can be
+   * responsive without re-rendering the thread every couple of seconds.
+   */
+  useEffect(() => {
+    let alive = true;
+    const tick = async () => {
+      if (document.visibilityState !== "visible") return;
+      try {
+        const res = await fetch(`/api/chat/state?c=${conversationId}`, {
+          cache: "no-store",
+        });
+        if (!res.ok || !alive) return;
+        const data = await res.json();
+        setTyping_(data.typing ?? []);
+        setReaders(data.readers ?? []);
+        setLastMine(Boolean(data.lastMessageMine));
+        if (countRef.current !== null && data.count !== countRef.current) {
+          router.refresh();
+        }
+        countRef.current = data.count;
+      } catch {
+        /* offline — try again on the next tick */
+      }
+    };
+    tick();
+    const t = setInterval(tick, 2500);
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
+  }, [conversationId, router]);
+
   /**
    * Poll for new messages, but only while the tab is actually visible —
    * a backgrounded thread refreshing every 5s wastes the worker's data and
@@ -148,8 +202,18 @@ export function Thread({
     };
   }, [router]);
 
+  // Tell the others I'm typing, at most once every couple of seconds.
+  const lastPing = useRef(0);
+  function pingTyping() {
+    const now = Date.now();
+    if (now - lastPing.current < 2000) return;
+    lastPing.current = now;
+    setTyping(conversationId).catch(() => {});
+  }
+
   function onType(v: string) {
     setText(v);
+    if (v.trim()) pingTyping();
     // @mention autocomplete on the last token.
     const m = v.match(/@(\w*)$/);
     if (m) {
@@ -256,6 +320,7 @@ export function Thread({
 
     try {
       await sendMessage(fd);
+      clearTyping(conversationId).catch(() => {});
       router.refresh();
     } catch {
       // Put it back so nothing is silently lost.
@@ -315,6 +380,21 @@ export function Thread({
             <span className="material-symbols-rounded text-[24px]">call</span>
           </a>
         )}
+
+        {panel && (
+          <div className={callNumber && !isGroup ? "" : "ml-auto"}>
+            <GroupPanel
+              conversationId={conversationId}
+              title={title}
+              isGroup={isGroup}
+              isOwner={panel.isOwner}
+              archived={panel.archived}
+              members={panel.members}
+              directory={panel.directory}
+              meId={meId}
+            />
+          </div>
+        )}
       </header>
 
       {/* Messages */}
@@ -373,6 +453,11 @@ export function Thread({
                       <span className="opacity-80">{m.replyTo.body.slice(0, 60)}</span>
                     </div>
                   )}
+                  {m.deleted ? (
+                    <div className="rounded-2xl border border-dashed border-[var(--border)] px-3.5 py-2 text-[13px] italic text-[var(--text-muted)]">
+                      This message was deleted
+                    </div>
+                  ) : (
                   <div
                     className={`bubble ${mine ? "bubble-me" : "bubble-them"} whitespace-pre-wrap break-words rounded-2xl px-3.5 py-2 text-[15px] leading-snug ${
                       mine
@@ -398,6 +483,7 @@ export function Thread({
                       {time(m.createdAt)}
                     </span>
                   </div>
+                  )}
                   {/* Like badge */}
                   {m.likes.length > 0 && (
                     <div
@@ -429,11 +515,53 @@ export function Thread({
                   >
                     <span className="material-symbols-rounded text-[16px]">reply</span>
                   </button>
+                  {/* Only the sender can delete, and only their own message */}
+                  {mine && !m.deleted && (
+                    <button
+                      onClick={() => {
+                        if (!confirm("Delete this message?")) return;
+                        const fd = new FormData();
+                        fd.set("id", m.id);
+                        deleteMessage(fd).then(() => router.refresh());
+                      }}
+                      className="flex h-7 w-7 items-center justify-center rounded-full text-slate-500 hover:bg-red-50 hover:text-red-600"
+                      title="Delete"
+                    >
+                      <span className="material-symbols-rounded text-[16px]">delete</span>
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
           );
         })}
+        {/* Seen receipt on my own latest message */}
+        {lastMine && readers.length > 0 && pending.length === 0 && (
+          <div className="flex justify-end pr-1">
+            <span className="text-[11px] text-[var(--text-muted)]">
+              Seen{isGroup ? ` by ${readers.length}` : ""}
+            </span>
+          </div>
+        )}
+
+        {/* Someone is typing */}
+        {typing.length > 0 && (
+          <div className="flex justify-start">
+            <div className="flex items-center gap-1.5 rounded-2xl rounded-bl-md bg-white px-3 py-2 shadow-sm">
+              <span className="flex gap-1">
+                <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.3s]" />
+                <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.15s]" />
+                <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400" />
+              </span>
+              <span className="text-xs text-[var(--text-secondary)]">
+                {typing.length === 1
+                  ? `${typing[0].split(" ")[0]} is typing`
+                  : `${typing.length} people are typing`}
+              </span>
+            </div>
+          </div>
+        )}
+
         {/* Sent, awaiting the server */}
         {pending.map((o) => (
           <div key={o.key} className="flex justify-end">
@@ -532,6 +660,7 @@ export function Thread({
           >
             <span className="material-symbols-rounded text-[22px]">image</span>
           </button>
+          <EmojiPicker onPick={(e) => setText((t) => t + e)} />
           <textarea
             value={text}
             onChange={(e) => onType(e.target.value)}
