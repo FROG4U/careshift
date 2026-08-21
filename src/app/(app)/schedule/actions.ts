@@ -7,7 +7,7 @@ import { syncShiftTasks } from "@/lib/tasks";
 import { notifyWorker, notifyManagers } from "@/lib/notify";
 import { isStaffUnavailable } from "@/lib/availability";
 
-import { isAdmin } from "@/lib/roles";
+import { isAdmin, isManager as hasManagerRole } from "@/lib/roles";
 function fmtWhen(d: Date) {
   return d.toLocaleString("en-AU", {
     weekday: "short",
@@ -141,6 +141,24 @@ export async function createShift(
 
   // Pull in whatever tasks this participant's templates call for.
   await syncShiftTasks(created.id);
+
+  // Plus any one-off tasks typed into the dialog, which belong to this shift
+  // alone (no template, so they never repeat).
+  const adHoc = formData
+    .getAll("taskTitle")
+    .map((t) => String(t).trim())
+    .filter(Boolean)
+    .slice(0, 20);
+  if (adHoc.length) {
+    await prisma.shiftTask.createMany({
+      data: adHoc.map((title, i) => ({
+        tenantId: tenant.id,
+        shiftId: created.id,
+        title,
+        sortOrder: 100 + i, // after the participant's regular tasks
+      })),
+    });
+  }
 
   revalidatePath("/schedule");
   revalidatePath("/dashboard");
@@ -497,4 +515,48 @@ export async function copyWeek(formData: FormData) {
   }
   revalidatePath("/schedule");
   revalidatePath("/dashboard");
+}
+
+/** Add a one-off task to an existing shift. */
+export async function addShiftTask(formData: FormData) {
+  const { tenant, session } = await requireTenant();
+  if (!hasManagerRole(session.role)) return;
+
+  const shiftId = String(formData.get("shiftId") ?? "");
+  const title = String(formData.get("title") ?? "").trim();
+  if (!shiftId || !title) return;
+
+  const shift = await prisma.shift.findFirst({
+    where: { id: shiftId, tenantId: tenant.id },
+    select: { id: true },
+  });
+  if (!shift) return;
+
+  const count = await prisma.shiftTask.count({ where: { shiftId } });
+  await prisma.shiftTask.create({
+    data: { tenantId: tenant.id, shiftId, title, sortOrder: 100 + count },
+  });
+
+  revalidatePath("/schedule");
+}
+
+/**
+ * Remove a task from a shift.
+ *
+ * Refuses once it's been ticked — that's a record of work done, and deleting
+ * it would quietly rewrite what happened on the visit.
+ */
+export async function removeShiftTask(formData: FormData) {
+  const { tenant, session } = await requireTenant();
+  if (!hasManagerRole(session.role)) return;
+
+  const id = String(formData.get("id") ?? "");
+  const task = await prisma.shiftTask.findFirst({
+    where: { id, tenantId: tenant.id },
+    select: { id: true, completedAt: true },
+  });
+  if (!task || task.completedAt) return;
+
+  await prisma.shiftTask.delete({ where: { id: task.id } });
+  revalidatePath("/schedule");
 }

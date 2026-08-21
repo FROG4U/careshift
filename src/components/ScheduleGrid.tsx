@@ -10,7 +10,10 @@ import {
   publishOneShift,
   unpublishShift,
   copyWeek,
+  addShiftTask,
+  removeShiftTask,
 } from "@/app/(app)/schedule/actions";
+import { ShiftTaskFields } from "./ShiftTaskFields";
 
 export type GridShift = {
   id: string;
@@ -27,6 +30,7 @@ export type GridShift = {
   hours: number;
   publishState: string;
   rejectionReason: string | null;
+  tasks: { id: string; title: string; completed: boolean }[];
 };
 
 const pubBadge: Record<string, { label: string; cls: string }> = {
@@ -649,6 +653,8 @@ export function ScheduleGrid({
                 </p>
               )}
 
+              <ShiftTaskFields />
+
               <p className="text-xs text-slate-400">
                 {modal.staffId
                   ? "Assigned to the selected staff member."
@@ -730,6 +736,72 @@ export function ScheduleGrid({
                 Save time
               </button>
             </form>
+
+            {/* Tasks on this shift */}
+            <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <div className="mb-2 text-sm font-semibold text-slate-700">Tasks</div>
+
+              {editShift.tasks.length === 0 ? (
+                <p className="text-xs text-slate-500">
+                  None yet. Recurring ones come from the participant&apos;s task list.
+                </p>
+              ) : (
+                <ul className="mb-2 space-y-1">
+                  {editShift.tasks.map((t) => (
+                    <li
+                      key={t.id}
+                      className="flex items-center gap-2 rounded-md bg-white px-2.5 py-1.5 text-sm"
+                    >
+                      <span
+                        className={`material-symbols-rounded text-[16px] ${
+                          t.completed ? "text-emerald-600" : "text-slate-300"
+                        }`}
+                      >
+                        {t.completed ? "check_circle" : "radio_button_unchecked"}
+                      </span>
+                      <span
+                        className={`min-w-0 flex-1 truncate ${
+                          t.completed
+                            ? "text-slate-500 line-through"
+                            : "text-slate-700"
+                        }`}
+                      >
+                        {t.title}
+                      </span>
+                      {t.completed ? (
+                        <span className="shrink-0 text-[11px] font-semibold text-emerald-600">
+                          done
+                        </span>
+                      ) : (
+                        <form action={removeShiftTask}>
+                          <input type="hidden" name="id" value={t.id} />
+                          <button className="text-xs font-semibold text-slate-400 hover:text-red-600">
+                            Remove
+                          </button>
+                        </form>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              <form action={addShiftTask} className="flex gap-2">
+                <input type="hidden" name="shiftId" value={editShift.id} />
+                <input
+                  name="title"
+                  required
+                  placeholder="Add a task for this shift"
+                  className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[var(--brand)]"
+                />
+                <button className="shrink-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700">
+                  Add
+                </button>
+              </form>
+              <p className="mt-1.5 text-[11px] text-slate-400">
+                A task the worker has already ticked can&apos;t be removed — it&apos;s
+                a record of what was done.
+              </p>
+            </div>
 
             {/* Publish / unpublish + delete */}
             <div className="mt-3 flex flex-col gap-2 border-t border-slate-100 pt-3">

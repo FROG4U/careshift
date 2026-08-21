@@ -134,7 +134,11 @@ export default async function SchedulePage({
         ...(staffFilter ? { staffId: staffFilter } : {}),
         ...(clientFilter ? { clientId: clientFilter } : {}),
       },
-      include: { client: true, staff: true },
+      include: {
+        client: true,
+        staff: true,
+        tasks: { orderBy: [{ dueTime: "asc" }, { sortOrder: "asc" }] },
+      },
       orderBy: { start: "asc" },
     }),
     prisma.staff.findMany({
@@ -177,6 +181,11 @@ export default async function SchedulePage({
     rejectionReason: s.rejectionReason,
     hours:
       (new Date(s.end).getTime() - new Date(s.start).getTime()) / 3_600_000,
+    tasks: s.tasks.map((t) => ({
+      id: t.id,
+      title: t.title,
+      completed: t.completedAt != null,
+    })),
   }));
 
   const usedByClient: Record<string, number> = {};
