@@ -29,7 +29,12 @@ export default async function CompletedShiftsPage() {
       status: "COMPLETED",
       ...branchWhere,
     },
-    include: { client: true, transports: true, pauses: true },
+    include: {
+      client: true,
+      transports: true,
+      pauses: true,
+      tasks: { orderBy: [{ dueTime: "asc" }, { sortOrder: "asc" }] },
+    },
     orderBy: { start: "desc" },
     take: 100,
   });
@@ -124,6 +129,39 @@ export default async function CompletedShiftsPage() {
                           {km.toFixed(1)} km
                         </span>
                       )}
+                    </div>
+                  )}
+
+                  {s.tasks.length > 0 && (
+                    <div className="mt-3 rounded-xl bg-slate-50 p-3">
+                      <div className="mb-1.5 text-xs font-semibold text-slate-600">
+                        Tasks · {s.tasks.filter((t) => t.completedAt).length} of{" "}
+                        {s.tasks.length} done
+                      </div>
+                      <ul className="space-y-1">
+                        {s.tasks.map((t) => (
+                          <li
+                            key={t.id}
+                            className="flex items-start gap-1.5 text-xs"
+                          >
+                            <span
+                              className={`material-symbols-rounded text-[15px] leading-4 ${
+                                t.completedAt ? "text-emerald-600" : "text-slate-300"
+                              }`}
+                            >
+                              {t.completedAt ? "check_circle" : "radio_button_unchecked"}
+                            </span>
+                            <span
+                              className={
+                                t.completedAt ? "text-slate-600" : "text-slate-400"
+                              }
+                            >
+                              {t.title}
+                              {t.dueTime && ` (${t.dueTime})`}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
                     </div>
                   )}
 

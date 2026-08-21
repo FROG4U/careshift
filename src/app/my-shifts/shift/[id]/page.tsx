@@ -11,6 +11,7 @@ import { DirectionsButton } from "@/components/worker/DirectionsButton";
 import { GeofenceMap } from "@/components/GeofenceMap";
 import { ShiftMap } from "@/components/ShiftMap";
 import { notesDueFor, hasOverdueNotes } from "@/lib/notesDue";
+import { ShiftTasks } from "@/components/worker/ShiftTasks";
 
 /**
  * One shift, full screen: the map, the big clock in/out button, and
@@ -37,7 +38,12 @@ export default async function WorkerShiftPage({
   // Scoped to this worker, so nobody can open someone else's shift.
   const shift = await prisma.shift.findFirst({
     where: { id, tenantId: session.tenantId, staffId: session.staffId },
-    include: { client: true, pauses: true, transports: true },
+    include: {
+      client: true,
+      pauses: true,
+      transports: true,
+      tasks: { orderBy: [{ dueTime: "asc" }, { sortOrder: "asc" }] },
+    },
   });
   if (!shift) notFound();
 
@@ -177,6 +183,17 @@ export default async function WorkerShiftPage({
           )}
         </div>
       </section>
+
+      <ShiftTasks
+        tasks={shift.tasks.map((t) => ({
+          id: t.id,
+          title: t.title,
+          notes: t.notes,
+          dueTime: t.dueTime,
+          completed: t.completedAt != null,
+        }))}
+        disabled={shift.status === "SCHEDULED"}
+      />
 
       {/* Clocked times + mileage once the visit is under way or finished. */}
       {shift.clockInAt && (

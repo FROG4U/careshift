@@ -564,3 +564,34 @@ export async function updatePhoto(dataUrl: string): Promise<{ error?: string }> 
   revalidatePath("/my-shifts");
   return {};
 }
+
+/**
+ * Tick a shift task on or off.
+ *
+ * Scoped to the signed-in worker's own shift, so nobody can tick someone
+ * else's checklist. Toggling is deliberate — a mis-tap should be undoable.
+ */
+export async function toggleShiftTask(taskId: string) {
+  const session = await getSession();
+  if (!session?.staffId) return;
+
+  const task = await prisma.shiftTask.findFirst({
+    where: {
+      id: taskId,
+      tenantId: session.tenantId,
+      shift: { staffId: session.staffId },
+    },
+    select: { id: true, completedAt: true, shiftId: true },
+  });
+  if (!task) return;
+
+  await prisma.shiftTask.update({
+    where: { id: task.id },
+    data: task.completedAt
+      ? { completedAt: null, completedById: null }
+      : { completedAt: new Date(), completedById: session.id },
+  });
+
+  revalidatePath(`/my-shifts/shift/${task.shiftId}`);
+  revalidatePath("/my-shifts/completed");
+}

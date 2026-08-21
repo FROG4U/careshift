@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireTenant } from "@/lib/tenant";
 import { prisma } from "@/lib/prisma";
+import { syncShiftTasks } from "@/lib/tasks";
 import { notifyWorker, notifyManagers } from "@/lib/notify";
 import { isStaffUnavailable } from "@/lib/availability";
 
@@ -124,7 +125,7 @@ export async function createShift(
   const branchId =
     String(formData.get("branchId") ?? "") || client.branchId || null;
 
-  await prisma.shift.create({
+  const created = await prisma.shift.create({
     data: {
       tenantId: tenant.id,
       clientId,
@@ -137,6 +138,9 @@ export async function createShift(
       authorisedBy,
     },
   });
+
+  // Pull in whatever tasks this participant's templates call for.
+  await syncShiftTasks(created.id);
 
   revalidatePath("/schedule");
   revalidatePath("/dashboard");
@@ -473,7 +477,7 @@ export async function copyWeek(formData: FormData) {
       },
     });
     if (exists) continue;
-    await prisma.shift.create({
+    const newShift = await prisma.shift.create({
       data: {
         tenantId: tenant.id,
         clientId: s.clientId,
@@ -488,6 +492,7 @@ export async function copyWeek(formData: FormData) {
         status: "SCHEDULED",
       },
     });
+    await syncShiftTasks(newShift.id);
     copied++;
   }
   revalidatePath("/schedule");

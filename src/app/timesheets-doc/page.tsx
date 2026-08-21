@@ -72,6 +72,7 @@ export default async function TimesheetNotesDoc({
       staff: true,
       pauses: true,
       branch: { select: { state: true } },
+      tasks: { orderBy: [{ dueTime: "asc" }, { sortOrder: "asc" }] },
     },
     orderBy: { start: "asc" },
   });
@@ -230,6 +231,26 @@ export default async function TimesheetNotesDoc({
                   <p className="mt-1.5 text-sm italic text-slate-500">
                     No notes recorded.
                   </p>
+                )}
+
+                {s.tasks.length > 0 && (
+                  <div className="mt-2 border-t border-slate-100 pt-1.5">
+                    <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                      Tasks — {s.tasks.filter((t) => t.completedAt).length} of{" "}
+                      {s.tasks.length} completed
+                    </div>
+                    <ul className="mt-1 space-y-0.5">
+                      {s.tasks.map((t) => (
+                        <li key={t.id} className="text-xs">
+                          <span className={t.completedAt ? "" : "text-slate-500"}>
+                            {t.completedAt ? "\u2713" : "\u2717"} {t.title}
+                            {t.dueTime ? ` (due ${t.dueTime})` : ""}
+                            {t.completedAt ? "" : " — not completed"}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 )}
               </article>
             );

@@ -157,6 +157,12 @@ export default async function ClientProfilePage({
             Care plan
           </Link>
           <Link
+            href={`/clients/${client.id}/tasks`}
+            className="rounded-xl border border-[var(--border)] bg-white px-3.5 py-2 text-sm font-semibold text-[var(--text-primary)]"
+          >
+            Shift tasks
+          </Link>
+          <Link
             href={`/clients/${client.id}/team`}
             className="rounded-xl border border-[var(--border)] bg-white px-3.5 py-2 text-sm font-semibold text-[var(--text-primary)]"
           >

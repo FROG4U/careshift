@@ -388,6 +388,78 @@ model StaffRate {
   @@index([staffId])
 }
 
+
+/// A task an admin wants done on a participant's shifts — "check the fridge",
+/// "give 10am medication". Templates generate a ShiftTask on each matching
+/// shift; the worker ticks the ShiftTask, not this.
+model TaskTemplate {
+  id       String @id @default(cuid())
+  tenantId String
+  clientId String
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  title String
+  notes String?
+
+  /// EVERY  — every shift for this participant
+  /// DAYS   — only on the weekdays listed in `days`
+  /// ONCE   — a one-off, applied to a single shift then done
+  recurrence String @default("EVERY")
+  /// Weekdays it applies to when recurrence = DAYS. 0 = Sunday .. 6 = Saturday.
+  days       Int[]  @default([])
+
+  /// Optional clock time the task is due, "HH:MM" in the branch's local time.
+  /// Without one the task is simply due sometime during the shift.
+  dueTime String?
+
+  /// Push the worker a reminder. Timed tasks are reminded
+  /// `reminderMinutesBefore` ahead; untimed ones at the start of the shift.
+  reminder              Boolean @default(false)
+  reminderMinutesBefore Int     @default(15)
+
+  sortOrder Int     @default(0)
+  active    Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  tasks     ShiftTask[]
+
+  @@index([tenantId])
+  @@index([clientId])
+}
+
+/// One task on one shift — this is what the worker actually ticks.
+///
+/// Copied from a TaskTemplate at rostering time (or added ad hoc to a single
+/// shift). It keeps its own title/time so editing a template later can't
+/// rewrite the record of what was asked for on a shift already worked.
+model ShiftTask {
+  id       String @id @default(cuid())
+  tenantId String
+  shiftId  String
+  shift    Shift  @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+
+  templateId String?
+  template   TaskTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+
+  title   String
+  notes   String?
+  dueTime String?
+
+  reminder              Boolean   @default(false)
+  reminderMinutesBefore Int       @default(15)
+  reminderSentAt        DateTime?
+
+  completedAt   DateTime?
+  completedById String?
+
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([shiftId])
+  @@index([templateId])
+}
+
 /// A one-time password-reset link.
 ///
 /// Only a HASH of the token is stored — anyone with database access still
@@ -550,6 +622,7 @@ model Client {
   careGoals CareGoal[]
   workers   ClientWorker[]
   incidents Incident[]
+  taskTemplates TaskTemplate[]
 
   @@index([tenantId])
   @@index([branchId])
@@ -855,6 +928,9 @@ model Shift {
   swaps       ShiftSwap[]
   lateNotices LateNotice[]
   incidents   Incident[]
+  tasks       ShiftTask[]
+  /// Set once the "you have tasks this shift" nudge has gone out.
+  tasksRemindedAt DateTime?
 
   @@index([tenantId])
   @@index([staffId])
