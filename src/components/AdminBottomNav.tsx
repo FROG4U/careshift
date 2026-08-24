@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useUnreadChat } from "@/lib/useUnreadChat";
 
 type Tab = {
   href: string;
@@ -24,12 +25,13 @@ export function AdminBottomNav({
   pendingTimesheets: number;
 }) {
   const path = usePathname();
+  const liveUnread = useUnreadChat(unreadChat);
 
   const tabs: Tab[] = [
     { href: "/schedule", label: "Schedule", icon: "calendar_month", badge: 0 },
     { href: "/timesheets", label: "Timesheet", icon: "receipt_long", badge: pendingTimesheets },
     { href: "/live", label: "Live", icon: "sensors", badge: 0 },
-    { href: "/messages", label: "Chat", icon: "chat_bubble", badge: unreadChat },
+    { href: "/messages", label: "Chat", icon: "chat_bubble", badge: liveUnread },
   ];
 
   return (
