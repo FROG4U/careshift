@@ -5,6 +5,7 @@ import { netHoursOf } from "@/lib/payroll";
 import { setApproval } from "./actions";
 import { ShiftDetail, type ShiftDetailData } from "./ShiftDetail";
 import type { LatLng } from "@/components/ShiftMap";
+import { DEFAULT_GEOFENCE_FT } from "@/lib/constants";
 
 function grossHours(a: Date | null, b: Date | null) {
   if (!a || !b) return 0;
@@ -331,7 +332,7 @@ export default async function TimesheetsPage({
                 needsNotes,
                 hasMap,
                 center,
-                radiusM: (s.client.geofenceFt ?? 150) / FT_PER_M,
+                radiusM: (s.client.geofenceFt ?? DEFAULT_GEOFENCE_FT) / FT_PER_M,
                 clockIn,
                 clockOut,
                 trips,

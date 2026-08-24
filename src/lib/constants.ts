@@ -197,3 +197,19 @@ export const INCIDENT_STATUS_LABELS: Record<IncidentStatus, string> = {
   UNDER_REVIEW: "Under review",
   CLOSED: "Closed",
 };
+
+/**
+ * Default clock-in radius around a participant's address, in feet.
+ *
+ * This has to absorb two errors at once: a phone's GPS fix (routinely 30-50m
+ * out, worse inside a unit block or against tall buildings) and any slack in
+ * the pin itself. It was 150 ft, which is tighter than a phone can reliably
+ * resolve — workers standing at the front door were being refused, so the
+ * fence was blocking real visits rather than catching false ones.
+ *
+ * The exact clock-in coordinates are still recorded on every shift, so a
+ * generous fence costs no evidence: Timesheets shows precisely where someone
+ * stood. Set a tighter figure per participant where the address is pinned
+ * accurately and it matters.
+ */
+export const DEFAULT_GEOFENCE_FT = 1000;

@@ -7,6 +7,7 @@ import {
   AGREEMENT_TYPES,
   AGREEMENT_LABELS,
   AGREEMENT_BADGE,
+  DEFAULT_GEOFENCE_FT,
   type AgreementType,
 } from "@/lib/constants";
 import { createClient, updateClient, setClientArchived } from "./actions";
@@ -66,7 +67,7 @@ const EMPTY: ParticipantRow = {
   email: "",
   lat: null,
   lng: null,
-  geofenceFt: 150,
+  geofenceFt: DEFAULT_GEOFENCE_FT,
   branchId: "",
   branchName: "",
   active: true,

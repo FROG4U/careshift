@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireTenant } from "@/lib/tenant";
 import { prisma } from "@/lib/prisma";
 import { resolveClientCoords } from "@/lib/geocode";
+import { DEFAULT_GEOFENCE_FT } from "@/lib/constants";
 
 const num = (v: FormDataEntryValue | null) => {
   const s = String(v ?? "").trim();
@@ -60,7 +61,7 @@ export async function createClient(formData: FormData) {
       email: str(formData.get("email")),
       lat: coords.lat,
       lng: coords.lng,
-      geofenceFt: Math.round(num(formData.get("geofenceFt")) ?? 150),
+      geofenceFt: Math.round(num(formData.get("geofenceFt")) ?? DEFAULT_GEOFENCE_FT),
       branchId: str(formData.get("branchId")),
       // Charge-rate overrides. Blank = inherit the agreement's default.
       chargeWeekdayDay: num(formData.get("chargeWeekdayDay")),
@@ -108,7 +109,7 @@ export async function updateClient(formData: FormData) {
       email: str(formData.get("email")),
       lat: coords.lat,
       lng: coords.lng,
-      geofenceFt: Math.round(num(formData.get("geofenceFt")) ?? 150),
+      geofenceFt: Math.round(num(formData.get("geofenceFt")) ?? DEFAULT_GEOFENCE_FT),
       branchId: str(formData.get("branchId")),
       // Charge-rate overrides. Blank = inherit the agreement's default.
       chargeWeekdayDay: num(formData.get("chargeWeekdayDay")),
