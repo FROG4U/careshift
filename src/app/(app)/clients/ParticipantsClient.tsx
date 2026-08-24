@@ -98,6 +98,7 @@ function LocationFields({
   const [searching, setSearching] = useState(false);
   const [capturing, setCapturing] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [matchedOn, setMatchedOn] = useState<string | null>(null);
   const skipNext = useRef(false); // don't re-search right after picking
 
   // Debounced OpenStreetMap (Nominatim) lookup, biased to Australia.
@@ -114,12 +115,23 @@ function LocationFields({
     const t = setTimeout(async () => {
       setSearching(true);
       try {
-        const res = await fetch(
-          `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=5&countrycodes=au&q=${encodeURIComponent(q)}`,
-          { headers: { "Accept-Language": "en" } },
+        // Our own endpoint: it identifies us to OpenStreetMap and retries in
+        // simpler forms, so "U7 59-61 Anne street" still finds Anne Street.
+        const res = await fetch(`/api/geocode?q=${encodeURIComponent(q)}`, {
+          cache: "no-store",
+        });
+        const data = (await res.json()) as {
+          results: { label: string; lat: number; lng: number }[];
+          matchedOn: string | null;
+        };
+        setSuggestions(
+          (data.results ?? []).map((r) => ({
+            display_name: r.label,
+            lat: String(r.lat),
+            lon: String(r.lng),
+          })),
         );
-        const data = (await res.json()) as Suggestion[];
-        setSuggestions(data);
+        setMatchedOn(data.matchedOn ?? null);
         setOpenList(true);
       } catch {
         setSuggestions([]);
@@ -214,11 +226,25 @@ function LocationFields({
           </ul>
         )}
       </label>
-      <p className="mt-1 text-xs text-[var(--text-muted)]">
-        Pick a suggestion to set the clock-in location from the address. The
-        address always wins — if a saved position turns out to be far from it,
-        we correct it back to the address on save.
-      </p>
+      {matchedOn && suggestions.length > 0 && (
+        <p className="mt-1 text-xs text-amber-700">
+          No exact match, so we searched for &ldquo;{matchedOn}&rdquo; instead.
+          Pick the closest one.
+        </p>
+      )}
+
+      {coords.lat && coords.lng ? (
+        <p className="mt-1 flex items-center gap-1 text-xs text-emerald-700">
+          <span className="material-symbols-rounded text-[14px]">check_circle</span>
+          Clock-in point set. Workers can clock in within the radius below.
+        </p>
+      ) : (
+        <p className="mt-1 flex items-center gap-1 text-xs text-amber-700">
+          <span className="material-symbols-rounded text-[14px]">warning</span>
+          No clock-in point yet — pick an address from the list. Without one,
+          workers can clock in from anywhere.
+        </p>
+      )}
 
       <div className="mt-3 grid grid-cols-2 gap-3">
         <label className="text-sm font-medium text-[var(--text-primary)]">
