@@ -26,6 +26,25 @@ export async function geocodeAddress(address: string): Promise<GeocodeResult> {
   const q = address.trim();
   if (q.length < 6) return null;
 
+  // Prefer the same source the form uses, so what an admin picked and what
+  // gets stored can't disagree.
+  try {
+    const { searchAddresses, googlePlaceDetails } = await import("./places");
+    const { results } = await searchAddresses(q);
+    const first = results[0];
+    if (first) {
+      if (first.lat != null && first.lng != null) {
+        return { lat: first.lat, lng: first.lng, label: first.label };
+      }
+      if (first.placeId) {
+        const d = await googlePlaceDetails(first.placeId);
+        if (d) return { lat: d.lat, lng: d.lng, label: d.label };
+      }
+    }
+  } catch {
+    /* fall through to the direct lookup below */
+  }
+
   try {
     const url =
       "https://nominatim.openstreetmap.org/search" +

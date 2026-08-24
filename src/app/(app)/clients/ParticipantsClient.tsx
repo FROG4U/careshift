@@ -72,7 +72,13 @@ const EMPTY: ParticipantRow = {
   active: true,
 };
 
-type Suggestion = { display_name: string; lat: string; lon: string };
+type Suggestion = {
+  display_name: string;
+  lat: string;
+  lon: string;
+  /** Google results resolve to coordinates only once picked. */
+  placeId?: string;
+};
 
 /** Address (with free OpenStreetMap autocomplete) + clock-in geofence.
  *  Picking a suggestion fills the address AND the map coordinates, which set
@@ -99,6 +105,7 @@ function LocationFields({
   const [capturing, setCapturing] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [matchedOn, setMatchedOn] = useState<string | null>(null);
+  const [precise, setPrecise] = useState(false);
   const skipNext = useRef(false); // don't re-search right after picking
 
   // Debounced OpenStreetMap (Nominatim) lookup, biased to Australia.
@@ -121,17 +128,20 @@ function LocationFields({
           cache: "no-store",
         });
         const data = (await res.json()) as {
-          results: { label: string; lat: number; lng: number }[];
+          results: { label: string; lat?: number; lng?: number; placeId?: string }[];
           matchedOn: string | null;
+          precise?: boolean;
         };
         setSuggestions(
           (data.results ?? []).map((r) => ({
             display_name: r.label,
-            lat: String(r.lat),
-            lon: String(r.lng),
+            lat: r.lat != null ? String(r.lat) : "",
+            lon: r.lng != null ? String(r.lng) : "",
+            placeId: r.placeId,
           })),
         );
         setMatchedOn(data.matchedOn ?? null);
+        setPrecise(Boolean(data.precise));
         setOpenList(true);
       } catch {
         setSuggestions([]);
@@ -141,15 +151,37 @@ function LocationFields({
     return () => clearTimeout(t);
   }, [addr]);
 
-  function pick(s: Suggestion) {
+  async function pick(s: Suggestion) {
     skipNext.current = true;
     setAddr(s.display_name);
-    setCoords({
-      lat: Number(s.lat).toFixed(6),
-      lng: Number(s.lon).toFixed(6),
-    });
     setSuggestions([]);
     setOpenList(false);
+
+    if (s.lat && s.lon) {
+      setCoords({
+        lat: Number(s.lat).toFixed(6),
+        lng: Number(s.lon).toFixed(6),
+      });
+      return;
+    }
+
+    // Google suggestions carry only an id until they're chosen.
+    if (s.placeId) {
+      setSearching(true);
+      try {
+        const res = await fetch(`/api/geocode?place=${encodeURIComponent(s.placeId)}`);
+        const d = await res.json();
+        if (d?.ok) {
+          setCoords({ lat: d.lat.toFixed(6), lng: d.lng.toFixed(6) });
+          if (d.label) setAddr(d.label);
+        } else {
+          setErr("Couldn't pin that address. Try picking another suggestion.");
+        }
+      } catch {
+        setErr("Couldn't pin that address. Try again.");
+      }
+      setSearching(false);
+    }
   }
 
   function capture() {
@@ -226,6 +258,13 @@ function LocationFields({
           </ul>
         )}
       </label>
+      {!precise && suggestions.length > 0 && (
+        <p className="mt-1 text-xs text-[var(--text-muted)]">
+          Street-level results only. Unit and house numbers need Google
+          address search switching on.
+        </p>
+      )}
+
       {matchedOn && suggestions.length > 0 && (
         <p className="mt-1 text-xs text-amber-700">
           No exact match, so we searched for &ldquo;{matchedOn}&rdquo; instead.
