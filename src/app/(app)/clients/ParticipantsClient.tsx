@@ -215,8 +215,9 @@ function LocationFields({
         )}
       </label>
       <p className="mt-1 text-xs text-[var(--text-muted)]">
-        Pick a suggestion to set the map location automatically (powered by
-        OpenStreetMap).
+        Pick a suggestion to set the clock-in location from the address. The
+        address always wins — if a saved position turns out to be far from it,
+        we correct it back to the address on save.
       </p>
 
       <div className="mt-3 grid grid-cols-2 gap-3">
@@ -234,11 +235,22 @@ function LocationFields({
         <div className="flex items-end">
           <button
             type="button"
-            onClick={capture}
+            onClick={() => {
+              // This saves the position of THIS device. Scheduling staff work
+              // from all over, so make the consequence explicit before it
+              // silently puts a participant's geofence on another continent.
+              if (
+                !confirm(
+                  "This saves where YOU are right now as the participant's clock-in point.\n\nOnly use it if you're standing at their home. Otherwise close this and pick their address from the suggestions above.",
+                )
+              )
+                return;
+              capture();
+            }}
             disabled={capturing}
-            className="w-full rounded-lg border border-[var(--brand)] px-3 py-2 text-sm font-semibold text-[var(--brand)] transition hover:bg-blue-50 disabled:opacity-60"
+            className="w-full rounded-lg border border-[var(--border)] px-3 py-2 text-sm font-semibold text-[var(--text-secondary)] transition hover:bg-[var(--background)] disabled:opacity-60"
           >
-            {capturing ? "Locating…" : "📍 Use current location"}
+            {capturing ? "Locating…" : "📍 I'm at their home — use my location"}
           </button>
         </div>
       </div>

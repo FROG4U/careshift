@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireTenant } from "@/lib/tenant";
 import { prisma } from "@/lib/prisma";
+import { resolveClientCoords } from "@/lib/geocode";
 
 const num = (v: FormDataEntryValue | null) => {
   const s = String(v ?? "").trim();
@@ -34,6 +35,15 @@ export async function createClient(formData: FormData) {
   const lastName = String(formData.get("lastName") ?? "").trim();
   if (!firstName || !lastName) return;
 
+  // The participant's ADDRESS decides where the clock-in geofence sits, not
+  // whoever happened to be at the keyboard.
+  const address = str(formData.get("address"));
+  const coords = await resolveClientCoords(
+    address,
+    num(formData.get("lat")),
+    num(formData.get("lng")),
+  );
+
   await prisma.client.create({
     data: {
       tenantId: tenant.id,
@@ -48,8 +58,8 @@ export async function createClient(formData: FormData) {
       address: str(formData.get("address")),
       phone: str(formData.get("phone")),
       email: str(formData.get("email")),
-      lat: num(formData.get("lat")),
-      lng: num(formData.get("lng")),
+      lat: coords.lat,
+      lng: coords.lng,
       geofenceFt: Math.round(num(formData.get("geofenceFt")) ?? 150),
       branchId: str(formData.get("branchId")),
       // Charge-rate overrides. Blank = inherit the agreement's default.
@@ -73,6 +83,14 @@ export async function updateClient(formData: FormData) {
   const lastName = String(formData.get("lastName") ?? "").trim();
   if (!id || !firstName || !lastName) return;
 
+  // Same rule on edit: the address decides the geofence.
+  const address = str(formData.get("address"));
+  const coords = await resolveClientCoords(
+    address,
+    num(formData.get("lat")),
+    num(formData.get("lng")),
+  );
+
   // Scope the update to this tenant so one customer can't edit another's data.
   await prisma.client.updateMany({
     where: { id, tenantId: tenant.id },
@@ -88,8 +106,8 @@ export async function updateClient(formData: FormData) {
       address: str(formData.get("address")),
       phone: str(formData.get("phone")),
       email: str(formData.get("email")),
-      lat: num(formData.get("lat")),
-      lng: num(formData.get("lng")),
+      lat: coords.lat,
+      lng: coords.lng,
       geofenceFt: Math.round(num(formData.get("geofenceFt")) ?? 150),
       branchId: str(formData.get("branchId")),
       // Charge-rate overrides. Blank = inherit the agreement's default.
