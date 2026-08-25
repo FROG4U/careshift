@@ -48,12 +48,17 @@ export function MessagesShell({
   const threadOpen = Boolean(activeId);
 
   return (
-    // 100dvh rather than 100vh: on a phone, 100vh means the viewport as if no
-    // keyboard and no browser toolbar existed, so opening the keyboard left
-    // this taller than the visible screen — the composer slid up and a gap
-    // opened beneath it. dvh shrinks with the keyboard. The 3.5rem subtracted
-    // is the sticky app header sitting above this shell.
-    <div className="flex h-[calc(100dvh-3.5rem)]">
+    // Two things get subtracted from the viewport here, and both matter.
+    //
+    // dvh, not vh: 100vh means the viewport as if no keyboard and no browser
+    // toolbar existed, so opening the keyboard left this taller than the
+    // visible screen — the composer slid up and a gap opened beneath it.
+    //
+    // 3.5rem is the sticky app header above this shell. Below md the app
+    // layout also puts pb-28 (7rem) on <main> to clear the floating bottom
+    // nav, and that padding sits *under* this element — so on a phone the
+    // page ran 7rem past the bottom of the screen unless we subtract it too.
+    <div className="flex h-[calc(100dvh-10.5rem)] md:h-[calc(100dvh-3.5rem)]">
       {/* Conversation list — hidden on mobile once a thread is open */}
       <aside
         className={`w-full shrink-0 flex-col border-r border-[var(--border)] bg-white md:flex md:w-80 ${
