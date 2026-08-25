@@ -7,6 +7,7 @@ import {
   type GridDay,
 } from "@/components/ScheduleGrid";
 import { ScheduleBranchBar } from "@/components/ScheduleBranchBar";
+import { netHoursOf, kmOf } from "@/lib/payroll";
 
 /** Monday of the week containing `d`, at local midnight. */
 function weekStart(d: Date) {
@@ -138,6 +139,10 @@ export default async function SchedulePage({
         client: true,
         staff: true,
         tasks: { orderBy: [{ dueTime: "asc" }, { sortOrder: "asc" }] },
+        // Needed to show what a completed shift actually ran to: paid hours
+        // are net of breaks, and mileage comes from tracked trips.
+        pauses: true,
+        transports: { select: { km: true } },
       },
       orderBy: { start: "asc" },
     }),
@@ -186,6 +191,15 @@ export default async function SchedulePage({
       title: t.title,
       completed: t.completedAt != null,
     })),
+    // Completed shifts show what actually happened rather than what was
+    // planned. Null when they never clocked in, so the card falls back to
+    // showing nothing rather than a misleading 0.
+    clockLabel:
+      s.clockInAt && s.clockOutAt
+        ? `${compactTime(new Date(s.clockInAt))}–${compactTime(new Date(s.clockOutAt))}`
+        : null,
+    workedHours: s.clockInAt && s.clockOutAt ? netHoursOf(s) : null,
+    km: kmOf(s) || null,
   }));
 
   const usedByClient: Record<string, number> = {};

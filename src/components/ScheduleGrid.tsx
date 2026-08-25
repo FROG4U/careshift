@@ -31,6 +31,10 @@ export type GridShift = {
   publishState: string;
   rejectionReason: string | null;
   tasks: { id: string; title: string; completed: boolean }[];
+  /** Completed shifts only: what actually happened, not what was planned. */
+  clockLabel: string | null;
+  workedHours: number | null;
+  km: number | null;
 };
 
 const pubBadge: Record<string, { label: string; cls: string }> = {
@@ -239,12 +243,59 @@ export function ScheduleGrid({
           )}
         </div>
         {s.staffId && (
-          <span
-            className={`mt-1 inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold ${pubBadge[s.publishState]?.cls ?? ""}`}
-            title={s.rejectionReason ?? undefined}
-          >
-            {pubBadge[s.publishState]?.label ?? s.publishState}
-          </span>
+          <div className="mt-1 flex flex-wrap items-center gap-1">
+            <span
+              className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold ${pubBadge[s.publishState]?.cls ?? ""}`}
+              title={s.rejectionReason ?? undefined}
+            >
+              {pubBadge[s.publishState]?.label ?? s.publishState}
+            </span>
+            {s.status === "COMPLETED" && (
+              <span
+                className="text-emerald-600"
+                title="Shift completed"
+                aria-label="Completed"
+              >
+                <span className="material-symbols-rounded align-middle text-[15px] leading-none">
+                  check_circle
+                </span>
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* What the shift actually ran to. Only once it's done — showing
+            clocked times mid-shift would read as a finished total. */}
+        {s.status === "COMPLETED" && (s.clockLabel || s.km) && (
+          <div className="mt-1 space-y-0.5 border-t border-black/5 pt-1">
+            {s.clockLabel && (
+              <div
+                className="flex items-center gap-1 text-[10px] text-slate-600"
+                title="Clocked in – clocked out, and paid hours after breaks"
+              >
+                <span className="material-symbols-rounded text-[13px] leading-none">
+                  schedule
+                </span>
+                <span className="truncate">{s.clockLabel}</span>
+                {s.workedHours != null && (
+                  <span className="ml-auto shrink-0 font-semibold text-slate-700">
+                    {s.workedHours.toFixed(2)}h
+                  </span>
+                )}
+              </div>
+            )}
+            {s.km != null && (
+              <div
+                className="flex items-center gap-1 text-[10px] text-slate-600"
+                title="Mileage recorded on this shift"
+              >
+                <span className="material-symbols-rounded text-[13px] leading-none">
+                  directions_car
+                </span>
+                <span>{s.km.toFixed(1)} km</span>
+              </div>
+            )}
+          </div>
         )}
       </div>
     );
