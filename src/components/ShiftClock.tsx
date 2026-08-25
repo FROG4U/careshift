@@ -53,6 +53,8 @@ export type ShiftClockProps = {
   transportKm: number;
   transportPurpose: string | null;
   note: string;
+  /** Handover already written on this shift, if the worker started one. */
+  handoverNote?: string | null;
   hero?: boolean;
   clockInIso?: string | null;
   /** If set, starting is blocked (e.g. overdue shift notes) and the reason shown. */
@@ -84,6 +86,7 @@ export function ShiftClock(props: ShiftClockProps) {
   const [error, setError] = useState<string | null>(null);
   const [locating, setLocating] = useState(false);
   const [note, setNote] = useState(props.note);
+  const [handover, setHandover] = useState(props.handoverNote ?? "");
   const elapsed = useElapsed(
     props.clockInIso,
     props.status === "IN_PROGRESS" && !props.paused,
@@ -274,7 +277,7 @@ export function ShiftClock(props: ShiftClockProps) {
   const endShift = () =>
     handle(async () => {
       const c = await locate();
-      return clockOut(withCoords(props.shiftId, c, { note }));
+      return clockOut(withCoords(props.shiftId, c, { note, handover }));
     });
 
   return (
@@ -363,6 +366,32 @@ export function ShiftClock(props: ShiftClockProps) {
           rows={2}
           className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[var(--brand)] focus:ring-2 focus:ring-blue-100"
         />
+
+        {/* Handover to the next worker. Optional — it must never stand between
+            a worker and clocking out — but prompted here because this is the
+            moment the shift is still fresh in mind. */}
+        <div className="mt-3">
+          <label className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-slate-600">
+            <span className="material-symbols-rounded text-[16px] text-[var(--brand)]">
+              swap_horiz
+            </span>
+            Pass on to the next worker
+            <span className="font-normal text-slate-400">(optional)</span>
+          </label>
+          <textarea
+            value={handover}
+            onChange={(e) => setHandover(e.target.value)}
+            placeholder="Anything the next person should know before they arrive?"
+            rows={2}
+            className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[var(--brand)] focus:ring-2 focus:ring-blue-100"
+          />
+          {handover.trim() && (
+            <p className="mt-1 text-xs text-slate-500">
+              The next worker with this participant must read this before they
+              can start.
+            </p>
+          )}
+        </div>
       </div>
       {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
     </div>

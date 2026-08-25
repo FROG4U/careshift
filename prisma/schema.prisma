@@ -927,6 +927,15 @@ model Shift {
   approval     String  @default("PENDING")
   progressNote String?
 
+  // Handover to the next worker for this participant. The note and its
+  // acknowledgement both live on the shift that WROTE it: the incoming worker
+  // acknowledges the outgoing worker's note, so `handoverAckAt` being null is
+  // what makes a note still pending. Once acknowledged it stays on the record
+  // as part of the shift's notes.
+  handoverNote        String?
+  handoverAckAt       DateTime?
+  handoverAckByStaffId String?
+
   // Set true when this shift was rostered beyond the participant's agreed
   // weekly hours and a manager authorised the overrun. `authorisedBy` records
   // the manager's name for the audit trail.

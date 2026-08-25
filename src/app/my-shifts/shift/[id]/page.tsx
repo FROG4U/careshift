@@ -141,6 +141,7 @@ export default async function WorkerShiftPage({
               shift.transports.find((t) => !t.endAt)?.purpose ?? null
             }
             note={shift.progressNote ?? ""}
+            handoverNote={shift.handoverNote ?? ""}
             blockedReason={clockInBlocked}
             participantName={`${shift.client.firstName} ${shift.client.lastName}`}
             participantAddress={shift.client.address ?? undefined}

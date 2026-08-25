@@ -113,6 +113,7 @@ export async function clockOut(formData: FormData) {
   const shift = await workerShift(String(formData.get("shiftId") ?? ""));
   const { lat, lng } = coords(formData);
   const note = String(formData.get("note") ?? "").trim() || null;
+  const handover = String(formData.get("handover") ?? "").trim() || null;
   const err = geofenceError(shift.client, lat, lng);
   if (err) return { error: err };
 
@@ -146,11 +147,48 @@ export async function clockOut(formData: FormData) {
       clockOutLat: lat,
       clockOutLng: lng,
       progressNote: note ?? shift.progressNote,
+      // Optional. Blank means nothing to pass on, and must not wipe a handover
+      // the worker already wrote earlier in the shift.
+      handoverNote: handover ?? shift.handoverNote,
     },
   });
   revalidatePath("/my-shifts");
   revalidatePath("/timesheets");
   revalidatePath("/dashboard");
+  return { ok: true };
+}
+
+/**
+ * The incoming worker confirms they've read the previous worker's handover.
+ *
+ * Acknowledging is what clears the note from the queue, so this is scoped to
+ * the acknowledging worker's own tenant — a worker can't clear a note for a
+ * participant they're not working with.
+ */
+export async function acknowledgeHandover(formData: FormData) {
+  const session = await getSession();
+  if (!session?.staffId) return { error: "Not signed in as a support worker." };
+
+  const fromShiftId = String(formData.get("fromShiftId") ?? "");
+  const target = await prisma.shift.findFirst({
+    where: { id: fromShiftId, tenantId: session.tenantId },
+    select: { id: true, handoverAckAt: true },
+  });
+  if (!target) return { error: "That handover note is no longer available." };
+
+  // Already acknowledged (two devices, double tap) — succeed quietly rather
+  // than overwriting who read it first.
+  if (target.handoverAckAt) return { ok: true };
+
+  await prisma.shift.update({
+    where: { id: target.id },
+    data: {
+      handoverAckAt: new Date(),
+      handoverAckByStaffId: session.staffId,
+    },
+  });
+  revalidatePath("/my-shifts");
+  revalidatePath("/timesheets");
   return { ok: true };
 }
 

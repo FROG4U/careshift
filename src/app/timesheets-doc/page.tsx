@@ -233,6 +233,18 @@ export default async function TimesheetNotesDoc({
                   </p>
                 )}
 
+                {s.handoverNote?.trim() && (
+                  <div className="mt-2 border-t border-slate-100 pt-1.5">
+                    <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                      Handover to next worker
+                      {s.handoverAckAt ? " — acknowledged" : " — not yet read"}
+                    </div>
+                    <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed">
+                      {s.handoverNote}
+                    </p>
+                  </div>
+                )}
+
                 {s.tasks.length > 0 && (
                   <div className="mt-2 border-t border-slate-100 pt-1.5">
                     <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">

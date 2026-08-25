@@ -19,6 +19,8 @@ export type ShiftDetailData = {
   breaks: string[];
   totalKm: number;
   note: string;
+  /** Passed to the next worker at clock-out, with who read it and when. */
+  handover: { body: string; ackBy: string | null; ackAt: string | null } | null;
   approval: string;
   needsNotes: boolean;
   hasMap: boolean;
@@ -380,6 +382,23 @@ export function ShiftDetail({ data }: { data: ShiftDetailData }) {
                         <span className="text-xs text-slate-400">km</span>
                       </div>
                     ))}
+                  </div>
+                )}
+
+                {data.handover && (
+                  <div className="rounded-xl border border-sky-200 bg-sky-50 p-3">
+                    <div className="flex items-center gap-1 text-sm font-medium text-slate-700">
+                      <Icon name="swap_horiz" className="text-[16px] text-sky-600" />
+                      Handover to the next worker
+                    </div>
+                    <p className="mt-1.5 whitespace-pre-wrap text-sm text-slate-800">
+                      {data.handover.body}
+                    </p>
+                    <p className="mt-2 text-xs text-slate-500">
+                      {data.handover.ackAt
+                        ? `Read by ${data.handover.ackBy ?? "the next worker"} · ${data.handover.ackAt}`
+                        : "Not yet read — the next worker sees this when they clock in."}
+                    </p>
                   </div>
                 )}
 

@@ -56,6 +56,16 @@ export default async function TimesheetsPage({
     }
   }
 
+  // Who acknowledged a handover — the shift only stores the staff id.
+  const staffNames = new Map(
+    (
+      await prisma.staff.findMany({
+        where: { tenantId: tenant.id },
+        select: { id: true, firstName: true, lastName: true },
+      })
+    ).map((st) => [st.id, `${st.firstName} ${st.lastName}`]),
+  );
+
   const rows = await prisma.shift.findMany({
     where: {
       tenantId: tenant.id,
@@ -328,6 +338,17 @@ export default async function TimesheetsPage({
                   };
                 })(),
                 note: s.progressNote ?? "",
+                handover: s.handoverNote
+                  ? {
+                      body: s.handoverNote,
+                      ackBy: s.handoverAckByStaffId
+                        ? (staffNames.get(s.handoverAckByStaffId) ?? null)
+                        : null,
+                      ackAt: s.handoverAckAt
+                        ? `${fmtDate(s.handoverAckAt)} ${fmtTime(s.handoverAckAt)}`
+                        : null,
+                    }
+                  : null,
                 approval: s.approval,
                 needsNotes,
                 hasMap,

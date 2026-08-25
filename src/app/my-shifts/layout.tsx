@@ -3,8 +3,10 @@ import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { totalUnread } from "@/lib/chat";
 import { notesDueFor } from "@/lib/notesDue";
+import { pendingHandoverForStaff } from "@/lib/handover";
 import { WorkerShell } from "@/components/worker/WorkerShell";
 import { NotesGuard } from "@/components/worker/NotesGuard";
+import { HandoverGuard } from "@/components/worker/HandoverGuard";
 import { LocationPinger } from "@/components/worker/LocationPinger";
 import { InstallPrompt } from "@/components/InstallPrompt";
 import { PushRegistrar } from "@/components/PushRegistrar";
@@ -18,8 +20,15 @@ export default async function WorkerLayout({
   const session = await getSession();
   if (!session) redirect("/login");
 
-  const [tenant, staff, notifications, chatUnread, pendingCount, notesDue] =
-    await Promise.all([
+  const [
+    tenant,
+    staff,
+    notifications,
+    chatUnread,
+    pendingCount,
+    notesDue,
+    handover,
+  ] = await Promise.all([
       prisma.tenant.findUnique({ where: { id: session.tenantId } }),
       session.staffId
         ? prisma.staff.findUnique({
@@ -45,6 +54,9 @@ export default async function WorkerLayout({
       session.staffId
         ? notesDueFor(session.tenantId, session.staffId)
         : Promise.resolve([]),
+      session.staffId
+        ? pendingHandoverForStaff(session.tenantId, session.staffId)
+        : Promise.resolve(null),
     ]);
 
   // Ping location only while there's a shift happening around now
@@ -82,7 +94,13 @@ export default async function WorkerLayout({
       >
         {children}
       </WorkerShell>
-      <NotesGuard dues={notesDue} />
+      {/* Handover first: it's about the shift the worker is standing in
+          right now, where the notes reminder is about a finished one. */}
+      {handover ? (
+        <HandoverGuard handover={handover} />
+      ) : (
+        <NotesGuard dues={notesDue} />
+      )}
       <InstallPrompt />
       <PushRegistrar />
       <PresenceHeartbeat />
