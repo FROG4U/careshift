@@ -99,7 +99,13 @@ export default async function AppLayout({
 
   return (
     <div
-      className="flex min-h-screen"
+      // h-dvh, not min-h-screen. The sidebar's nav list is already built to
+      // scroll on its own (flex-1 + overflow-y-auto), but a *minimum* height
+      // gave it no ceiling: with more nav items than fit, the aside grew past
+      // the viewport — 1115px against an 866px window on Danu's screen — and
+      // dragged the whole row with it. The page then scrolled, and the chat
+      // composer lifted off the bottom with dead space beneath it.
+      className="flex h-dvh overflow-hidden"
       style={{
         ["--brand" as string]: brand,
         ["--accent" as string]: tenant.accentColor || "#886949",
