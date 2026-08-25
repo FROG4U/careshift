@@ -127,7 +127,12 @@ export default async function AppLayout({
       />
 
       {/* Main content */}
-      <main className="flex-1 overflow-x-hidden bg-[var(--background)] pb-28 md:pb-0">
+      {/* The app shell scrolls here, not on the page. h-dvh (a DEFINITE
+          height, not min-h) is what lets a full-height child claim the space
+          left over via `flex-1 min-h-0` — with min-h-dvh there's nothing for
+          it to size against and it grows to fit its content instead, which is
+          what pushed the chat composer off the bottom of the screen. */}
+      <main className="flex h-dvh flex-1 flex-col overflow-x-hidden overflow-y-auto bg-[var(--background)] pb-28 md:pb-0">
         {/* Top header bar — notifications on the right */}
         <header className="sticky top-0 z-30 flex h-14 items-center justify-end gap-2 border-b border-[var(--border)] bg-[var(--background)] pl-6 pr-3">
           <NotificationBell notifications={notifications} />

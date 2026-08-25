@@ -48,17 +48,17 @@ export function MessagesShell({
   const threadOpen = Boolean(activeId);
 
   return (
-    // Two things get subtracted from the viewport here, and both matter.
+    // Fill whatever <main> has left rather than subtracting hardcoded heights
+    // from the viewport. Two earlier attempts did the arithmetic — minus the
+    // header, minus the bottom-nav padding — and both were wrong somewhere:
+    // the numbers only hold if the header is exactly 3.5rem and rendered on
+    // every surface, which isn't true in the installed app. flex-1 measures
+    // the real leftover space, so it can't drift.
     //
-    // dvh, not vh: 100vh means the viewport as if no keyboard and no browser
-    // toolbar existed, so opening the keyboard left this taller than the
-    // visible screen — the composer slid up and a gap opened beneath it.
-    //
-    // 3.5rem is the sticky app header above this shell. Below md the app
-    // layout also puts pb-28 (7rem) on <main> to clear the floating bottom
-    // nav, and that padding sits *under* this element — so on a phone the
-    // page ran 7rem past the bottom of the screen unless we subtract it too.
-    <div className="flex h-[calc(100dvh-10.5rem)] md:h-[calc(100dvh-3.5rem)]">
+    // min-h-0 is what makes it work: a flex child defaults to min-height:auto
+    // and refuses to shrink below its content, which would push the composer
+    // back off the bottom of the screen.
+    <div className="flex min-h-0 flex-1">
       {/* Conversation list — hidden on mobile once a thread is open */}
       <aside
         className={`w-full shrink-0 flex-col border-r border-[var(--border)] bg-white md:flex md:w-80 ${
