@@ -79,7 +79,8 @@ export function WorkerShell({
 
   return (
     <div
-      className="relative min-h-screen bg-[#f6f7f9]"
+      // dvh, not vh — workers are on phones, where vh ignores the keyboard.
+      className="relative min-h-dvh bg-[#f6f7f9]"
       style={{ ["--brand" as string]: brand, ["--accent" as string]: accent }}
     >
       {/* ── Navy brand top bar ──────────────────────────────────── */}

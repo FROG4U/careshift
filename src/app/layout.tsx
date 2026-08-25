@@ -35,6 +35,9 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
+  // Android Chrome otherwise slides the keyboard OVER the page, leaving
+  // fixed-to-bottom UI (the chat composer) stranded behind it.
+  interactiveWidget: "resizes-content",
 };
 
 export default function RootLayout({
