@@ -936,6 +936,13 @@ model Shift {
   handoverAckAt       DateTime?
   handoverAckByStaffId String?
 
+  // Clocking out away from the participant's home is legitimate — dropping
+  // someone at a day program, finishing at an appointment. It's never blocked
+  // (paid time is capped to the roster either way, so it can't inflate pay),
+  // but when it happens the worker says why and the distance is kept.
+  clockOutReason    String?
+  clockOutDistanceM Float?
+
   // Set true when this shift was rostered beyond the participant's agreed
   // weekly hours and a manager authorised the overrun. `authorisedBy` records
   // the manager's name for the audit trail.

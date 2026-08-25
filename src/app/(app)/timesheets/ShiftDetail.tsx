@@ -21,6 +21,8 @@ export type ShiftDetailData = {
   note: string;
   /** Passed to the next worker at clock-out, with who read it and when. */
   handover: { body: string; ackBy: string | null; ackAt: string | null } | null;
+  /** Set only when they finished outside the participant's radius. */
+  finishedAway: { reason: string; distanceFt: number } | null;
   approval: string;
   needsNotes: boolean;
   hasMap: boolean;
@@ -382,6 +384,18 @@ export function ShiftDetail({ data }: { data: ShiftDetailData }) {
                         <span className="text-xs text-slate-400">km</span>
                       </div>
                     ))}
+                  </div>
+                )}
+
+                {data.finishedAway && (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+                    <div className="flex items-center gap-1 text-sm font-medium text-slate-700">
+                      <Icon name="wrong_location" className="text-[16px] text-amber-600" />
+                      Clocked out {data.finishedAway.distanceFt} ft away
+                    </div>
+                    <p className="mt-1 text-sm text-slate-800">
+                      {data.finishedAway.reason}
+                    </p>
                   </div>
                 )}
 

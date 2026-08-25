@@ -11,6 +11,16 @@ import {
   endTransport,
 } from "@/app/my-shifts/actions";
 
+const OTHER_REASON = "Something else";
+
+/** Why a worker might legitimately finish away from the participant's home. */
+const AWAY_REASONS = [
+  "Dropped the participant somewhere else",
+  "Finished at an appointment or outing",
+  "Participant left with family or another service",
+  OTHER_REASON,
+];
+
 type Coords = { lat: number; lng: number; speed: number | null } | null;
 
 function getLocation(): Promise<Coords> {
@@ -87,6 +97,14 @@ export function ShiftClock(props: ShiftClockProps) {
   const [locating, setLocating] = useState(false);
   const [note, setNote] = useState(props.note);
   const [handover, setHandover] = useState(props.handoverNote ?? "");
+  // Set when the server says they're finishing away from the participant's
+  // home and wants a reason before it will record the clock-out.
+  const [awayPrompt, setAwayPrompt] = useState<{
+    distanceFt: number;
+    clientName: string;
+  } | null>(null);
+  const [awayReason, setAwayReason] = useState("");
+  const [awayOther, setAwayOther] = useState("");
   const elapsed = useElapsed(
     props.clockInIso,
     props.status === "IN_PROGRESS" && !props.paused,
@@ -128,7 +146,9 @@ export function ShiftClock(props: ShiftClockProps) {
   }
 
   function handle(
-    fn: () => Promise<{ error?: string; ok?: boolean } | void>,
+    fn: () => Promise<
+      { error?: string; ok?: boolean; needsReason?: boolean } | void
+    >,
   ) {
     setError(null);
     startTx(async () => {
@@ -274,10 +294,23 @@ export function ShiftClock(props: ShiftClockProps) {
   }
 
   // --- IN_PROGRESS: working (default) ---
-  const endShift = () =>
+  const endShift = (outReason?: string) =>
     handle(async () => {
       const c = await locate();
-      return clockOut(withCoords(props.shiftId, c, { note, handover }));
+      const res = await clockOut(
+        withCoords(props.shiftId, c, {
+          note,
+          handover,
+          ...(outReason ? { outReason } : {}),
+        }),
+      );
+      // Finishing away from the participant's home: allowed, but say why.
+      if (res && "needsReason" in res && res.needsReason) {
+        setAwayPrompt({ distanceFt: res.distanceFt, clientName: res.clientName });
+        return;
+      }
+      setAwayPrompt(null);
+      return res;
     });
 
   return (
@@ -285,7 +318,7 @@ export function ShiftClock(props: ShiftClockProps) {
       {props.hero && (
         <>
           <button
-            onClick={endShift}
+            onClick={() => endShift()}
             disabled={busy}
             className="flex h-36 w-36 flex-col items-center justify-center rounded-full bg-red-600 text-white shadow-xl ring-4 ring-white transition active:scale-95 disabled:opacity-60"
           >
@@ -393,6 +426,82 @@ export function ShiftClock(props: ShiftClockProps) {
           )}
         </div>
       </div>
+      {/* Finishing away from the participant's home. Allowed — but recorded,
+          with a reason, so the admin sees an explained event rather than an
+          anomaly. Cancel leaves the shift running; nothing is lost. */}
+      {awayPrompt && (
+        <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/50 p-4 sm:items-center">
+          <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl">
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-amber-100 text-amber-600">
+              <span className="material-symbols-rounded text-[30px]">
+                wrong_location
+              </span>
+            </div>
+            <h2 className="text-center text-lg font-bold text-slate-900">
+              Finishing away from {awayPrompt.clientName}&apos;s place?
+            </h2>
+            <p className="mt-1 text-center text-sm text-slate-500">
+              You&apos;re about {awayPrompt.distanceFt} ft away. That&apos;s
+              fine — just tell us why so it&apos;s on the record.
+            </p>
+
+            <div className="mt-4 space-y-2">
+              {AWAY_REASONS.map((r) => (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => setAwayReason(r)}
+                  className={`w-full rounded-xl border px-4 py-2.5 text-left text-sm font-medium transition ${
+                    awayReason === r
+                      ? "border-[var(--brand)] bg-[var(--brand)]/5 text-slate-900"
+                      : "border-slate-300 text-slate-700 hover:bg-slate-50"
+                  }`}
+                >
+                  {r}
+                </button>
+              ))}
+            </div>
+
+            {awayReason === OTHER_REASON && (
+              <textarea
+                value={awayOther}
+                onChange={(e) => setAwayOther(e.target.value)}
+                rows={2}
+                autoFocus
+                placeholder="Where did you finish, and why?"
+                className="mt-2 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[var(--brand)] focus:ring-2 focus:ring-blue-100"
+              />
+            )}
+
+            <button
+              type="button"
+              disabled={
+                busy ||
+                !awayReason ||
+                (awayReason === OTHER_REASON && !awayOther.trim())
+              }
+              onClick={() =>
+                endShift(
+                  awayReason === OTHER_REASON
+                    ? `Other — ${awayOther.trim()}`
+                    : awayReason,
+                )
+              }
+              className="mt-5 w-full rounded-xl px-4 py-3 text-sm font-bold text-white shadow-sm transition hover:opacity-90 disabled:opacity-50"
+              style={{ background: "var(--brand)" }}
+            >
+              {busy ? "Finishing…" : "Clock out"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setAwayPrompt(null)}
+              className="mt-2 w-full rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-500 transition hover:bg-slate-50"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
       {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
     </div>
   );

@@ -349,6 +349,13 @@ export default async function TimesheetsPage({
                         : null,
                     }
                   : null,
+                finishedAway:
+                  s.clockOutReason && s.clockOutDistanceM != null
+                    ? {
+                        reason: s.clockOutReason,
+                        distanceFt: Math.round(s.clockOutDistanceM * FT_PER_M),
+                      }
+                    : null,
                 approval: s.approval,
                 needsNotes,
                 hasMap,

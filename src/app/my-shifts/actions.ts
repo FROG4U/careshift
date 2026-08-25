@@ -60,10 +60,35 @@ async function workerShift(shiftId: string) {
   return shift;
 }
 
+type GeoClient = {
+  lat: number | null;
+  lng: number | null;
+  geofenceFt: number;
+  firstName: string;
+};
+
+/**
+ * How far outside the participant's radius the worker is, in metres, or null
+ * if they're inside it (or there's nothing to compare against).
+ */
+function metresOutside(
+  client: GeoClient,
+  lat: number | null,
+  lng: number | null,
+): number | null {
+  if (client.lat == null || client.lng == null) return null;
+  if (lat == null || lng == null) return null;
+  const dist = distanceMetres(lat, lng, client.lat, client.lng);
+  const limitM = client.geofenceFt / FT_PER_M;
+  return dist > limitM ? dist : null;
+}
+
 /**
  * Returns a geofence error message if the worker is outside the participant's
  * allowed radius, else null. If the participant has no location set, or the
  * phone couldn't supply GPS, we allow the action (and record no coordinates).
+ *
+ * Used for clocking IN only. Clocking OUT is never blocked — see `clockOut`.
  */
 function geofenceError(
   client: { lat: number | null; lng: number | null; geofenceFt: number; firstName: string },
@@ -114,8 +139,21 @@ export async function clockOut(formData: FormData) {
   const { lat, lng } = coords(formData);
   const note = String(formData.get("note") ?? "").trim() || null;
   const handover = String(formData.get("handover") ?? "").trim() || null;
-  const err = geofenceError(shift.client, lat, lng);
-  if (err) return { error: err };
+  const outReason = String(formData.get("outReason") ?? "").trim() || null;
+
+  // Finishing away from the participant's home is legitimate — dropping
+  // someone at a day program, ending at an appointment. So clocking OUT is
+  // never blocked: paid time is capped to the roster regardless, so a distant
+  // clock-out can't gain anyone a minute of pay, and refusing it just strands
+  // a worker in a car park. We ask why instead, and keep the distance.
+  const outsideM = metresOutside(shift.client, lat, lng);
+  if (outsideM != null && !outReason) {
+    return {
+      needsReason: true,
+      distanceFt: Math.round(outsideM * FT_PER_M),
+      clientName: shift.client.firstName,
+    };
+  }
 
   const now = new Date();
 
@@ -150,6 +188,10 @@ export async function clockOut(formData: FormData) {
       // Optional. Blank means nothing to pass on, and must not wipe a handover
       // the worker already wrote earlier in the shift.
       handoverNote: handover ?? shift.handoverNote,
+      // Only set when they actually finished outside the radius, so an
+      // ordinary clock-out leaves these null.
+      clockOutReason: outsideM != null ? outReason : null,
+      clockOutDistanceM: outsideM,
     },
   });
   revalidatePath("/my-shifts");
