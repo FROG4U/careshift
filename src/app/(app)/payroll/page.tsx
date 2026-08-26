@@ -3,13 +3,24 @@ import { redirect } from "next/navigation";
 import { requireTenant } from "@/lib/tenant";
 import { prisma } from "@/lib/prisma";
 import { fmtDate } from "@/lib/format";
-import { createPayrollPeriod, deletePayrollPeriod } from "./actions";
+import {
+  createPayrollPeriod,
+  deletePayrollPeriod,
+  approvePayrollPeriod,
+  reopenPayrollPeriod,
+} from "./actions";
 
 import { isManager } from "@/lib/roles";
 export default async function PayrollPage({
   searchParams,
 }: {
-  searchParams: Promise<{ branch?: string; tab?: string; q?: string }>;
+  searchParams: Promise<{
+    branch?: string;
+    tab?: string;
+    q?: string;
+    from?: string;
+    to?: string;
+  }>;
 }) {
   const { tenant, session } = await requireTenant();
   // Managers only — workers never see payroll.
@@ -17,7 +28,7 @@ export default async function PayrollPage({
     redirect("/dashboard");
   }
 
-  const { branch, tab, q } = await searchParams;
+  const { branch, tab, q, from, to } = await searchParams;
   const branches = await prisma.branch.findMany({
     where: { tenantId: tenant.id },
     orderBy: { createdAt: "asc" },
@@ -38,13 +49,23 @@ export default async function PayrollPage({
   const query = (q ?? "").trim().toLowerCase();
   const current = allPeriods.filter((p) => p.status !== "APPROVED");
   const pastAll = allPeriods.filter((p) => p.status === "APPROVED");
-  const past = query
-    ? pastAll.filter((p) =>
-        `${fmtDate(p.startDate)} ${fmtDate(p.endDate)} ${p.approvedBy ?? ""}`
-          .toLowerCase()
-          .includes(query),
-      )
-    : pastAll;
+  // Date filtering works on the real dates, not on formatted strings — the
+  // old text search only matched what fmtDate happened to print, so "Apr 2027"
+  // found a run but "2027-04-30" didn't. A run matches when its period
+  // OVERLAPS the range asked for, which is what someone means by "show me
+  // April": a run spanning the month boundary still counts.
+  const fromDate = from ? new Date(`${from}T00:00:00`) : null;
+  const toDate = to ? new Date(`${to}T23:59:59`) : null;
+  const validFrom = fromDate && !Number.isNaN(fromDate.getTime()) ? fromDate : null;
+  const validTo = toDate && !Number.isNaN(toDate.getTime()) ? toDate : null;
+
+  const past = pastAll.filter((p) => {
+    if (validFrom && p.endDate < validFrom) return false;
+    if (validTo && p.startDate > validTo) return false;
+    if (query && !(p.approvedBy ?? "").toLowerCase().includes(query)) return false;
+    return true;
+  });
+  const filtersOn = Boolean(validFrom || validTo || query);
   const periods = view === "past" ? past : current;
 
   return (
@@ -109,17 +130,49 @@ export default async function PayrollPage({
             </Link>
           </div>
 
-          {/* Search past pay runs */}
+          {/* Filter past pay runs by date range and approver */}
           {view === "past" && (
-            <form className="mb-5">
+            <form className="mb-5 flex flex-wrap items-end gap-3 rounded-2xl border border-[var(--border)] bg-white p-4 shadow-sm">
               <input type="hidden" name="branch" value={selected} />
               <input type="hidden" name="tab" value="past" />
-              <input
-                name="q"
-                defaultValue={q ?? ""}
-                placeholder="Search past pay runs — date or approver…"
-                className="w-full max-w-md rounded-xl border border-[var(--border)] bg-white px-4 py-2.5 text-sm outline-none focus:border-[var(--brand)]"
-              />
+              <label className="block text-xs font-medium text-[var(--text-secondary)]">
+                From
+                <input
+                  type="date"
+                  name="from"
+                  defaultValue={from ?? ""}
+                  className="mt-1 block rounded-lg border border-[var(--border)] px-2.5 py-1.5 text-sm outline-none focus:border-[var(--brand)]"
+                />
+              </label>
+              <label className="block text-xs font-medium text-[var(--text-secondary)]">
+                To
+                <input
+                  type="date"
+                  name="to"
+                  defaultValue={to ?? ""}
+                  className="mt-1 block rounded-lg border border-[var(--border)] px-2.5 py-1.5 text-sm outline-none focus:border-[var(--brand)]"
+                />
+              </label>
+              <label className="block min-w-[12rem] flex-1 text-xs font-medium text-[var(--text-secondary)]">
+                Approved by
+                <input
+                  name="q"
+                  defaultValue={q ?? ""}
+                  placeholder="Any approver"
+                  className="mt-1 block w-full rounded-lg border border-[var(--border)] px-2.5 py-1.5 text-sm outline-none focus:border-[var(--brand)]"
+                />
+              </label>
+              <button className="rounded-lg bg-[var(--brand)] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90">
+                Filter
+              </button>
+              {filtersOn && (
+                <Link
+                  href={`/payroll?branch=${selected}&tab=past`}
+                  className="px-2 py-2 text-sm font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                >
+                  Clear
+                </Link>
+              )}
             </form>
           )}
 
@@ -216,10 +269,29 @@ export default async function PayrollPage({
                       View report →
                     </Link>
                     {p.status === "DRAFT" && (
-                      <form action={deletePayrollPeriod}>
+                      <>
+                        {/* Completing from the list saves opening every run
+                            just to finish it. The report stays the place to
+                            check the figures first. */}
+                        <form action={approvePayrollPeriod}>
+                          <input type="hidden" name="id" value={p.id} />
+                          <button className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:opacity-90">
+                            Complete
+                          </button>
+                        </form>
+                        <form action={deletePayrollPeriod}>
+                          <input type="hidden" name="id" value={p.id} />
+                          <button className="rounded-lg px-2.5 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50">
+                            Delete
+                          </button>
+                        </form>
+                      </>
+                    )}
+                    {p.status === "APPROVED" && (
+                      <form action={reopenPayrollPeriod}>
                         <input type="hidden" name="id" value={p.id} />
-                        <button className="rounded-lg px-2.5 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50">
-                          Delete
+                        <button className="rounded-lg px-2.5 py-1.5 text-xs font-medium text-[var(--text-muted)] hover:bg-[var(--background)] hover:text-[var(--text-primary)]">
+                          Re-open
                         </button>
                       </form>
                     )}
