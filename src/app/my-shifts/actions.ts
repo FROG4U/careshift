@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { notifyManagers } from "@/lib/notify";
 import { notesDueFor, hasOverdueNotes } from "@/lib/notesDue";
 import { roadDistanceKm } from "@/lib/roadDistance";
+import { gpsQualityOf } from "@/lib/gpsQuality";
 import {
   speedLimitAt,
   MIN_DRIVING_KMH,
@@ -192,20 +193,9 @@ export async function clockOut(formData: FormData) {
     });
 
     // A trip closed by clocking out is still a trip that gets paid, so give it
-    // the same road snapping as one the worker ended themselves.
+    // the same treatment as one the worker ended themselves.
     try {
-      const pts = await prisma.transportPoint.findMany({
-        where: { transportId: openT.id },
-        orderBy: { at: "asc" },
-        select: { lat: true, lng: true },
-      });
-      const snapped = await roadDistanceKm(pts, km);
-      if (snapped != null && snapped !== km) {
-        await prisma.transport.update({
-          where: { id: openT.id },
-          data: { km: snapped },
-        });
-      }
+      await snapSparseTripToRoads(openT.id, km);
     } catch {
       /* road snapping is non-critical */
     }
@@ -378,6 +368,33 @@ export async function startTransport(formData: FormData) {
  * recorded point, ignoring GPS jitter (<15 m) and implausible jumps (>5 km in
  * one window). Does NOT revalidate — the client tracks the running km itself.
  */
+/**
+ * Replace a trip's distance with a road-routed estimate ONLY when its GPS
+ * trail is too sparse to have measured it properly.
+ *
+ * A dense trail is a real measurement and is left alone. Re-routing it through
+ * OSRM would substitute a guess for a fact.
+ */
+async function snapSparseTripToRoads(transportId: string, measuredKm: number) {
+  const pts = await prisma.transportPoint.findMany({
+    where: { transportId },
+    orderBy: { at: "asc" },
+    select: { lat: true, lng: true, at: true },
+  });
+
+  if (gpsQualityOf(pts).reliable) return;
+
+  const snapped = await roadDistanceKm(pts, measuredKm);
+  // Only ever correct upwards: a sparse trail undercounts, so a snapped
+  // figure below the measured one means the match went wrong.
+  if (snapped == null || snapped <= measuredKm) return;
+
+  await prisma.transport.update({
+    where: { id: transportId },
+    data: { km: snapped },
+  });
+}
+
 export async function pingTransport(formData: FormData) {
   const shift = await workerShift(String(formData.get("shiftId") ?? ""));
   const { lat, lng, speedKmh: reported } = coords(formData);
@@ -444,23 +461,18 @@ export async function endTransport(formData: FormData) {
     },
   });
 
-  // Mileage is paid, and straight lines between sparse GPS points undercount
-  // what was actually driven. Snap the trail to real roads where we can.
-  // Best-effort: a failure keeps the straight-line figure rather than
-  // replacing a slight underestimate with a wrong number.
+  // Mileage is paid, so only estimate when the measurement actually failed.
+  //
+  // While the phone is awake, pings are seconds apart, the trail is dense and
+  // the accumulated distance is genuinely accurate — snapping that to roads
+  // could only add error. It's the sleeping-phone case that breaks it: long
+  // gaps leave straight chords, and a leg over 5 km is dropped entirely by the
+  // guard in pingTransport, so the trip is undercounted.
+  //
+  // So: dense trail, keep what was measured. Sparse trail, fall back to a road
+  // estimate, which is a guess but a better one than a chord across suburbs.
   try {
-    const pts = await prisma.transportPoint.findMany({
-      where: { transportId: t.id },
-      orderBy: { at: "asc" },
-      select: { lat: true, lng: true },
-    });
-    const snapped = await roadDistanceKm(pts, km);
-    if (snapped != null && snapped !== km) {
-      await prisma.transport.update({
-        where: { id: t.id },
-        data: { km: snapped },
-      });
-    }
+    await snapSparseTripToRoads(t.id, km);
   } catch {
     /* road snapping is non-critical */
   }
