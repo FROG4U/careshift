@@ -104,6 +104,12 @@ export function ShiftClock(props: ShiftClockProps) {
     clientName: string;
   } | null>(null);
   const [awayReason, setAwayReason] = useState("");
+  // Offered after a clock-in is refused for distance: they may be standing at
+  // the door with a phone that can't tell.
+  const [onSiteOffer, setOnSiteOffer] = useState<{
+    distanceFt: number;
+    clientName: string;
+  } | null>(null);
   const [awayOther, setAwayOther] = useState("");
   const elapsed = useElapsed(
     props.clockInIso,
@@ -147,7 +153,13 @@ export function ShiftClock(props: ShiftClockProps) {
 
   function handle(
     fn: () => Promise<
-      { error?: string; ok?: boolean; needsReason?: boolean } | void
+      | {
+          error?: string;
+          ok?: boolean;
+          needsReason?: boolean;
+          canConfirmOnSite?: boolean;
+        }
+      | void
     >,
   ) {
     setError(null);
@@ -174,17 +186,28 @@ export function ShiftClock(props: ShiftClockProps) {
   // --- SCHEDULED (not started) ---
   if (props.status !== "IN_PROGRESS") {
     const blocked = props.blockedReason ?? null;
-    const startIn = () =>
+    const startIn = (onSite?: boolean) =>
       handle(async () => {
         const c = await locate();
-        return clockIn(withCoords(props.shiftId, c));
+        const res = await clockIn(
+          withCoords(props.shiftId, c, onSite ? { onSite: "1" } : {}),
+        );
+        if (res && "canConfirmOnSite" in res && res.canConfirmOnSite) {
+          setOnSiteOffer({
+            distanceFt: res.distanceFt,
+            clientName: res.clientName,
+          });
+        } else {
+          setOnSiteOffer(null);
+        }
+        return res;
       });
 
     if (props.hero) {
       return (
         <div className="flex flex-col items-center">
           <button
-            onClick={startIn}
+            onClick={() => startIn()}
             disabled={busy || !!blocked}
             className="flex h-36 w-36 flex-col items-center justify-center rounded-full text-white shadow-xl ring-4 ring-white transition active:scale-95 disabled:opacity-40"
             style={{
@@ -217,7 +240,7 @@ export function ShiftClock(props: ShiftClockProps) {
     return (
       <div className="space-y-2">
         <button
-          onClick={startIn}
+          onClick={() => startIn()}
           disabled={busy || !!blocked}
           className="w-full rounded-xl bg-[var(--brand)] px-4 py-3 text-base font-semibold text-white transition active:scale-[0.99] disabled:opacity-50"
         >
@@ -229,6 +252,25 @@ export function ShiftClock(props: ShiftClockProps) {
           </p>
         )}
         {error && <p className="text-sm text-red-600">{error}</p>}
+        {/* They may be at the door with a phone that can't tell — indoors GPS
+            often falls back to WiFi and reads hundreds of feet out. Refusing
+            outright would strand them; this records the exception instead. */}
+        {onSiteOffer && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+            <p className="text-sm text-amber-900">
+              Already at {onSiteOffer.clientName}&apos;s place? Phones can read
+              badly indoors. Confirm you&apos;re there and you can start — your
+              distance ({onSiteOffer.distanceFt} ft) is saved with the shift.
+            </p>
+            <button
+              onClick={() => startIn(true)}
+              disabled={busy}
+              className="mt-2 w-full rounded-xl border border-amber-400 bg-white px-4 py-2.5 text-sm font-bold text-amber-800 transition hover:bg-amber-100 disabled:opacity-50"
+            >
+              {busy ? "Starting…" : "I'm here — clock me in"}
+            </button>
+          </div>
+        )}
       </div>
     );
   }

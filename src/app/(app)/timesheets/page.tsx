@@ -349,6 +349,10 @@ export default async function TimesheetsPage({
                         : null,
                     }
                   : null,
+                startedAway:
+                  s.clockInOnSiteConfirmed && s.clockInDistanceM != null
+                    ? { distanceFt: Math.round(s.clockInDistanceM * FT_PER_M) }
+                    : null,
                 finishedAway:
                   s.clockOutReason && s.clockOutDistanceM != null
                     ? {

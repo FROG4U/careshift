@@ -943,6 +943,13 @@ model Shift {
   clockOutReason    String?
   clockOutDistanceM Float?
 
+  // A worker standing at the door whose phone reads as outside the radius
+  // (indoors, GPS falls back to WiFi triangulation) can confirm they're on
+  // site and clock in anyway. Recorded rather than refused, so the exception
+  // is visible to admins instead of stranding someone at a doorstep.
+  clockInOnSiteConfirmed Boolean @default(false)
+  clockInDistanceM       Float?
+
   // Set true when this shift was rostered beyond the participant's agreed
   // weekly hours and a manager authorised the overrun. `authorisedBy` records
   // the manager's name for the audit trail.

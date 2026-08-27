@@ -91,18 +91,16 @@ function metresOutside(
  * Used for clocking IN only. Clocking OUT is never blocked — see `clockOut`.
  */
 function geofenceError(
-  client: { lat: number | null; lng: number | null; geofenceFt: number; firstName: string },
+  client: GeoClient,
   lat: number | null,
   lng: number | null,
 ) {
-  if (client.lat == null || client.lng == null) return null;
-  if (lat == null || lng == null) return null;
-  const dist = distanceMetres(lat, lng, client.lat, client.lng);
-  const limitM = client.geofenceFt / FT_PER_M;
-  if (dist > limitM) {
-    return `You're about ${Math.round(dist * FT_PER_M)} ft from ${client.firstName}'s location (allowed within ${client.geofenceFt} ft). Move closer to clock in/out.`;
-  }
-  return null;
+  const outsideM = metresOutside(client, lat, lng);
+  if (outsideM == null) return null;
+  // The number that helps is the OVERSHOOT — how much closer to get — not the
+  // raw distance, which a worker can't act on without knowing the limit.
+  const overFt = Math.round((outsideM - client.geofenceFt / FT_PER_M) * FT_PER_M);
+  return `You're about ${overFt} ft too far from ${client.firstName}'s place. Move closer and try again.`;
 }
 
 export async function clockIn(formData: FormData) {
@@ -118,8 +116,21 @@ export async function clockIn(formData: FormData) {
   }
 
   const { lat, lng } = coords(formData);
-  const err = geofenceError(shift.client, lat, lng);
-  if (err) return { error: err };
+  const onSite = String(formData.get("onSite") ?? "") === "1";
+  const outsideM = metresOutside(shift.client, lat, lng);
+
+  // Outside the radius and not yet confirmed: refuse, but tell them how much
+  // closer to get, and offer the on-site override. A phone indoors can fall
+  // back to WiFi triangulation and read hundreds of feet out while the worker
+  // is at the door — "move closer" is useless advice to someone already there.
+  if (outsideM != null && !onSite) {
+    return {
+      error: geofenceError(shift.client, lat, lng) ?? undefined,
+      canConfirmOnSite: true,
+      distanceFt: Math.round(outsideM * FT_PER_M),
+      clientName: shift.client.firstName,
+    };
+  }
 
   await prisma.shift.update({
     where: { id: shift.id },
@@ -128,6 +139,9 @@ export async function clockIn(formData: FormData) {
       clockInAt: new Date(),
       clockInLat: lat,
       clockInLng: lng,
+      // Only stamped on the exception, so an ordinary clock-in stays clean.
+      clockInOnSiteConfirmed: outsideM != null && onSite,
+      clockInDistanceM: outsideM,
     },
   });
   revalidatePath("/my-shifts");
