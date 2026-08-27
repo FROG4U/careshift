@@ -93,10 +93,22 @@ export function GuideContent({ s }: { s: GuideSettings }) {
           pick a quick reason. That&apos;s all; it takes one tap.
         </p>
         <Key>
-          Don&apos;t clock out early from the driveway to &ldquo;beat&rdquo; the
-          location check. Clock out when you actually finish, and say where.
-          It&apos;s more accurate and it protects you.
+          Your clock-out location is always recorded. Make sure it is where you
+          genuinely finished, and that it matches what the participant needed
+          that day.
         </Key>
+        <p>
+          Coordinators can and do check. If a clock-out shows you finishing
+          somewhere unexpected, the simplest way to confirm it is to ring the
+          participant and ask. An accurate finish point and an honest reason
+          hold up to that; a rounded-off one does not.
+        </p>
+        <p>
+          So don&apos;t clock out early from the driveway to &ldquo;beat&rdquo;
+          the location check, and don&apos;t clock out later from somewhere
+          else. Clock out when you actually finish, where you actually are.
+          That is what protects you.
+        </p>
       </Section>
 
       <Section icon="edit_note" title="Shift notes">
@@ -105,9 +117,14 @@ export function GuideContent({ s }: { s: GuideSettings }) {
           <strong>Completed Shifts</strong>.
         </p>
         <Key>
-          A shift without notes is <strong>not paid</strong>. You have{" "}
-          {NOTES_WINDOW_H} hours after clocking out.
+          No notes means your coordinator <strong>cannot approve the shift</strong>,
+          and a shift that isn&apos;t approved <strong>cannot go into a pay
+          run</strong>. That is why it doesn&apos;t get paid.
         </Key>
+        <p>
+          Writing your notes is what releases the shift to payroll. You have{" "}
+          {NOTES_WINDOW_H} hours after clocking out.
+        </p>
         <p>
           Leave notes longer than {NOTES_WINDOW_H} hours and you{" "}
           <strong>can&apos;t start a new shift</strong> until they&apos;re
