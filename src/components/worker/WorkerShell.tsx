@@ -34,6 +34,7 @@ function titleFor(path: string) {
   if (path.startsWith("/my-shifts/summary")) return "My Hours";
   if (path.startsWith("/my-shifts/pay")) return "My Pay";
   if (path.startsWith("/my-shifts/rates")) return "My Rates";
+  if (path.startsWith("/my-shifts/guide")) return "How This App Works";
   return "My Shifts";
 }
 
@@ -163,6 +164,7 @@ export function WorkerShell({
               <p className="px-3 pb-1 pt-4 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
                 App
               </p>
+              <DrawerLink href="/my-shifts/guide" icon="menu_book" label="How this app works" onClick={() => setMenuOpen(false)} />
               <DrawerLink href="/install" icon="install_mobile" label="Get the app" onClick={() => setMenuOpen(false)} />
             </nav>
 
