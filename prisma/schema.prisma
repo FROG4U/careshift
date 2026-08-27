@@ -83,6 +83,51 @@ model Tenant {
   availabilities Availability[]
   adminInvites   AdminInvite[]
   incidents      Incident[]
+  broadcasts     Broadcast[]
+}
+
+/// A message broadcast from the office to a group of people (a branch's
+/// workers, or the admin team). Unlike chat, it demands acknowledgement: the
+/// recipient gets a full-screen popup they must read and close, and the office
+/// can see exactly who opened it and when.
+model Broadcast {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  /// Null = every branch.
+  branchId String?
+  branch   Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  /// Who it was aimed at: WORKERS | ADMINS. Only a super admin may target ADMINS.
+  audience String @default("WORKERS")
+  /// Shown to the recipient as the sender, e.g. "PCG Admin Team".
+  fromLabel String
+  title     String
+  body      String
+  createdById String?
+  createdBy   User?  @relation("BroadcastAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+  /// The name of whoever sent it, kept even if their account is later removed.
+  createdByName String
+  createdAt DateTime @default(now())
+
+  recipients BroadcastRecipient[]
+
+  @@index([tenantId])
+  @@index([branchId])
+}
+
+/// One person's copy of a broadcast. Written when the broadcast is sent, so
+/// the read list is a record of who it actually went to - moving someone to
+/// another branch afterwards can't rewrite history.
+model BroadcastRecipient {
+  id          String    @id @default(cuid())
+  broadcastId String
+  broadcast   Broadcast @relation(fields: [broadcastId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  readAt      DateTime?
+
+  @@unique([broadcastId, userId])
+  @@index([userId, readAt])
 }
 
 /// A worker tapping "Running late" on a shift, with their reason. Managers see
@@ -204,6 +249,7 @@ model Branch {
   shifts  Shift[]
   payrollPeriods PayrollPeriod[]
   incidents Incident[]
+  broadcasts Broadcast[]
 
   @@index([tenantId])
 }
@@ -259,6 +305,8 @@ model User {
   pushSubscriptions PushSubscription[]
   incidentsReported Incident[] @relation("IncidentReporter")
   passwordResets    PasswordReset[]
+  broadcastsSent    Broadcast[]          @relation("BroadcastAuthor")
+  broadcastsGot     BroadcastRecipient[]
 
   @@unique([tenantId, email])
   @@index([tenantId])

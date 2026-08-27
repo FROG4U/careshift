@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { pendingBroadcastFor } from "@/lib/broadcast";
+import { BroadcastGuard } from "@/components/BroadcastGuard";
 import { AdminSidebar } from "@/components/AdminSidebar";
 import { NotificationBell } from "@/components/NotificationBell";
 import { logoutAction } from "./actions";
@@ -45,6 +47,7 @@ export default async function AppLayout({
     pendingApprovals,
     pendingAdmins,
     openIncidents,
+    broadcast,
   ] = await Promise.all([
     prisma.tenant.findUnique({ where: { id: session.tenantId } }),
     prisma.notification.findMany({
@@ -92,6 +95,7 @@ export default async function AppLayout({
           },
         })
       : Promise.resolve(0),
+    pendingBroadcastFor(session.id),
   ]);
   if (!tenant) redirect("/login");
 
@@ -146,6 +150,7 @@ export default async function AppLayout({
         {children}
       </main>
       <AdminBottomNav unreadChat={unreadChat} pendingTimesheets={pendingTimesheets} />
+      {broadcast && <BroadcastGuard item={broadcast} />}
       <InstallPrompt />
       <PushRegistrar />
       <PresenceHeartbeat />

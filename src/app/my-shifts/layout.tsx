@@ -4,9 +4,11 @@ import { prisma } from "@/lib/prisma";
 import { totalUnread } from "@/lib/chat";
 import { notesDueFor } from "@/lib/notesDue";
 import { pendingHandoverForStaff } from "@/lib/handover";
+import { pendingBroadcastFor } from "@/lib/broadcast";
 import { WorkerShell } from "@/components/worker/WorkerShell";
 import { NotesGuard } from "@/components/worker/NotesGuard";
 import { HandoverGuard } from "@/components/worker/HandoverGuard";
+import { BroadcastGuard } from "@/components/BroadcastGuard";
 import { LocationPinger } from "@/components/worker/LocationPinger";
 import { InstallPrompt } from "@/components/InstallPrompt";
 import { PushRegistrar } from "@/components/PushRegistrar";
@@ -28,6 +30,7 @@ export default async function WorkerLayout({
     pendingCount,
     notesDue,
     handover,
+    broadcast,
   ] = await Promise.all([
       prisma.tenant.findUnique({ where: { id: session.tenantId } }),
       session.staffId
@@ -57,6 +60,7 @@ export default async function WorkerLayout({
       session.staffId
         ? pendingHandoverForStaff(session.tenantId, session.staffId)
         : Promise.resolve(null),
+      pendingBroadcastFor(session.id),
     ]);
 
   // Ping location only while there's a shift happening around now
@@ -94,9 +98,12 @@ export default async function WorkerLayout({
       >
         {children}
       </WorkerShell>
-      {/* Handover first: it's about the shift the worker is standing in
-          right now, where the notes reminder is about a finished one. */}
-      {handover ? (
+      {/* One popup at a time, most urgent first: an announcement is the office
+          asking for attention now, a handover is about the shift they're
+          standing in, and the notes reminder is about a finished one. */}
+      {broadcast ? (
+        <BroadcastGuard item={broadcast} />
+      ) : handover ? (
         <HandoverGuard handover={handover} />
       ) : (
         <NotesGuard dues={notesDue} />

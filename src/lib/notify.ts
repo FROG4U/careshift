@@ -34,6 +34,10 @@ function urlFor(n: NotifyInput): string {
       return "/approvals";
     case "LEAVE_REQUESTED":
       return "/leave";
+    case "ANNOUNCEMENT":
+      // The popup finds them wherever they land, so the app root is fine and
+      // works for workers and admins alike.
+      return "/";
     default:
       return "/";
   }
