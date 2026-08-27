@@ -1,7 +1,7 @@
 import { NOTES_WINDOW_H } from "@/lib/notesDue";
 
 /**
- * The worker handbook — how the app behaves and why.
+ * The worker handbook - how the app behaves and why.
  *
  * Shared between the worker app and the admin side so there is exactly one
  * copy: if an admin is asked "what does it tell them about pay?", they read
@@ -62,7 +62,7 @@ export function GuideContent({ s }: { s: GuideSettings }) {
       <Section icon="login" title="Clocking in">
         <p>
           Open the shift and tap <strong>Clock in</strong>. Your phone checks
-          you&apos;re at the participant&apos;s address — within{" "}
+          you&apos;re at the participant&apos;s address, within{" "}
           <strong>{s.geofenceFt} ft</strong>.
         </p>
         <p>
@@ -71,25 +71,25 @@ export function GuideContent({ s }: { s: GuideSettings }) {
         </p>
         <Key>
           Already at the door and it still won&apos;t accept? Tap{" "}
-          <strong>&ldquo;I&apos;m here — clock me in&rdquo;</strong>. Phones
+          <strong>&ldquo;I&apos;m here, clock me in&rdquo;</strong>. Phones
           read badly inside brick and concrete. You&apos;ll be clocked in, and
-          your distance is saved with the shift — that&apos;s normal, not a
+          your distance is saved with the shift. That&apos;s normal, not a
           black mark.
         </Key>
         <p className="text-slate-500">
           Clock in when you <em>arrive</em>. Starting early doesn&apos;t earn
-          extra pay, and starting late is recorded — see Pay below.
+          extra pay, and starting late is recorded. See Pay below.
         </p>
       </Section>
 
       <Section icon="logout" title="Clocking out">
         <p>
           Tap <strong>Clock out</strong> when the shift is done. You can finish
-          anywhere — you are never blocked by location at the end of a shift.
+          anywhere. You are never blocked by location at the end of a shift.
         </p>
         <p>
-          If you finish away from the participant&apos;s home — you dropped them
-          at a day program, or ended at an appointment — you&apos;ll be asked to
+          If you finish away from the participant&apos;s home, say you dropped them
+          at a day program or ended at an appointment, you&apos;ll be asked to
           pick a quick reason. That&apos;s all; it takes one tap.
         </p>
         <Key>
@@ -118,7 +118,7 @@ export function GuideContent({ s }: { s: GuideSettings }) {
       <Section icon="swap_horiz" title="Handover to the next worker">
         <p>
           At clock-out there&apos;s a box: <em>Pass on to the next worker</em>.
-          Optional — use it when the next person genuinely needs to know
+          Optional. Use it when the next person genuinely needs to know
           something.
         </p>
         <p>
@@ -127,48 +127,39 @@ export function GuideContent({ s }: { s: GuideSettings }) {
           before they can carry on. Their name and the time are recorded.
         </p>
         <p className="text-slate-500">
-          It goes to the next shift for that participant — not to a particular
-          person — so it reaches whoever actually turns up.
+          It goes to the next shift for that participant, not to a particular
+          person, so it reaches whoever actually turns up.
         </p>
       </Section>
 
       <Section icon="payments" title="How your pay is worked out">
         <Key>
-          You&apos;re paid for the overlap of your clocked time and your
-          rostered time.
+          Your clock-in is rounded up to your rostered start time.
         </Key>
-        <ul className="list-disc space-y-1 pl-5">
-          <li>
-            Clock in <strong>early</strong> — pay starts at the rostered time. A
-            9am shift started at 8:50 is paid from 9:00.
-          </li>
-          <li>
-            Clock in <strong>late</strong> — pay starts when you clocked in.
-            9:15 is paid from 9:15.
-          </li>
-          <li>
-            Clock out <strong>late</strong> — pay stops at the rostered end.
-            12:12 on a shift ending 12:00 is paid to 12:00.
-          </li>
-          <li>
-            Clock out <strong>early</strong> — pay stops when you clocked out.
-          </li>
-        </ul>
+        <p>
+          Arrive a few minutes early and clock in at 8:52 for a 9am shift, and
+          you&apos;re paid from 9:00. The same at the end: staying a little past
+          the rostered finish is paid to the rostered finish.
+        </p>
+        <p>
+          Start late and pay begins when you clocked in, so 9:15 is paid from
+          9:15.
+        </p>
         <p>
           Breaks you start in the app are deducted. Mileage is paid separately
-          from hours, at your mileage rate.
+          from your hours, at your mileage rate.
         </p>
         <p className="text-slate-500">
-          Genuinely worked longer than rostered? Don&apos;t just stay clocked in
-          — tell your coordinator, who can adjust the shift so the extra time is
-          actually paid.
+          Genuinely worked longer than rostered? Tell your coordinator rather
+          than staying clocked in. They can adjust the shift so the extra time
+          is actually paid.
         </p>
       </Section>
 
       <Section icon="directions_car" title="Mileage and transport">
         <p>
           Driving the participant somewhere? Start a trip in the app before you
-          set off and end it when you arrive — distance is tracked along the
+          set off and end it when you arrive. Distance is tracked along the
           real roads.
         </p>
         <p className="text-slate-500">
@@ -194,7 +185,7 @@ export function GuideContent({ s }: { s: GuideSettings }) {
           </li>
           <li>
             Each <em>Running late</em> notice costs{" "}
-            <strong>{s.lateNoticePenalty} points</strong> — but sending one is
+            <strong>{s.lateNoticePenalty} points</strong>, but sending one is
             still far better than simply turning up late.
           </li>
         </ul>
@@ -203,9 +194,9 @@ export function GuideContent({ s }: { s: GuideSettings }) {
           you. It&apos;s counted separately as going the extra mile.
         </Key>
         <p>
-          {s.ratingGreenAt}+ is green, {s.ratingAmberAt}–{s.ratingGreenAt - 1}{" "}
+          {s.ratingGreenAt}+ is green, {s.ratingAmberAt} to {s.ratingGreenAt - 1}{" "}
           amber, below {s.ratingAmberAt} red. No completed shifts yet means you
-          start at 100 — nothing is held against a new starter.
+          start at 100, so nothing is held against a new starter.
         </p>
       </Section>
 
@@ -241,7 +232,7 @@ export function GuideContent({ s }: { s: GuideSettings }) {
           approve.
         </p>
         <p className="text-slate-500">
-          Put leave in as far ahead as you can — once a shift is rostered and
+          Put leave in as far ahead as you can - once a shift is rostered and
           accepted, undoing it needs a swap.
         </p>
       </Section>
@@ -249,7 +240,7 @@ export function GuideContent({ s }: { s: GuideSettings }) {
       <Section icon="report" title="Incidents">
         <p>
           Anything that hurt someone, nearly did, or that a manager needs to
-          know about goes in as an incident report — the same day where you can.
+          know about goes in as an incident report - the same day where you can.
         </p>
         <p className="text-slate-500">
           Report it even if you&apos;re not sure it counts. An unnecessary

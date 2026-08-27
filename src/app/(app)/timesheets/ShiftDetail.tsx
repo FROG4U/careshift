@@ -222,20 +222,20 @@ export function ShiftDetail({ data }: { data: ShiftDetailData }) {
                   icon="pause_circle"
                   label="Break"
                   value={
-                    data.breakHours > 0 ? `${data.breakHours.toFixed(2)} h` : "—"
+                    data.breakHours > 0 ? `${data.breakHours.toFixed(2)} h` : "-"
                   }
                   accent="text-amber-600"
                 />
                 <Stat
                   icon="directions_car"
                   label="Mileage"
-                  value={data.totalKm > 0 ? `${data.totalKm.toFixed(1)} km` : "—"}
+                  value={data.totalKm > 0 ? `${data.totalKm.toFixed(1)} km` : "-"}
                   accent="text-violet-600"
                 />
                 <Stat
                   icon="timer"
                   label="Clocked"
-                  value={`${data.clockInLabel}–${data.clockOutLabel}`}
+                  value={`${data.clockInLabel}-${data.clockOutLabel}`}
                   accent="text-sky-600"
                 />
               </div>
@@ -257,7 +257,7 @@ export function ShiftDetail({ data }: { data: ShiftDetailData }) {
                   <div className="grid grid-cols-3 gap-2.5">
                     <div className="rounded-xl bg-slate-50 p-3 text-center">
                       <div className="text-lg font-bold text-slate-900">
-                        {data.driving.maxKmh || "—"}
+                        {data.driving.maxKmh || "-"}
                         <span className="text-xs font-medium text-slate-400"> km/h</span>
                       </div>
                       <div className="text-[10px] uppercase tracking-wide text-slate-400">
@@ -266,7 +266,7 @@ export function ShiftDetail({ data }: { data: ShiftDetailData }) {
                     </div>
                     <div className="rounded-xl bg-slate-50 p-3 text-center">
                       <div className="text-lg font-bold text-slate-900">
-                        {data.driving.avgKmh || "—"}
+                        {data.driving.avgKmh || "-"}
                         <span className="text-xs font-medium text-slate-400"> km/h</span>
                       </div>
                       <div className="text-[10px] uppercase tracking-wide text-slate-400">
@@ -397,7 +397,7 @@ export function ShiftDetail({ data }: { data: ShiftDetailData }) {
                     </div>
                     <p className="mt-1 text-sm text-slate-800">
                       The worker confirmed they were on site. Phones read badly
-                      indoors, so this is usually genuine — worth a look if it
+                      indoors, so this is usually genuine - worth a look if it
                       keeps happening.
                     </p>
                   </div>
@@ -427,7 +427,7 @@ export function ShiftDetail({ data }: { data: ShiftDetailData }) {
                     <p className="mt-2 text-xs text-slate-500">
                       {data.handover.ackAt
                         ? `Read by ${data.handover.ackBy ?? "the next worker"} · ${data.handover.ackAt}`
-                        : "Not yet read — the next worker sees this when they clock in."}
+                        : "Not yet read - the next worker sees this when they clock in."}
                     </p>
                   </div>
                 )}

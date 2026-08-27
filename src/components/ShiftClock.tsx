@@ -173,7 +173,7 @@ export function ShiftClock(props: ShiftClockProps) {
   if (props.status === "COMPLETED") {
     return (
       <div className="rounded-xl bg-emerald-50 px-4 py-3 text-center text-sm font-semibold text-emerald-700">
-        ✓ Shift completed — sent to admin for approval
+        ✓ Shift completed - sent to admin for approval
         {props.transportKm > 0 && (
           <div className="mt-0.5 text-xs font-normal text-emerald-600">
             {props.transportKm.toFixed(1)} km transport recorded
@@ -244,7 +244,7 @@ export function ShiftClock(props: ShiftClockProps) {
           disabled={busy || !!blocked}
           className="w-full rounded-xl bg-[var(--brand)] px-4 py-3 text-base font-semibold text-white transition active:scale-[0.99] disabled:opacity-50"
         >
-          {busy ? "Locating…" : blocked ? "Locked — notes overdue" : "Clock in"}
+          {busy ? "Locating…" : blocked ? "Locked - notes overdue" : "Clock in"}
         </button>
         {blocked && (
           <p className="rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-600">
@@ -252,14 +252,14 @@ export function ShiftClock(props: ShiftClockProps) {
           </p>
         )}
         {error && <p className="text-sm text-red-600">{error}</p>}
-        {/* They may be at the door with a phone that can't tell — indoors GPS
+        {/* They may be at the door with a phone that can't tell - indoors GPS
             often falls back to WiFi and reads hundreds of feet out. Refusing
             outright would strand them; this records the exception instead. */}
         {onSiteOffer && (
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
             <p className="text-sm text-amber-900">
               Already at {onSiteOffer.clientName}&apos;s place? Phones can read
-              badly indoors. Confirm you&apos;re there and you can start — your
+              badly indoors. Confirm you&apos;re there and you can start - your
               distance ({onSiteOffer.distanceFt} ft) is saved with the shift.
             </p>
             <button
@@ -267,7 +267,7 @@ export function ShiftClock(props: ShiftClockProps) {
               disabled={busy}
               className="mt-2 w-full rounded-xl border border-amber-400 bg-white px-4 py-2.5 text-sm font-bold text-amber-800 transition hover:bg-amber-100 disabled:opacity-50"
             >
-              {busy ? "Starting…" : "I'm here — clock me in"}
+              {busy ? "Starting…" : "I'm here - clock me in"}
             </button>
           </div>
         )}
@@ -321,7 +321,7 @@ export function ShiftClock(props: ShiftClockProps) {
     return (
       <div className="space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-3">
         <div className="text-center text-sm font-semibold text-amber-700">
-          ⏸ On break — worked time is paused
+          ⏸ On break - worked time is paused
         </div>
         <button
           onClick={() => handle(() => endPause(withCoords(props.shiftId, null)))}
@@ -442,8 +442,8 @@ export function ShiftClock(props: ShiftClockProps) {
           className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[var(--brand)] focus:ring-2 focus:ring-blue-100"
         />
 
-        {/* Handover to the next worker. Optional — it must never stand between
-            a worker and clocking out — but prompted here because this is the
+        {/* Handover to the next worker. Optional - it must never stand between
+            a worker and clocking out - but prompted here because this is the
             moment the shift is still fresh in mind. */}
         <div className="mt-3">
           <label className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-slate-600">
@@ -468,7 +468,7 @@ export function ShiftClock(props: ShiftClockProps) {
           )}
         </div>
       </div>
-      {/* Finishing away from the participant's home. Allowed — but recorded,
+      {/* Finishing away from the participant's home. Allowed - but recorded,
           with a reason, so the admin sees an explained event rather than an
           anomaly. Cancel leaves the shift running; nothing is lost. */}
       {awayPrompt && (
@@ -484,7 +484,7 @@ export function ShiftClock(props: ShiftClockProps) {
             </h2>
             <p className="mt-1 text-center text-sm text-slate-500">
               You&apos;re about {awayPrompt.distanceFt} ft away. That&apos;s
-              fine — just tell us why so it&apos;s on the record.
+              fine - just tell us why so it&apos;s on the record.
             </p>
 
             <div className="mt-4 space-y-2">
@@ -525,7 +525,7 @@ export function ShiftClock(props: ShiftClockProps) {
               onClick={() =>
                 endShift(
                   awayReason === OTHER_REASON
-                    ? `Other — ${awayOther.trim()}`
+                    ? `Other - ${awayOther.trim()}`
                     : awayReason,
                 )
               }

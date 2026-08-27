@@ -23,7 +23,7 @@ export default async function PayrollPage({
   }>;
 }) {
   const { tenant, session } = await requireTenant();
-  // Managers only — workers never see payroll.
+  // Managers only - workers never see payroll.
   if (!isManager(session.role)) {
     redirect("/dashboard");
   }
@@ -49,7 +49,7 @@ export default async function PayrollPage({
   const query = (q ?? "").trim().toLowerCase();
   const current = allPeriods.filter((p) => p.status !== "APPROVED");
   const pastAll = allPeriods.filter((p) => p.status === "APPROVED");
-  // Date filtering works on the real dates, not on formatted strings — the
+  // Date filtering works on the real dates, not on formatted strings - the
   // old text search only matched what fmtDate happened to print, so "Apr 2027"
   // found a run but "2027-04-30" didn't. A run matches when its period
   // OVERLAPS the range asked for, which is what someone means by "show me
@@ -75,12 +75,12 @@ export default async function PayrollPage({
           Payroll Periods
         </h1>
         <p className="text-sm text-[var(--text-secondary)]">
-          Create a pay run for a date range — hours, mileage and pay are pulled
+          Create a pay run for a date range - hours, mileage and pay are pulled
           automatically for every worker in the branch.
         </p>
       </header>
 
-      {/* Branch tabs — each branch has its own pay runs */}
+      {/* Branch tabs - each branch has its own pay runs */}
       {branches.length > 0 && (
         <div className="mb-5 flex flex-wrap gap-2">
           {branches.map((b) => (
@@ -105,7 +105,7 @@ export default async function PayrollPage({
             No branches yet
           </p>
           <p className="mt-1 text-sm text-[var(--text-secondary)]">
-            Create a branch schedule first — payroll is run per branch.
+            Create a branch schedule first - payroll is run per branch.
           </p>
         </div>
       ) : (
@@ -245,12 +245,12 @@ export default async function PayrollPage({
                         href={`/payroll/${p.id}`}
                         className="font-semibold text-[var(--text-primary)] hover:text-[var(--brand)]"
                       >
-                        {fmtDate(p.startDate)} – {fmtDate(p.endDate)}
+                        {fmtDate(p.startDate)} - {fmtDate(p.endDate)}
                       </Link>
                       <div className="text-xs text-[var(--text-muted)]">
                         {p.status === "APPROVED"
                           ? `Approved by ${p.approvedBy}`
-                          : "Draft — not yet approved"}
+                          : "Draft - not yet approved"}
                       </div>
                     </div>
                     <span

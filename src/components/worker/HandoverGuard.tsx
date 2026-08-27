@@ -25,7 +25,7 @@ function whenLabel(iso: string) {
  *
  * Deliberately has no dismiss: the whole point is that the note gets read, and
  * a "Later" button would make it another thing to swipe away. There's nothing
- * to lose by acknowledging — the note stays on the shift record afterwards.
+ * to lose by acknowledging - the note stays on the shift record afterwards.
  */
 export function HandoverGuard({ handover }: { handover: PendingHandover }) {
   const router = useRouter();

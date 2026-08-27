@@ -34,7 +34,7 @@ export default async function AdminGuidePage() {
       <div className="mb-5 rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm text-slate-700">
         <p className="font-semibold text-slate-900">Why this page exists</p>
         <p className="mt-1">
-          The numbers below come from your own Settings — the clock-in radius,
+          The numbers below come from your own Settings - the clock-in radius,
           the lateness grace periods, the rating thresholds. Change them in
           Settings and this guide changes with them, for you and for the
           workers, so nobody is working from stale instructions.

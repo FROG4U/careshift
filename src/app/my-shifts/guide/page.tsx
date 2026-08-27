@@ -20,7 +20,7 @@ export default async function WorkerGuidePage() {
   if (!tenant) redirect("/login");
 
   // Show the radius this worker's own participants actually use, not the
-  // default — a guide quoting a number that doesn't apply is worse than none.
+  // default - a guide quoting a number that doesn't apply is worse than none.
   const clients = staff
     ? await prisma.client.findMany({
         where: { tenantId: tenant.id, active: true, shifts: { some: { staffId: staff.id } } },
@@ -34,7 +34,7 @@ export default async function WorkerGuidePage() {
     <div className="mx-auto max-w-md px-4 py-5">
       <h1 className="mb-1 text-xl font-bold text-slate-900">How this app works</h1>
       <p className="mb-4 text-sm text-slate-500">
-        Clocking in and out, notes, pay and swaps — the short version.
+        Clocking in and out, notes, pay and swaps - the short version.
       </p>
       <GuideContent
         s={{
