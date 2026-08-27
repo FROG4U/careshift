@@ -6,6 +6,7 @@ import { setApproval } from "./actions";
 import { ShiftDetail, type ShiftDetailData } from "./ShiftDetail";
 import type { LatLng } from "@/components/ShiftMap";
 import { DEFAULT_GEOFENCE_FT } from "@/lib/constants";
+import { gpsQualityOf } from "@/lib/gpsQuality";
 
 function grossHours(a: Date | null, b: Date | null) {
   if (!a || !b) return 0;
@@ -329,7 +330,12 @@ export default async function TimesheetsPage({
                     })),
                   );
                   if (speeds.length === 0 && events.length === 0) return null;
+                  // Judged across the whole shift's points: one throttled trip
+                  // is enough to make the shift's speed figures untrustworthy.
+                  const q = gpsQualityOf(s.transports.flatMap((t) => t.points));
                   return {
+                    reliable: q.reliable,
+                    unreliableReason: q.reason,
                     maxKmh: speeds.length ? Math.round(Math.max(...speeds)) : 0,
                     avgKmh: speeds.length
                       ? Math.round(speeds.reduce((a, b) => a + b, 0) / speeds.length)

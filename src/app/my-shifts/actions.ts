@@ -5,6 +5,7 @@ import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { notifyManagers } from "@/lib/notify";
 import { notesDueFor, hasOverdueNotes } from "@/lib/notesDue";
+import { roadDistanceKm } from "@/lib/roadDistance";
 import {
   speedLimitAt,
   MIN_DRIVING_KMH,
@@ -189,6 +190,25 @@ export async function clockOut(formData: FormData) {
       where: { id: openT.id },
       data: { endAt: now, km, endLat: lat, endLng: lng, lastLat: lat, lastLng: lng },
     });
+
+    // A trip closed by clocking out is still a trip that gets paid, so give it
+    // the same road snapping as one the worker ended themselves.
+    try {
+      const pts = await prisma.transportPoint.findMany({
+        where: { transportId: openT.id },
+        orderBy: { at: "asc" },
+        select: { lat: true, lng: true },
+      });
+      const snapped = await roadDistanceKm(pts, km);
+      if (snapped != null && snapped !== km) {
+        await prisma.transport.update({
+          where: { id: openT.id },
+          data: { km: snapped },
+        });
+      }
+    } catch {
+      /* road snapping is non-critical */
+    }
   }
 
   await prisma.shift.update({
@@ -423,6 +443,27 @@ export async function endTransport(formData: FormData) {
           : undefined,
     },
   });
+
+  // Mileage is paid, and straight lines between sparse GPS points undercount
+  // what was actually driven. Snap the trail to real roads where we can.
+  // Best-effort: a failure keeps the straight-line figure rather than
+  // replacing a slight underestimate with a wrong number.
+  try {
+    const pts = await prisma.transportPoint.findMany({
+      where: { transportId: t.id },
+      orderBy: { at: "asc" },
+      select: { lat: true, lng: true },
+    });
+    const snapped = await roadDistanceKm(pts, km);
+    if (snapped != null && snapped !== km) {
+      await prisma.transport.update({
+        where: { id: t.id },
+        data: { km: snapped },
+      });
+    }
+  } catch {
+    /* road snapping is non-critical */
+  }
 
   // Safety pass: compare recorded speeds to street limits and store only the
   // over-the-limit events. Best-effort — never blocks ending the trip.

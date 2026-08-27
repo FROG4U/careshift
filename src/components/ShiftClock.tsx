@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import {
   clockIn,
   clockOut,
@@ -75,7 +75,10 @@ export type ShiftClockProps = {
   whenLabel?: string;
 };
 
-const PING_MS = 15_000; // GPS sample interval while transporting
+/** Discard fixes worse than this (metres); they're noise, not position. */
+const MAX_ACCURACY_M = 50;
+/** Floor between server writes, so a burst of fixes doesn't flood it. */
+const MIN_SEND_GAP_MS = 10_000;
 
 function useElapsed(fromIso: string | null | undefined, active: boolean) {
   const [now, setNow] = useState(() => Date.now());
@@ -122,25 +125,62 @@ export function ShiftClock(props: ShiftClockProps) {
   const [purpose, setPurpose] = useState(props.transportPurpose ?? "");
   const [showTripForm, setShowTripForm] = useState(false);
   const [tripPurpose, setTripPurpose] = useState("");
-  const pingTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const busy = pending || locating;
 
-  // While transporting, sample GPS periodically and accumulate km on the server.
+  // While transporting, follow the phone's position and accumulate km on the
+  // server.
+  //
+  // watchPosition, not setInterval: a timer is suspended when the screen locks
+  // or the tab is hidden, which on real trips produced four GPS points across
+  // eighteen minutes. watchPosition is still throttled in the background, but
+  // it fires on movement rather than on a clock, so it recovers as soon as the
+  // OS gives the page any time at all.
   useEffect(() => {
     if (!transporting) return;
+    if (typeof navigator === "undefined" || !navigator.geolocation) return;
+
     let cancelled = false;
-    const tick = async () => {
-      const c = await getLocation();
-      if (cancelled || !c) return;
-      const res = await pingTransport(withCoords(props.shiftId, c));
-      if (!cancelled && res && typeof res.km === "number") setKm(res.km);
+    let lastSentAt = 0;
+    let inFlight = false;
+
+    const send = async (pos: GeolocationPosition) => {
+      // A fix accurate to worse than this is noise — recording it as truth is
+      // how a stationary phone ends up with a route and a speed.
+      if (pos.coords.accuracy != null && pos.coords.accuracy > MAX_ACCURACY_M) return;
+      // Don't flood the server when the OS delivers a burst of fixes.
+      const now = Date.now();
+      if (now - lastSentAt < MIN_SEND_GAP_MS) return;
+      if (inFlight || cancelled) return;
+
+      inFlight = true;
+      lastSentAt = now;
+      try {
+        const res = await pingTransport(
+          withCoords(props.shiftId, {
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+            speed:
+              pos.coords.speed != null && pos.coords.speed >= 0
+                ? pos.coords.speed
+                : null,
+          }),
+        );
+        if (!cancelled && res && typeof res.km === "number") setKm(res.km);
+      } finally {
+        inFlight = false;
+      }
     };
-    pingTimer.current = setInterval(tick, PING_MS);
-    tick(); // fire one immediately
+
+    const id = navigator.geolocation.watchPosition(send, () => {}, {
+      enableHighAccuracy: true,
+      maximumAge: 0,
+      timeout: 30_000,
+    });
+
     return () => {
       cancelled = true;
-      if (pingTimer.current) clearInterval(pingTimer.current);
+      navigator.geolocation.clearWatch(id);
     };
   }, [transporting, props.shiftId]);
 

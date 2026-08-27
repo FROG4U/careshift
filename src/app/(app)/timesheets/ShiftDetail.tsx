@@ -35,6 +35,9 @@ export type ShiftDetailData = {
   trips: Trip[];
   transports: { id: string; purpose: string | null; km: number }[];
   driving: {
+    /** False when the GPS trail is too sparse to judge speed at all. */
+    reliable: boolean;
+    unreliableReason: string | null;
     maxKmh: number;
     avgKmh: number;
     events: {
@@ -254,6 +257,22 @@ export function ShiftDetail({ data }: { data: ShiftDetailData }) {
                     <Icon name="speed" className="text-[18px] text-[var(--brand)]" />
                     Driving overview
                   </div>
+                  {!data.driving.reliable && (
+                    <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 p-3">
+                      <div className="flex items-center gap-1.5 text-sm font-semibold text-amber-900">
+                        <Icon name="gps_off" className="text-[16px] text-amber-600" />
+                        Speed can&apos;t be assessed for this trip
+                      </div>
+                      <p className="mt-1 text-xs text-amber-900">
+                        {data.driving.unreliableReason}
+                      </p>
+                      <p className="mt-1 text-xs text-amber-800">
+                        This is not a finding either way. Treat the figures
+                        below as incomplete rather than as a clean record.
+                      </p>
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-3 gap-2.5">
                     <div className="rounded-xl bg-slate-50 p-3 text-center">
                       <div className="text-lg font-bold text-slate-900">
@@ -308,9 +327,14 @@ export function ShiftDetail({ data }: { data: ShiftDetailData }) {
                         </li>
                       ))}
                     </ul>
-                  ) : (
+                  ) : data.driving.reliable ? (
                     <p className="mt-3 text-xs text-emerald-700">
                       No speeding recorded against known street limits. 👍
+                    </p>
+                  ) : (
+                    <p className="mt-3 text-xs text-slate-500">
+                      No speeding was detected, but with this little GPS data
+                      that is not evidence of careful driving.
                     </p>
                   )}
                   <p className="mt-2 text-[10px] text-slate-400">
