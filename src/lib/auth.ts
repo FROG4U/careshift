@@ -81,6 +81,11 @@ export async function authenticate(email: string, password: string) {
   if (!user) return null;
   const ok = await verifyPassword(password, user.passwordHash);
   if (!ok) return null;
+  // Access revoked by a super admin. Their row survives so their messages and
+  // incident reports do too, but the account can no longer be used. Treated as
+  // a failed login rather than a distinct message, so the form can't be used
+  // to discover which accounts exist.
+  if (user.status === "REMOVED") return null;
   const session: SessionUser = {
     id: user.id,
     tenantId: user.tenantId,

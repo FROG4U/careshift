@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { isAdmin, isSuperAdmin } from "@/lib/roles";
 import { ROLE_LABELS } from "@/lib/constants";
 import { CopyLink } from "./CopyLink";
+import { AdminRowActions } from "./AdminRowActions";
 import {
   createAdminInvite,
   revokeInvite,
@@ -250,6 +251,9 @@ export default async function AdminsPage() {
                         {isSuper ? "Make admin" : "Make super admin"}
                       </button>
                     </form>
+                  )}
+                  {!isMe && (
+                    <AdminRowActions userId={u.id} name={u.name} />
                   )}
                 </div>
               </div>
