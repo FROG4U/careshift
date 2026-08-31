@@ -8,24 +8,50 @@ import { isSuperAdmin } from "@/lib/roles";
 import { notifyUser } from "@/lib/notify";
 import { hashPassword } from "@/lib/auth";
 
-/** Create a shareable invite link for a new admin. Super admins only. */
+/**
+ * Create a shareable invite link for a new admin. Super admins only.
+ *
+ * Every refusal says why. This used to `return` silently four different ways,
+ * so the button simply did nothing and there was no way to tell which rule had
+ * stopped it.
+ */
 export async function createAdminInvite(formData: FormData) {
   const { tenant, session } = await requireTenant();
-  if (!isSuperAdmin(session.role)) return;
+  if (!isSuperAdmin(session.role)) return { error: "Super admins only." };
 
   const email = String(formData.get("email") ?? "").toLowerCase().trim();
   const name = String(formData.get("name") ?? "").trim();
   const role = String(formData.get("role") ?? "ADMIN") === "SUPER_ADMIN"
     ? "SUPER_ADMIN"
     : "ADMIN";
-  if (!email) return;
+  if (!email) return { error: "Enter an email address." };
 
-  // Don't invite someone who already has an account here.
   const existing = await prisma.user.findFirst({
     where: { tenantId: tenant.id, email },
+    select: { id: true, status: true, role: true, name: true },
+  });
+  if (existing) {
+    // A removed admin still has a row, which used to make them permanently
+    // un-invitable with no explanation. Point at the fix instead.
+    if (existing.status === "REMOVED") {
+      return {
+        error: `${existing.name} was removed. Use Restore access below rather than a new invite, so their history stays attached to the same account.`,
+      };
+    }
+    if (existing.role === "WORKER") {
+      return { error: "That email is already a support worker's login." };
+    }
+    return { error: "They already have an account here." };
+  }
+
+  // Don't stack duplicate live invites for the same person.
+  const openInvite = await prisma.adminInvite.findFirst({
+    where: { tenantId: tenant.id, email, status: "PENDING" },
     select: { id: true },
   });
-  if (existing) return;
+  if (openInvite) {
+    return { error: "There's already an open invite for that email below." };
+  }
 
   const token = randomBytes(24).toString("base64url");
   await prisma.adminInvite.create({
@@ -40,6 +66,7 @@ export async function createAdminInvite(formData: FormData) {
   });
 
   revalidatePath("/admins");
+  return { ok: true };
 }
 
 /** Cancel an outstanding invite link. */
@@ -219,4 +246,31 @@ export async function resetAdminPassword(formData: FormData) {
 
   revalidatePath("/admins");
   return { ok: true, name: target.name, password };
+}
+
+/**
+ * Give a removed admin their access back.
+ *
+ * Reinstating the same row keeps their messages, incident reports and read
+ * receipts attached to them. Inviting them as a new account would leave all of
+ * that orphaned on a login nobody can use.
+ */
+export async function reinstateAdmin(formData: FormData) {
+  const { tenant, session } = await requireTenant();
+  if (!isSuperAdmin(session.role)) return { error: "Super admins only." };
+
+  const userId = String(formData.get("userId") ?? "");
+  const target = await prisma.user.findFirst({
+    where: { id: userId, tenantId: tenant.id, status: "REMOVED" },
+    select: { id: true, name: true },
+  });
+  if (!target) return { error: "That account is no longer removed." };
+
+  await prisma.user.update({
+    where: { id: target.id },
+    data: { status: "APPROVED" },
+  });
+
+  revalidatePath("/admins");
+  return { ok: true, name: target.name };
 }

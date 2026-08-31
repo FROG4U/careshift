@@ -6,8 +6,9 @@ import { isAdmin, isSuperAdmin } from "@/lib/roles";
 import { ROLE_LABELS } from "@/lib/constants";
 import { CopyLink } from "./CopyLink";
 import { AdminRowActions } from "./AdminRowActions";
+import { InviteForm } from "./InviteForm";
+import { RemovedAdmins } from "./RemovedAdmins";
 import {
-  createAdminInvite,
   revokeInvite,
   approveAdmin,
   rejectAdmin,
@@ -52,7 +53,7 @@ export default async function AdminsPage() {
     );
   }
 
-  const [admins, pendingAdmins, invites] = await Promise.all([
+  const [admins, pendingAdmins, invites, removedAdmins] = await Promise.all([
     prisma.user.findMany({
       where: {
         tenantId: tenant.id,
@@ -74,6 +75,15 @@ export default async function AdminsPage() {
     prisma.adminInvite.findMany({
       where: { tenantId: tenant.id, status: "PENDING" },
       orderBy: { createdAt: "desc" },
+    }),
+    prisma.user.findMany({
+      where: {
+        tenantId: tenant.id,
+        role: { in: ["ADMIN", "SUPER_ADMIN"] },
+        status: "REMOVED",
+      },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, email: true },
     }),
   ]);
 
@@ -100,46 +110,7 @@ export default async function AdminsPage() {
           Creates a private link. They open it, set a password, then you approve
           them below.
         </p>
-        <form
-          action={createAdminInvite}
-          className="mt-3 flex flex-wrap items-end gap-3"
-        >
-          <label className="flex flex-1 flex-col gap-1 text-xs font-medium text-slate-600">
-            Email
-            <input
-              name="email"
-              type="email"
-              required
-              placeholder="name@company.com"
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[#003146] focus:ring-2 focus:ring-[#003146]/15"
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-xs font-medium text-slate-600">
-            Name (optional)
-            <input
-              name="name"
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[#003146] focus:ring-2 focus:ring-[#003146]/15"
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-xs font-medium text-slate-600">
-            Role
-            <select
-              name="role"
-              defaultValue="ADMIN"
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[#003146] focus:ring-2 focus:ring-[#003146]/15"
-            >
-              <option value="ADMIN">Admin</option>
-              <option value="SUPER_ADMIN">Super Admin</option>
-            </select>
-          </label>
-          <button
-            type="submit"
-            className="rounded-lg px-4 py-2 text-sm font-semibold text-white shadow-sm"
-            style={{ background: "var(--brand)" }}
-          >
-            Create link
-          </button>
-        </form>
+        <InviteForm />
 
         {invites.length > 0 && (
           <div className="mt-4 space-y-3 border-t border-slate-100 pt-4">
@@ -261,6 +232,8 @@ export default async function AdminsPage() {
           })}
         </div>
       </section>
+
+      <RemovedAdmins admins={removedAdmins} />
     </div>
   );
 }
