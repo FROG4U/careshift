@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireTenant } from "@/lib/tenant";
+import { isManager } from "@/lib/roles";
 import { prisma } from "@/lib/prisma";
 import { effectiveRates } from "@/lib/rates";
 import { DAY_TYPES, STAFF_STREAMS } from "@/lib/constants";
@@ -165,4 +166,63 @@ export async function updateStaff(formData: FormData) {
 
   revalidatePath("/staff");
   revalidatePath("/payroll");
+}
+
+/**
+ * Permanently delete an archived staff member.
+ *
+ * Refused outright once they have any shift against them. `Shift.staffId` is
+ * SetNull, so deleting a worker who has actually worked would leave completed,
+ * paid shifts showing "Unassigned" - corrupting payroll and the NDIS record of
+ * who delivered what. Archiving is the correct end state for anyone who has
+ * worked a day; this is only for records created in error.
+ *
+ * A linked login is locked out rather than deleted, for the same reason it is
+ * with admins: deleting the user would cascade away their messages and any
+ * incident reports they filed.
+ */
+export async function deleteStaff(formData: FormData) {
+  const { tenant, session } = await requireTenant();
+  if (!isManager(session.role)) return { error: "Managers only." };
+
+  const id = String(formData.get("id") ?? "");
+  const staff = await prisma.staff.findFirst({
+    where: { id, tenantId: tenant.id },
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      active: true,
+      _count: { select: { shifts: true, incidents: true } },
+    },
+  });
+  if (!staff) return { error: "That staff member no longer exists." };
+
+  if (staff.active) {
+    return { error: "Archive them first, so deleting is never a single click." };
+  }
+
+  if (staff._count.shifts > 0) {
+    return {
+      error: `${staff.firstName} has ${staff._count.shifts} shift${staff._count.shifts === 1 ? "" : "s"} on record. Deleting would leave those shifts with no worker, so they have to stay archived.`,
+    };
+  }
+
+  if (staff._count.incidents > 0) {
+    return {
+      error: `${staff.firstName} filed incident reports, which have to be kept. They have to stay archived.`,
+    };
+  }
+
+  // Lock any login out rather than deleting it, so messages and reports survive.
+  await prisma.user.updateMany({
+    where: { tenantId: tenant.id, staffId: staff.id },
+    data: { status: "REMOVED", staffId: null },
+  });
+
+  await prisma.staff.delete({ where: { id: staff.id } });
+
+  revalidatePath("/staff");
+  revalidatePath("/schedule");
+  return { ok: true, name: `${staff.firstName} ${staff.lastName}` };
 }

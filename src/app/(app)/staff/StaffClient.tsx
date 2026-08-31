@@ -16,6 +16,7 @@ import {
   type EmploymentType,
 } from "@/lib/constants";
 import { createStaff, updateStaff, setStaffArchived } from "./actions";
+import { DeleteStaffButton } from "./DeleteStaffButton";
 
 export type LevelOption = {
   id: string;
@@ -257,6 +258,14 @@ export function StaffClient({
                           </span>
                         </button>
                       </form>
+                      {/* Only on archived rows: deleting an active worker
+                          should never be one click away. */}
+                      {!s.active && (
+                        <DeleteStaffButton
+                          id={s.id}
+                          name={`${s.firstName} ${s.lastName}`}
+                        />
+                      )}
                     </div>
                   </div>
                 </td>
