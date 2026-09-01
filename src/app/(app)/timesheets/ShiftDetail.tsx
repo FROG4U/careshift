@@ -25,6 +25,8 @@ export type ShiftDetailData = {
   finishedAway: { reason: string; distanceFt: number } | null;
   /** Set only when they clocked in outside the radius and confirmed on site. */
   startedAway: { distanceFt: number } | null;
+  /** Set when the office entered this shift by hand rather than it being clocked. */
+  manualEntry: { by: string; at: string; reason: string } | null;
   approval: string;
   needsNotes: boolean;
   hasMap: boolean;
@@ -410,6 +412,22 @@ export function ShiftDetail({ data }: { data: ShiftDetailData }) {
                         <span className="text-xs text-slate-400">km</span>
                       </div>
                     ))}
+                  </div>
+                )}
+
+                {data.manualEntry && (
+                  <div className="rounded-xl border border-violet-200 bg-violet-50 p-3">
+                    <div className="flex items-center gap-1 text-sm font-medium text-slate-700">
+                      <Icon name="post_add" className="text-[16px] text-violet-600" />
+                      Entered by hand, not clocked
+                    </div>
+                    <p className="mt-1 text-sm text-slate-800">
+                      {data.manualEntry.reason}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Added by {data.manualEntry.by} on {data.manualEntry.at}.
+                      These hours were stated, not measured.
+                    </p>
                   </div>
                 )}
 

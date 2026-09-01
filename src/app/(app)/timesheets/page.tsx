@@ -4,6 +4,7 @@ import { fmtDate, fmtTime, initials } from "@/lib/format";
 import { netHoursOf } from "@/lib/payroll";
 import { setApproval } from "./actions";
 import { ShiftDetail, type ShiftDetailData } from "./ShiftDetail";
+import { ManualShiftForm } from "./ManualShiftForm";
 import type { LatLng } from "@/components/ShiftMap";
 import { DEFAULT_GEOFENCE_FT } from "@/lib/constants";
 import { gpsQualityOf } from "@/lib/gpsQuality";
@@ -155,6 +156,17 @@ export default async function TimesheetsPage({
           .
         </p>
       </header>
+
+      <ManualShiftForm
+        staff={staffOptions.map((x) => ({
+          id: x.id,
+          name: `${x.firstName} ${x.lastName}`,
+        }))}
+        clients={clientOptions.map((c) => ({
+          id: c.id,
+          name: `${c.firstName} ${c.lastName}`,
+        }))}
+      />
 
       {/* Filters */}
       <form className="mb-5 flex flex-wrap items-end gap-3">
@@ -355,6 +367,14 @@ export default async function TimesheetsPage({
                         : null,
                     }
                   : null,
+                manualEntry:
+                  s.manualEntryBy && s.manualEntryAt
+                    ? {
+                        by: s.manualEntryBy,
+                        at: `${fmtDate(s.manualEntryAt)} ${fmtTime(s.manualEntryAt)}`,
+                        reason: s.manualEntryReason ?? "",
+                      }
+                    : null,
                 startedAway:
                   s.clockInOnSiteConfirmed && s.clockInDistanceM != null
                     ? { distanceFt: Math.round(s.clockInDistanceM * FT_PER_M) }

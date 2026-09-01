@@ -998,6 +998,13 @@ model Shift {
   clockInOnSiteConfirmed Boolean @default(false)
   clockInDistanceM       Float?
 
+  // Entered by the office rather than clocked by the worker - a phone that
+  // died, a shift covered at short notice and never rostered. Recorded so a
+  // timesheet reader can always tell measured time from stated time.
+  manualEntryBy     String?
+  manualEntryAt     DateTime?
+  manualEntryReason String?
+
   // Set true when this shift was rostered beyond the participant's agreed
   // weekly hours and a manager authorised the overrun. `authorisedBy` records
   // the manager's name for the audit trail.

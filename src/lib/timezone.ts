@@ -141,3 +141,44 @@ export function fmtInTz(
 ): string {
   return new Intl.DateTimeFormat("en-AU", { ...options, timeZone: tz }).format(d);
 }
+
+/**
+ * A wall-clock date and time in a given zone, as a real UTC instant.
+ *
+ * "2026-10-10" + "09:00" in Australia/Sydney is a different moment from the
+ * same string in Australia/Brisbane once NSW is on daylight saving, and
+ * `new Date("2026-10-10T09:00")` resolves it against the SERVER's zone, which
+ * is neither participant's business.
+ *
+ * Works by guessing UTC, seeing what that guess reads as in the target zone,
+ * and correcting by the difference. Two passes, because the correction can
+ * itself cross a daylight-saving boundary.
+ */
+export function zonedTimeToUtc(
+  dateKey: string,
+  timeHm: string,
+  tz: string,
+): Date | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateKey);
+  const t = /^(\d{2}):(\d{2})$/.exec(timeHm);
+  if (!m || !t) return null;
+
+  const wanted = Date.UTC(
+    Number(m[1]),
+    Number(m[2]) - 1,
+    Number(m[3]),
+    Number(t[1]),
+    Number(t[2]),
+  );
+
+  let guess = wanted;
+  for (let i = 0; i < 2; i++) {
+    const p = zonedParts(new Date(guess), tz);
+    const seen = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute);
+    const drift = seen - wanted;
+    if (drift === 0) break;
+    guess -= drift;
+  }
+  const out = new Date(guess);
+  return Number.isNaN(out.getTime()) ? null : out;
+}
