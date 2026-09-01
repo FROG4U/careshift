@@ -35,8 +35,14 @@ const STYLE: Record<
   OVERRUN: { label: "Overrunning", chip: "bg-orange-100 text-orange-700", dot: "bg-orange-500" },
 };
 
-function time(iso: string) {
-  return new Date(iso).toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" });
+function time(iso: string, tz: string) {
+  return new Date(iso).toLocaleTimeString("en-AU", {
+    hour: "numeric",
+    minute: "2-digit",
+    // Without this the browser uses ITS timezone. Admins work from the UK and
+    // South Africa, so a 9am Brisbane shift was rendering as midnight.
+    timeZone: tz,
+  });
 }
 
 function rel(iso: string) {
@@ -125,7 +131,7 @@ export function LiveShiftsView({ shifts }: { shifts: LiveShift[] }) {
                   <div className="min-w-0 flex-1">
                     <div className="font-semibold text-[var(--text-primary)]">{s.worker}</div>
                     <div className="truncate text-sm text-[var(--text-secondary)]">
-                      {s.client} · {time(s.startIso)}–{time(s.endIso)}
+                      {s.client} · {time(s.startIso, s.timeZone)}–{time(s.endIso, s.timeZone)}
                     </div>
                   </div>
                   <div className="text-right">
@@ -136,7 +142,7 @@ export function LiveShiftsView({ shifts }: { shifts: LiveShift[] }) {
                       {s.status === "UPCOMING"
                         ? `starts ${rel(s.startIso)}`
                         : s.clockInIso
-                          ? `in ${time(s.clockInIso)}`
+                          ? `in ${time(s.clockInIso, s.timeZone)}`
                           : s.status === "OVERRUN"
                             ? `ended ${rel(s.endIso)}`
                             : `started ${rel(s.startIso)}`}

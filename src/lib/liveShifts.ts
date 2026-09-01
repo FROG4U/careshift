@@ -1,5 +1,6 @@
 import { prisma } from "./prisma";
 import { notifyWorker, notifyManagers } from "./notify";
+import { tzForState } from "./timezone";
 
 export type LiveStatus =
   | "UPCOMING" // starts within 15 min, not started yet
@@ -24,6 +25,12 @@ export type LiveShift = {
   workerLat: number | null;
   workerLng: number | null;
   workerSeenIso: string | null;
+  /**
+   * The participant's local timezone, so the admin screen shows the shift in
+   * the time the worker is actually living in - not whatever timezone the
+   * admin's own laptop happens to be set to.
+   */
+  timeZone: string;
 };
 
 const MIN = 60_000;
@@ -53,7 +60,7 @@ export async function runLiveChecks(
       // however long ago the shift was meant to end, until they clock out).
       OR: [{ end: { gte: new Date(now - TRAIL) } }, { status: "IN_PROGRESS" }],
     },
-    include: { staff: true, client: true },
+    include: { staff: true, client: true, branch: { select: { state: true } } },
     orderBy: { start: "asc" },
   });
 
@@ -77,9 +84,14 @@ export async function runLiveChecks(
 
     const worker = `${s.staff!.firstName} ${s.staff!.lastName}`;
     const client = `${s.client.firstName} ${s.client.lastName}`;
+    // Formatted in the BRANCH's timezone. This label goes into the push sent
+    // to the worker, so rendering it in the server's timezone told a Brisbane
+    // worker a time that meant nothing to them.
+    const timeZone = tzForState(s.branch?.state ?? null);
     const startLabel = s.start.toLocaleTimeString("en-AU", {
       hour: "numeric",
       minute: "2-digit",
+      timeZone,
     });
 
     // ── Late: not clocked in past the grace window ──
@@ -140,6 +152,7 @@ export async function runLiveChecks(
       workerLat: s.staff!.lastLat,
       workerLng: s.staff!.lastLng,
       workerSeenIso: s.staff!.lastSeenAt?.toISOString() ?? null,
+      timeZone,
     });
   }
 
