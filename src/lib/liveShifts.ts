@@ -31,6 +31,8 @@ export type LiveShift = {
    * admin's own laptop happens to be set to.
    */
   timeZone: string;
+  /** Rostered start as HH:MM in the branch's zone, for the office clock-in. */
+  startHm: string;
 };
 
 const MIN = 60_000;
@@ -93,6 +95,13 @@ export async function runLiveChecks(
       minute: "2-digit",
       timeZone,
     });
+    // 24-hour HH:MM for the office clock-in's <input type="time">.
+    const startHm = s.start.toLocaleTimeString("en-GB", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+      timeZone,
+    });
 
     // ── Late: not clocked in past the grace window ──
     if (status === "LATE" && !s.lateAlertedAt) {
@@ -153,6 +162,7 @@ export async function runLiveChecks(
       workerLng: s.staff!.lastLng,
       workerSeenIso: s.staff!.lastSeenAt?.toISOString() ?? null,
       timeZone,
+      startHm,
     });
   }
 

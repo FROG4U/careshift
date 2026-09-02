@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { LiveShift, LiveStatus } from "@/lib/liveShifts";
+import { OfficeClockIn } from "./OfficeClockIn";
 import { TrackMap } from "@/components/TrackMap";
 
 function haversineKm(aLat: number, aLng: number, bLat: number, bLng: number) {
@@ -157,6 +158,18 @@ export function LiveShiftsView({ shifts }: { shifts: LiveShift[] }) {
 
                 {open && (
                   <div className="border-t border-[var(--border)] p-4">
+                    {(s.status === "LATE" || s.status === "AWAITING") && (
+                      <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl bg-[var(--background)] px-3 py-2.5">
+                        <span className="flex-1 text-sm text-[var(--text-secondary)]">
+                          On site but can&apos;t clock in? Do it for them.
+                        </span>
+                        <OfficeClockIn
+                          shiftId={s.id}
+                          worker={s.worker}
+                          rosteredStartHm={s.startHm}
+                        />
+                      </div>
+                    )}
                     {s.clientLat == null || s.clientLng == null ? (
                       <p className="text-sm text-[var(--text-muted)]">
                         No location set for this participant.

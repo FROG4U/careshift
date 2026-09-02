@@ -375,6 +375,7 @@ export default async function TimesheetsPage({
                         reason: s.manualEntryReason ?? "",
                       }
                     : null,
+                clockedInByOffice: s.clockInByOffice,
                 startedAway:
                   s.clockInOnSiteConfirmed && s.clockInDistanceM != null
                     ? { distanceFt: Math.round(s.clockInDistanceM * FT_PER_M) }

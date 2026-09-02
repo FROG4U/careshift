@@ -1005,6 +1005,11 @@ model Shift {
   manualEntryAt     DateTime?
   manualEntryReason String?
 
+  // The office clocked this worker in on their behalf - they were on site but
+  // couldn't. Separate from manualEntry, which is a whole shift entered after
+  // the fact; here only the clock-in was stated rather than measured.
+  clockInByOffice String?
+
   // Set true when this shift was rostered beyond the participant's agreed
   // weekly hours and a manager authorised the overrun. `authorisedBy` records
   // the manager's name for the audit trail.

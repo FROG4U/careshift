@@ -27,6 +27,8 @@ export type ShiftDetailData = {
   startedAway: { distanceFt: number } | null;
   /** Set when the office entered this shift by hand rather than it being clocked. */
   manualEntry: { by: string; at: string; reason: string } | null;
+  /** Set when the office clocked the worker in on their behalf. */
+  clockedInByOffice: string | null;
   approval: string;
   needsNotes: boolean;
   hasMap: boolean;
@@ -427,6 +429,20 @@ export function ShiftDetail({ data }: { data: ShiftDetailData }) {
                     <p className="mt-1 text-xs text-slate-500">
                       Added by {data.manualEntry.by} on {data.manualEntry.at}.
                       These hours were stated, not measured.
+                    </p>
+                  </div>
+                )}
+
+                {data.clockedInByOffice && (
+                  <div className="rounded-xl border border-violet-200 bg-violet-50 p-3">
+                    <div className="flex items-center gap-1 text-sm font-medium text-slate-700">
+                      <Icon name="pan_tool_alt" className="text-[16px] text-violet-600" />
+                      Clocked in by the office
+                    </div>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {data.clockedInByOffice} started this shift on the
+                      worker&apos;s behalf, so the start time was stated rather
+                      than measured and no clock-in location was recorded.
                     </p>
                   </div>
                 )}
