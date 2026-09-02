@@ -182,3 +182,23 @@ export function zonedTimeToUtc(
   const out = new Date(guess);
   return Number.isNaN(out.getTime()) ? null : out;
 }
+
+/** `HH:MM` (24h) as seen in `tz` — the local wall-clock time of an instant. */
+export function hmInTz(d: Date, tz: string): string {
+  const p = zonedParts(d, tz);
+  return `${String(p.hour).padStart(2, "0")}:${String(p.minute).padStart(2, "0")}`;
+}
+
+/**
+ * Move an instant by whole days while keeping the same LOCAL wall-clock time.
+ *
+ * Adding 7 x 24h is not the same as adding a week once daylight saving is in
+ * play: a 9am Sydney shift copied across the October change would land at 8am
+ * or 10am. This re-resolves the same clock time on the later date instead.
+ */
+export function addDaysInTz(d: Date, days: number, tz: string): Date {
+  const p = zonedParts(d, tz);
+  const moved = new Date(Date.UTC(p.year, p.month - 1, p.day + days));
+  const dateKey = `${moved.getUTCFullYear()}-${String(moved.getUTCMonth() + 1).padStart(2, "0")}-${String(moved.getUTCDate()).padStart(2, "0")}`;
+  return zonedTimeToUtc(dateKey, hmInTz(d, tz), tz) ?? d;
+}

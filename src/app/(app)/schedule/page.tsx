@@ -8,6 +8,12 @@ import {
 } from "@/components/ScheduleGrid";
 import { ScheduleBranchBar } from "@/components/ScheduleBranchBar";
 import { netHoursOf, kmOf } from "@/lib/payroll";
+import {
+  tzForState as tzOf,
+  dateKeyInTz,
+  hmInTz,
+  zonedParts,
+} from "@/lib/timezone";
 
 /** Monday of the week containing `d`, at local midnight. */
 function weekStart(d: Date) {
@@ -30,12 +36,21 @@ function addDays(d: Date, n: number) {
   return x;
 }
 
-/** Compact time for the narrow grid cells: "9am", "9:30am". */
-function compactTime(d: Date) {
+/**
+ * Compact time for the narrow grid cells: "9am", "9:30am".
+ *
+ * Rendered in the participant's timezone. Without one this used the server's
+ * zone, which also decided which day COLUMN a shift landed in - so after the
+ * October daylight-saving change a late-evening Sydney shift could show on the
+ * wrong day entirely.
+ */
+function compactTime(d: Date, tz: string) {
+  const p = zonedParts(d, tz);
   return d
     .toLocaleTimeString("en-AU", {
       hour: "numeric",
-      minute: d.getMinutes() ? "2-digit" : undefined,
+      minute: p.minute ? "2-digit" : undefined,
+      timeZone: tz,
     })
     .replace(/\s/g, "")
     .toLowerCase();
@@ -139,6 +154,7 @@ export default async function SchedulePage({
         client: true,
         staff: true,
         tasks: { orderBy: [{ dueTime: "asc" }, { sortOrder: "asc" }] },
+        branch: { select: { state: true } },
         // Needed to show what a completed shift actually ran to: paid hours
         // are net of breaks, and mileage comes from tracked trips.
         pauses: true,
@@ -170,14 +186,16 @@ export default async function SchedulePage({
     : allClients;
   const filtersOn = Boolean(customRange || staffFilter || clientFilter);
 
-  const shifts: GridShift[] = rawShifts.map((s) => ({
+  const shifts: GridShift[] = rawShifts.map((s) => {
+    const tz = tzOf(s.branch?.state ?? null);
+    return {
     id: s.id,
     staffId: s.staffId,
     clientId: s.clientId,
-    dayIso: isoDate(new Date(s.start)),
-    timeLabel: `${compactTime(new Date(s.start))}–${compactTime(new Date(s.end))}`,
-    startHm: `${String(new Date(s.start).getHours()).padStart(2, "0")}:${String(new Date(s.start).getMinutes()).padStart(2, "0")}`,
-    endHm: `${String(new Date(s.end).getHours()).padStart(2, "0")}:${String(new Date(s.end).getMinutes()).padStart(2, "0")}`,
+    dayIso: dateKeyInTz(s.start, tz),
+    timeLabel: `${compactTime(s.start, tz)}-${compactTime(s.end, tz)}`,
+    startHm: hmInTz(s.start, tz),
+    endHm: hmInTz(s.end, tz),
     clientName: `${s.client.firstName} ${s.client.lastName}`,
     staffName: s.staff ? `${s.staff.firstName} ${s.staff.lastName}` : null,
     status: s.status,
@@ -196,11 +214,12 @@ export default async function SchedulePage({
     // showing nothing rather than a misleading 0.
     clockLabel:
       s.clockInAt && s.clockOutAt
-        ? `${compactTime(new Date(s.clockInAt))}–${compactTime(new Date(s.clockOutAt))}`
+        ? `${compactTime(s.clockInAt, tz)}-${compactTime(s.clockOutAt, tz)}`
         : null,
     workedHours: s.clockInAt && s.clockOutAt ? netHoursOf(s) : null,
     km: kmOf(s) || null,
-  }));
+    };
+  });
 
   const usedByClient: Record<string, number> = {};
   for (const s of shifts) {

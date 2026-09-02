@@ -3,6 +3,14 @@
 import { revalidatePath } from "next/cache";
 import { requireTenant } from "@/lib/tenant";
 import { prisma } from "@/lib/prisma";
+import {
+  tzForState,
+  zonedTimeToUtc,
+  dateKeyInTz,
+  hmInTz,
+  addDaysInTz,
+  DEFAULT_TIMEZONE,
+} from "@/lib/timezone";
 import { syncShiftTasks, syncTemplateToFutureShifts } from "@/lib/tasks";
 import { notifyWorker, notifyManagers } from "@/lib/notify";
 import { isStaffUnavailable } from "@/lib/availability";
@@ -130,6 +138,24 @@ async function saveDialogTasks(
   }
 }
 
+/**
+ * The timezone a shift's clock times mean something in.
+ *
+ * Every date+time an admin types is a WALL CLOCK time where the participant
+ * lives. Resolving it with `new Date("2026-10-10T09:00")` uses the SERVER's
+ * zone instead, which is Australia/Brisbane - indistinguishable from correct
+ * until NSW goes onto daylight saving, at which point every Sydney shift is an
+ * hour out.
+ */
+async function tzForBranch(branchId: string | null): Promise<string> {
+  if (!branchId) return DEFAULT_TIMEZONE;
+  const b = await prisma.branch.findUnique({
+    where: { id: branchId },
+    select: { state: true },
+  });
+  return tzForState(b?.state ?? null);
+}
+
 export async function createShift(
   formData: FormData,
 ): Promise<CreateShiftResult> {
@@ -142,15 +168,20 @@ export async function createShift(
     return { ok: false, error: "Please complete all fields." };
 
   const staffId = String(formData.get("staffId") ?? "") || null;
-  const start = new Date(`${date}T${startTime}`);
-  const end = new Date(`${date}T${endTime}`);
-  if (end <= start)
-    return { ok: false, error: "End time must be after start time." };
 
   const client = await prisma.client.findFirst({
     where: { id: clientId, tenantId: tenant.id },
   });
   if (!client) return { ok: false, error: "Participant not found." };
+
+  // Read in the participant's own timezone, not the server's.
+  const tz = await tzForBranch(client.branchId);
+  const start = zonedTimeToUtc(date, startTime, tz);
+  const end = zonedTimeToUtc(date, endTime, tz);
+  if (!start || !end)
+    return { ok: false, error: "Check the date and times." };
+  if (end <= start)
+    return { ok: false, error: "End time must be after start time." };
 
   // Don't roster a worker during their approved time off.
   if (staffId && (await isStaffUnavailable(tenant.id, staffId, start, end))) {
@@ -321,15 +352,26 @@ export async function reassignShift(formData: FormData) {
     }
   }
 
-  // Keep the same time-of-day, just move to the new date.
+  // Keep the same time-of-day, just move to the new date. Both the reading of
+  // the old time and the writing of the new one happen in the shift's own
+  // timezone, so a 9am Sydney shift dragged across a day stays 9am.
   if (date) {
-    const move = (d: Date) => {
-      const target = new Date(`${date}T00:00:00`);
-      target.setHours(d.getHours(), d.getMinutes(), 0, 0);
-      return target;
-    };
-    data.start = move(shift.start);
-    data.end = move(shift.end);
+    const tz = await tzForBranch(shift.branchId);
+    const spanDays = Math.round(
+      (Date.parse(`${dateKeyInTz(shift.end, tz)}T00:00:00Z`) -
+        Date.parse(`${dateKeyInTz(shift.start, tz)}T00:00:00Z`)) /
+        86_400_000,
+    );
+    const movedStart = zonedTimeToUtc(date, hmInTz(shift.start, tz), tz);
+    if (movedStart) {
+      data.start = movedStart;
+      // An overnight shift must stay overnight after the move.
+      data.end = addDaysInTz(
+        zonedTimeToUtc(date, hmInTz(shift.end, tz), tz) ?? movedStart,
+        spanDays,
+        tz,
+      );
+    }
   }
 
   // Don't drop a shift onto a worker during their approved time off — the board
@@ -455,11 +497,13 @@ export async function updateShiftTime(formData: FormData) {
   });
   if (!shift) return;
 
-  const iso = (d: Date) =>
-    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  const start = new Date(`${iso(shift.start)}T${startTime}`);
-  const end = new Date(`${iso(shift.start)}T${endTime}`);
-  if (end <= start) return;
+  // The shift's calendar date as seen where the participant lives, so editing
+  // the times can't quietly shunt the shift onto another day.
+  const tz = await tzForBranch(shift.branchId);
+  const dateKey = dateKeyInTz(shift.start, tz);
+  const start = zonedTimeToUtc(dateKey, startTime, tz);
+  const end = zonedTimeToUtc(dateKey, endTime, tz);
+  if (!start || !end || end <= start) return;
 
   await prisma.shift.update({
     where: { id: shift.id },
@@ -558,16 +602,13 @@ export async function copyWeek(formData: FormData) {
   });
   if (source.length === 0) return;
 
-  const shift7 = (d: Date) => {
-    const x = new Date(d);
-    x.setDate(x.getDate() + 7);
-    return x;
-  };
-
   let copied = 0;
   for (const s of source) {
-    const start = shift7(s.start);
-    const end = shift7(s.end);
+    // A week later at the SAME local time. Adding 7 x 24h would move a 9am
+    // Sydney shift to 10am across the October daylight-saving change.
+    const tz = await tzForBranch(s.branchId);
+    const start = addDaysInTz(s.start, 7, tz);
+    const end = addDaysInTz(s.end, 7, tz);
     // De-dupe: same client, staff, start already there?
     const exists = await prisma.shift.findFirst({
       where: {
