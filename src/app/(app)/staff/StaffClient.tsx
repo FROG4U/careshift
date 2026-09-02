@@ -54,6 +54,15 @@ export type StaffRow = {
 const field =
   "mt-1 w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm outline-none transition focus:border-[var(--brand)] focus:ring-2 focus:ring-blue-100";
 
+/**
+ * Filter value for staff with no branch set.
+ *
+ * Not a null byte or empty string: browsers sanitise \u0000 out of attribute
+ * values, so the option came back mangled and matched nothing. Branch ids are
+ * cuids, so this can't collide with a real one.
+ */
+const UNASSIGNED = "__no_branch__";
+
 const EMPTY: StaffRow = {
   id: "", firstName: "", lastName: "", active: true, title: "", phone: "", email: "",
   branchId: "", branchName: "",
@@ -86,11 +95,20 @@ export function StaffClient({
   const [status, setStatus] = useState<"ACTIVE" | "ARCHIVED">("ACTIVE");
   const [selLevel, setSelLevel] = useState("");
   const [selEmp, setSelEmp] = useState<EmploymentType>("PERMANENT");
+  const [branch, setBranch] = useState("");
   const isNew = editing?.id === "";
 
-  const activeCount = rows.filter((r) => r.active).length;
-  const archivedCount = rows.length - activeCount;
-  const visible = rows.filter((r) => (status === "ACTIVE" ? r.active : !r.active));
+  const unbranchedCount = rows.filter((r) => !r.branchId).length;
+
+  const inBranch = (r: StaffRow) =>
+    !branch || (branch === UNASSIGNED ? !r.branchId : r.branchId === branch);
+
+  // Counts follow the branch filter, so the tabs describe what you'd actually
+  // see rather than the whole tenant.
+  const scoped = rows.filter(inBranch);
+  const activeCount = scoped.filter((r) => r.active).length;
+  const archivedCount = scoped.length - activeCount;
+  const visible = scoped.filter((r) => (status === "ACTIVE" ? r.active : !r.active));
 
   // Close on Escape. No background-click close — native date/select pickers can
   // emit stray backdrop clicks that would close the dialog mid-edit.
@@ -145,8 +163,9 @@ export function StaffClient({
         </div>
       </header>
 
-      {/* Active / Archived tabs */}
-      <div className="mb-4 inline-flex rounded-xl border border-[var(--border)] bg-white p-1">
+      {/* Active / Archived tabs + branch filter */}
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+      <div className="inline-flex rounded-xl border border-[var(--border)] bg-white p-1">
         {(
           [
             ["ACTIVE", "Active", activeCount],
@@ -168,6 +187,34 @@ export function StaffClient({
             </span>
           </button>
         ))}
+      </div>
+
+        {branches.length > 0 && (
+          <select
+            value={branch}
+            onChange={(e) => setBranch(e.target.value)}
+            className="rounded-xl border border-[var(--border)] bg-white px-3 py-2 text-sm font-medium text-[var(--text-primary)] outline-none focus:border-[var(--brand)]"
+          >
+            <option value="">All branches</option>
+            {branches.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name}
+              </option>
+            ))}
+            {unbranchedCount > 0 && (
+              <option value={UNASSIGNED}>No branch ({unbranchedCount})</option>
+            )}
+          </select>
+        )}
+
+        {branch && (
+          <button
+            onClick={() => setBranch("")}
+            className="text-sm font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+          >
+            Clear
+          </button>
+        )}
       </div>
 
       <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-white shadow-sm">
