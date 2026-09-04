@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-type Band = "GREEN" | "AMBER" | "RED" | "BUILDING";
+type Band = "GREEN" | "AMBER" | "RED";
 
 const BAND: Record<Band, { label: string; chip: string; bar: string; why: string }> = {
   GREEN: {
@@ -22,12 +22,6 @@ const BAND: Record<Band, { label: string; chip: string; bar: string; why: string
     chip: "bg-red-50 text-red-700",
     bar: "bg-red-500",
     why: "Late starts or notices are affecting your score. Your most recent shifts count most, so a few on-time starts will bring it back up.",
-  },
-  BUILDING: {
-    label: "Building record",
-    chip: "bg-slate-100 text-slate-600",
-    bar: "bg-slate-400",
-    why: "You haven't done enough shifts yet for this to mean much. It settles once you have a few behind you.",
   },
 };
 

@@ -41,8 +41,6 @@ const minsBetween = (a: Date, b: Date) => (b.getTime() - a.getTime()) / 60_000;
  */
 const RECENCY_DECAY = 0.85;
 
-/** Fewer judged shifts than this and the score is shown as still building. */
-const MIN_RATED_SHIFTS = 4;
 
 /** Judge one shift against the thresholds. */
 export function flagShift(
@@ -85,9 +83,7 @@ export function fmtMins(mins: number): string {
 
 export type Reliability = {
   score: number; // 0–100
-  /** BUILDING until there are enough shifts to judge someone fairly. */
-  band: "GREEN" | "AMBER" | "RED" | "BUILDING";
-  building: boolean;
+  band: "GREEN" | "AMBER" | "RED";
   total: number;
   clean: number;
   lateStarts: number;
@@ -158,13 +154,11 @@ export function reliabilityOf(
   const penalty = lateNotices * cfg.lateNoticePenalty;
   const score = Math.max(0, Math.min(100, Math.round(base - penalty)));
 
-  // One shift is not a pattern. Below this, the worker is still building a
-  // record and shouldn't be branded on a sample of one.
-  const building = total < MIN_RATED_SHIFTS;
-
-  const band: Reliability["band"] = building
-    ? "BUILDING"
-    : score >= cfg.ratingGreenAt
+  // Banded straight off the score, from the first shift. The rating is meant
+  // to move with how someone is working right now: do well and it says so
+  // immediately, slip and it says that too.
+  const band: Reliability["band"] =
+    score >= cfg.ratingGreenAt
       ? "GREEN"
       : score >= cfg.ratingAmberAt
         ? "AMBER"
@@ -173,7 +167,6 @@ export function reliabilityOf(
   return {
     score,
     band,
-    building,
     total,
     clean,
     lateStarts,
