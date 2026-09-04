@@ -1,4 +1,4 @@
-export type Band = "GREEN" | "AMBER" | "RED";
+export type Band = "GREEN" | "AMBER" | "RED" | "BUILDING";
 
 const BAND_STYLE: Record<Band, { bar: string; text: string; chip: string; label: string }> = {
   GREEN: {
@@ -18,6 +18,15 @@ const BAND_STYLE: Record<Band, { bar: string; text: string; chip: string; label:
     text: "text-red-700",
     chip: "bg-red-50 text-red-700",
     label: "Action required",
+  },
+  // Too few shifts to judge anyone on. Deliberately neutral: branding someone
+  // "Action required" off a single shift says more about the sample than the
+  // worker.
+  BUILDING: {
+    bar: "bg-slate-400",
+    text: "text-slate-600",
+    chip: "bg-slate-100 text-slate-600",
+    label: "Building record",
   },
 };
 
@@ -40,6 +49,12 @@ const MONO_STYLE: Record<Band, { bar: string; text: string; chip: string; label:
     text: "text-neutral-900",
     chip: "bg-neutral-200 text-neutral-800",
     label: "Action required",
+  },
+  BUILDING: {
+    bar: "bg-neutral-400",
+    text: "text-neutral-600",
+    chip: "bg-neutral-100 text-neutral-600",
+    label: "Building record",
   },
 };
 

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-type Band = "GREEN" | "AMBER" | "RED";
+type Band = "GREEN" | "AMBER" | "RED" | "BUILDING";
 
 const BAND: Record<Band, { label: string; chip: string; bar: string; why: string }> = {
   GREEN: {
@@ -15,13 +15,19 @@ const BAND: Record<Band, { label: string; chip: string; bar: string; why: string
     label: "Needs attention",
     chip: "bg-amber-50 text-amber-700",
     bar: "bg-amber-500",
-    why: "A few late starts are nudging your score down. Clocking in on time will lift it.",
+    why: "A few late starts are nudging your score down. Your most recent shifts count most, so clocking in on time will lift it again.",
   },
   RED: {
     label: "Action required",
     chip: "bg-red-50 text-red-700",
     bar: "bg-red-500",
-    why: "Late starts or notices are affecting your score. Let's get back on track.",
+    why: "Late starts or notices are affecting your score. Your most recent shifts count most, so a few on-time starts will bring it back up.",
+  },
+  BUILDING: {
+    label: "Building record",
+    chip: "bg-slate-100 text-slate-600",
+    bar: "bg-slate-400",
+    why: "You haven't done enough shifts yet for this to mean much. It settles once you have a few behind you.",
   },
 };
 

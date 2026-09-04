@@ -30,6 +30,20 @@ export type ShiftFlags = {
 
 const minsBetween = (a: Date, b: Date) => (b.getTime() - a.getTime()) / 60_000;
 
+/**
+ * How much each older shift counts relative to the next newer one.
+ *
+ * 0.85 means the shift before last carries 85% of the newest one's weight, the
+ * one before that 72%, and so on. Roughly: the last four or five shifts drive
+ * most of the score, and anything beyond about fifteen barely registers. Raise
+ * it towards 1 to make the score more forgiving of a bad run but slower to
+ * recover; lower it to react faster to recent work.
+ */
+const RECENCY_DECAY = 0.85;
+
+/** Fewer judged shifts than this and the score is shown as still building. */
+const MIN_RATED_SHIFTS = 4;
+
 /** Judge one shift against the thresholds. */
 export function flagShift(
   s: ShiftForRating,
@@ -71,7 +85,9 @@ export function fmtMins(mins: number): string {
 
 export type Reliability = {
   score: number; // 0–100
-  band: "GREEN" | "AMBER" | "RED";
+  /** BUILDING until there are enough shifts to judge someone fairly. */
+  band: "GREEN" | "AMBER" | "RED" | "BUILDING";
+  building: boolean;
   total: number;
   clean: number;
   lateStarts: number;
@@ -94,7 +110,13 @@ export function reliabilityOf(
   cfg: AttendanceSettings,
 ): Reliability {
   // Only shifts the worker actually clocked into can be judged.
-  const judged = shifts.filter((s) => s.clockInAt && s.clockOutAt);
+  //
+  // Sorted here rather than trusting the caller: the score weights recent work
+  // more heavily, so an arbitrary order would silently produce an arbitrary
+  // score. Neither caller specifies an orderBy.
+  const judged = shifts
+    .filter((s) => s.clockInAt && s.clockOutAt)
+    .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
   const flags = judged.map((s) => flagShift(s, cfg));
 
   const total = judged.length;
@@ -111,12 +133,38 @@ export function reliabilityOf(
     ? Math.round(lateDeltas.reduce((a, b) => a + b, 0) / lateDeltas.length)
     : 0;
 
-  const base = total === 0 ? 100 : (clean / total) * 100;
+  // Recency-weighted, not a lifetime average.
+  //
+  // A flat average means an early mistake never fades: a worker whose first
+  // shift ran late is stuck below par however well they do afterwards, which
+  // is both unfair and useless as a signal - it stops tracking how they are
+  // working NOW. Each older shift counts a little less than the one after it,
+  // so consistent good work pulls the score up over a few shifts while a
+  // recent problem still shows.
+  //
+  // `judged` is sorted oldest-first above, so the weight climbs towards the
+  // end of the list.
+  let weighted = 0;
+  let weightTotal = 0;
+  flags.forEach((f, i) => {
+    // i = 0 is the OLDEST of the judged shifts.
+    const stepsFromNewest = flags.length - 1 - i;
+    const w = Math.pow(RECENCY_DECAY, stepsFromNewest);
+    weightTotal += w;
+    if (f.clean) weighted += w;
+  });
+
+  const base = weightTotal === 0 ? 100 : (weighted / weightTotal) * 100;
   const penalty = lateNotices * cfg.lateNoticePenalty;
   const score = Math.max(0, Math.min(100, Math.round(base - penalty)));
 
-  const band: Reliability["band"] =
-    score >= cfg.ratingGreenAt
+  // One shift is not a pattern. Below this, the worker is still building a
+  // record and shouldn't be branded on a sample of one.
+  const building = total < MIN_RATED_SHIFTS;
+
+  const band: Reliability["band"] = building
+    ? "BUILDING"
+    : score >= cfg.ratingGreenAt
       ? "GREEN"
       : score >= cfg.ratingAmberAt
         ? "AMBER"
@@ -125,6 +173,7 @@ export function reliabilityOf(
   return {
     score,
     band,
+    building,
     total,
     clean,
     lateStarts,
