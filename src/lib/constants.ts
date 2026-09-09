@@ -216,3 +216,13 @@ export const INCIDENT_STATUS_LABELS: Record<IncidentStatus, string> = {
  * stranded at a door; the exception is visible instead.
  */
 export const DEFAULT_GEOFENCE_FT = 250;
+
+/**
+ * The one clock-in reason meaning "the address is right, my phone is wrong".
+ *
+ * Everything else a worker can pick means the shift genuinely started
+ * somewhere different, and carries a place with it. Lives here rather than in
+ * the server action because a "use server" module may only export async
+ * functions, and the worker's phone needs this string too.
+ */
+export const ON_SITE_REASON = "I'm at their place, my phone is wrong";

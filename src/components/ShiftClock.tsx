@@ -10,8 +10,24 @@ import {
   pingTransport,
   endTransport,
 } from "@/app/my-shifts/actions";
+import { ON_SITE_REASON } from "@/lib/constants";
 
 const OTHER_REASON = "Something else";
+
+/**
+ * Why a worker might be starting away from the participant's home.
+ *
+ * The first is the phone being wrong at the right address; the rest are the
+ * shift genuinely beginning somewhere else, and ask for that place. Kept short
+ * because it's read one-handed on a doorstep.
+ */
+const START_REASONS = [
+  ON_SITE_REASON,
+  "Picking the participant up from somewhere",
+  "Meeting them somewhere else today",
+  "Starting at an appointment or outing",
+  OTHER_REASON,
+];
 
 /** Why a worker might legitimately finish away from the participant's home. */
 const AWAY_REASONS = [
@@ -109,10 +125,12 @@ export function ShiftClock(props: ShiftClockProps) {
   const [awayReason, setAwayReason] = useState("");
   // Offered after a clock-in is refused for distance: they may be standing at
   // the door with a phone that can't tell.
-  const [onSiteOffer, setOnSiteOffer] = useState<{
+  const [startPrompt, setStartPrompt] = useState<{
     distanceFt: number;
     clientName: string;
   } | null>(null);
+  const [startReason, setStartReason] = useState("");
+  const [startPlace, setStartPlace] = useState("");
   const [awayOther, setAwayOther] = useState("");
   const elapsed = useElapsed(
     props.clockInIso,
@@ -197,7 +215,7 @@ export function ShiftClock(props: ShiftClockProps) {
           error?: string;
           ok?: boolean;
           needsReason?: boolean;
-          canConfirmOnSite?: boolean;
+          needsStartReason?: boolean;
         }
       | void
     >,
@@ -226,19 +244,25 @@ export function ShiftClock(props: ShiftClockProps) {
   // --- SCHEDULED (not started) ---
   if (props.status !== "IN_PROGRESS") {
     const blocked = props.blockedReason ?? null;
-    const startIn = (onSite?: boolean) =>
+    const startIn = (declared?: { reason: string; place: string }) =>
       handle(async () => {
         const c = await locate();
         const res = await clockIn(
-          withCoords(props.shiftId, c, onSite ? { onSite: "1" } : {}),
+          withCoords(
+            props.shiftId,
+            c,
+            declared
+              ? { startReason: declared.reason, startPlace: declared.place }
+              : {},
+          ),
         );
-        if (res && "canConfirmOnSite" in res && res.canConfirmOnSite) {
-          setOnSiteOffer({
+        if (res && "needsStartReason" in res && res.needsStartReason) {
+          setStartPrompt({
             distanceFt: res.distanceFt,
             clientName: res.clientName,
           });
         } else {
-          setOnSiteOffer(null);
+          setStartPrompt(null);
         }
         return res;
       });
@@ -292,23 +316,64 @@ export function ShiftClock(props: ShiftClockProps) {
           </p>
         )}
         {error && <p className="text-sm text-red-600">{error}</p>}
-        {/* They may be at the door with a phone that can't tell - indoors GPS
-            often falls back to WiFi and reads hundreds of feet out. Refusing
-            outright would strand them; this records the exception instead. */}
-        {onSiteOffer && (
+        {/* Outside the radius. Two different situations land here: a phone
+            reading badly at the right address, and a shift that genuinely
+            starts somewhere else. Ask which, and where. */}
+        {startPrompt && (
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
-            <p className="text-sm text-amber-900">
-              Already at {onSiteOffer.clientName}&apos;s place? Phones can read
-              badly indoors. Confirm you&apos;re there and you can start - your
-              distance ({onSiteOffer.distanceFt} ft) is saved with the shift.
+            <p className="text-sm font-semibold text-amber-900">
+              You&apos;re {startPrompt.distanceFt} ft from{" "}
+              {startPrompt.clientName}&apos;s place
             </p>
+            <p className="mt-1 text-xs text-amber-900">
+              That&apos;s fine if the shift starts somewhere else today. Tell us
+              where and you can start.
+            </p>
+
+            <div className="mt-3 space-y-1.5">
+              {START_REASONS.map((r) => (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => setStartReason(r)}
+                  className={`w-full rounded-lg border px-3 py-2 text-left text-sm font-medium transition ${
+                    startReason === r
+                      ? "border-amber-500 bg-white text-slate-900"
+                      : "border-amber-200 bg-white/60 text-slate-700"
+                  }`}
+                >
+                  {r}
+                </button>
+              ))}
+            </div>
+
+            {startReason && startReason !== ON_SITE_REASON && (
+              <label className="mt-2 block text-xs font-semibold text-amber-900">
+                Where are you?
+                <input
+                  value={startPlace}
+                  onChange={(e) => setStartPlace(e.target.value)}
+                  placeholder="e.g. Shamon's work, 12 Smith St"
+                  className="mt-1 w-full rounded-lg border border-amber-300 px-3 py-2 text-sm font-normal outline-none focus:border-[var(--brand)]"
+                />
+              </label>
+            )}
+
             <button
-              onClick={() => startIn(true)}
-              disabled={busy}
-              className="mt-2 w-full rounded-xl border border-amber-400 bg-white px-4 py-2.5 text-sm font-bold text-amber-800 transition hover:bg-amber-100 disabled:opacity-50"
+              onClick={() => startIn({ reason: startReason, place: startPlace })}
+              disabled={
+                busy ||
+                !startReason ||
+                (startReason !== ON_SITE_REASON && !startPlace.trim())
+              }
+              className="mt-3 w-full rounded-xl border border-amber-400 bg-white px-4 py-2.5 text-sm font-bold text-amber-800 transition hover:bg-amber-100 disabled:opacity-50"
             >
-              {busy ? "Starting…" : "I'm here - clock me in"}
+              {busy ? "Starting…" : "Clock me in"}
             </button>
+            <p className="mt-2 text-[11px] text-amber-800">
+              Your answer and your location are saved with the shift for the
+              office.
+            </p>
           </div>
         )}
       </div>

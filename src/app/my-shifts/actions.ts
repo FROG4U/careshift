@@ -7,6 +7,7 @@ import { notifyManagers } from "@/lib/notify";
 import { notesDueFor, hasOverdueNotes } from "@/lib/notesDue";
 import { roadDistanceKm } from "@/lib/roadDistance";
 import { gpsQualityOf } from "@/lib/gpsQuality";
+import { ON_SITE_REASON } from "@/lib/constants";
 import {
   speedLimitAt,
   MIN_DRIVING_KMH,
@@ -118,17 +119,24 @@ export async function clockIn(formData: FormData) {
   }
 
   const { lat, lng } = coords(formData);
-  const onSite = String(formData.get("onSite") ?? "") === "1";
+  const reason = String(formData.get("startReason") ?? "").trim() || null;
+  const place = String(formData.get("startPlace") ?? "").trim() || null;
   const outsideM = metresOutside(shift.client, lat, lng);
 
-  // Outside the radius and not yet confirmed: refuse, but tell them how much
-  // closer to get, and offer the on-site override. A phone indoors can fall
-  // back to WiFi triangulation and read hundreds of feet out while the worker
-  // is at the door — "move closer" is useless advice to someone already there.
-  if (outsideM != null && !onSite) {
+  // Outside the radius: ask where they are and why, rather than refusing.
+  //
+  // Two different things put a worker outside it. Their phone can read badly
+  // indoors while they stand at the front door, and some shifts genuinely
+  // start somewhere else — a pickup from work, a meeting point that changes
+  // week to week and isn't known until the day. Neither is misconduct, and
+  // blocking both means the honest majority can't start work.
+  //
+  // So the shift starts either way, and the answer is kept next to the GPS fix
+  // for the office to review.
+  if (outsideM != null && !reason) {
     return {
       error: geofenceError(shift.client, lat, lng) ?? undefined,
-      canConfirmOnSite: true,
+      needsStartReason: true,
       distanceFt: Math.round(outsideM * FT_PER_M),
       clientName: shift.client.firstName,
     };
@@ -142,8 +150,12 @@ export async function clockIn(formData: FormData) {
       clockInLat: lat,
       clockInLng: lng,
       // Only stamped on the exception, so an ordinary clock-in stays clean.
-      clockInOnSiteConfirmed: outsideM != null && onSite,
+      // ON_SITE means "I'm at their place, the phone is wrong"; anything else
+      // is a genuine start somewhere different.
+      clockInOnSiteConfirmed: outsideM != null && reason === ON_SITE_REASON,
       clockInDistanceM: outsideM,
+      clockInReason: outsideM != null ? reason : null,
+      clockInPlace: outsideM != null && reason !== ON_SITE_REASON ? place : null,
     },
   });
   revalidatePath("/my-shifts");

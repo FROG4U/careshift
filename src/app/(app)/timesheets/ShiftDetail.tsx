@@ -23,8 +23,14 @@ export type ShiftDetailData = {
   handover: { body: string; ackBy: string | null; ackAt: string | null } | null;
   /** Set only when they finished outside the participant's radius. */
   finishedAway: { reason: string; distanceFt: number } | null;
-  /** Set only when they clocked in outside the radius and confirmed on site. */
-  startedAway: { distanceFt: number } | null;
+  /** Set only when they clocked in outside the participant's radius. */
+  startedAway: {
+    distanceFt: number;
+    reason: string | null;
+    place: string | null;
+    /** True when they said the address was right and the phone was wrong. */
+    onSite: boolean;
+  } | null;
   /** Set when the office entered this shift by hand rather than it being clocked. */
   manualEntry: { by: string; at: string; reason: string } | null;
   /** Set when the office clocked the worker in on their behalf. */
@@ -453,10 +459,20 @@ export function ShiftDetail({ data }: { data: ShiftDetailData }) {
                       <Icon name="my_location" className="text-[16px] text-amber-600" />
                       Clocked in {data.startedAway.distanceFt} ft away
                     </div>
-                    <p className="mt-1 text-sm text-slate-800">
-                      The worker confirmed they were on site. Phones read badly
-                      indoors, so this is usually genuine - worth a look if it
-                      keeps happening.
+                    {data.startedAway.reason && (
+                      <p className="mt-1 text-sm text-slate-800">
+                        &ldquo;{data.startedAway.reason}&rdquo;
+                      </p>
+                    )}
+                    {data.startedAway.place && (
+                      <p className="mt-0.5 text-sm font-medium text-slate-900">
+                        Said they were at: {data.startedAway.place}
+                      </p>
+                    )}
+                    <p className="mt-1 text-xs text-slate-500">
+                      {data.startedAway.onSite
+                        ? "They said the address was right and the phone was wrong. Common indoors, worth a look only if it keeps happening."
+                        : "Check the pin on the map above against what they said. The exact position is recorded either way."}
                     </p>
                   </div>
                 )}

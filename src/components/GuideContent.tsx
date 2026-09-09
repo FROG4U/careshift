@@ -70,12 +70,16 @@ export function GuideContent({ s }: { s: GuideSettings }) {
           Move nearer and try again.
         </p>
         <Key>
-          Already at the door and it still won&apos;t accept? Tap{" "}
-          <strong>&ldquo;I&apos;m here, clock me in&rdquo;</strong>. Phones
-          read badly inside brick and concrete. You&apos;ll be clocked in, and
-          your distance is saved with the shift. That&apos;s normal, not a
-          black mark.
+          Starting somewhere else today, like picking the participant up from
+          work? Tell the app where you are and it will clock you in. Same if
+          you&apos;re at their door and the phone reads badly indoors: pick{" "}
+          <strong>&ldquo;I&apos;m at their place, my phone is wrong&rdquo;</strong>.
         </Key>
+        <p className="text-slate-500">
+          Neither is a black mark. Your answer and your location are saved with
+          the shift so the office can see what happened, which is what protects
+          you if anyone asks later.
+        </p>
         <p className="text-slate-500">
           Clock in when you <em>arrive</em>. Starting early doesn&apos;t earn
           extra pay, and starting late is recorded. See Pay below.

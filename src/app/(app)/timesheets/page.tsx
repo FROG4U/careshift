@@ -376,9 +376,17 @@ export default async function TimesheetsPage({
                       }
                     : null,
                 clockedInByOffice: s.clockInByOffice,
+                // Shown whenever they started outside the radius, not only
+                // when they claimed to be on site - a shift that genuinely
+                // began elsewhere is the case worth reading.
                 startedAway:
-                  s.clockInOnSiteConfirmed && s.clockInDistanceM != null
-                    ? { distanceFt: Math.round(s.clockInDistanceM * FT_PER_M) }
+                  s.clockInDistanceM != null
+                    ? {
+                        distanceFt: Math.round(s.clockInDistanceM * FT_PER_M),
+                        reason: s.clockInReason,
+                        place: s.clockInPlace,
+                        onSite: s.clockInOnSiteConfirmed,
+                      }
                     : null,
                 finishedAway:
                   s.clockOutReason && s.clockOutDistanceM != null
