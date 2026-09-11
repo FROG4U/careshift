@@ -3,44 +3,9 @@
 import { Fragment, useState } from "react";
 import { initialsFromName } from "@/lib/format";
 import { DAY_TYPE_LABELS, type DayType } from "@/lib/constants";
+import type { DayLine, WorkerRow, Totals } from "@/lib/payReportTypes";
 
-export type DayLine = {
-  id: string;
-  dateLabel: string; // "Mon 20 Jul"
-  timeLabel: string; // "9:00 am – 12:00 pm"
-  clientName: string;
-  dayType: string;
-  holidayName: string | null;
-  hours: number;
-  rate: number;
-  km: number;
-  kmPay: number;
-  pay: number;
-};
-
-export type WorkerRow = {
-  staffId: string;
-  name: string;
-  level: string;
-  employment: string;
-  shifts: number;
-  hours: number;
-  km: number;
-  wagePay: number;
-  kmPay: number;
-  total: number;
-  bands: Record<string, number>;
-  unrated: boolean;
-  lines: DayLine[];
-};
-
-export type Totals = {
-  hours: number;
-  km: number;
-  wagePay: number;
-  kmPay: number;
-  total: number;
-};
+export type { DayLine, WorkerRow, Totals };
 
 const money = (n: number) =>
   new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD" }).format(n);

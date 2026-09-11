@@ -130,6 +130,11 @@ export function GuideContent({ s }: { s: GuideSettings }) {
           {NOTES_WINDOW_H} hours after clocking out.
         </p>
         <p>
+          Made a mistake? Change your notes from <strong>Completed Shifts</strong>{" "}
+          until your coordinator approves the shift. After that they&apos;re
+          locked, because the approval was given to what you wrote.
+        </p>
+        <p>
           Leave notes longer than {NOTES_WINDOW_H} hours and you{" "}
           <strong>can&apos;t start a new shift</strong> until they&apos;re
           filled in. The app will keep reminding you before it gets to that.
@@ -175,6 +180,10 @@ export function GuideContent({ s }: { s: GuideSettings }) {
           than staying clocked in. They can adjust the shift so the extra time
           is actually paid.
         </p>
+        <Key>
+          When the office completes a pay run you get a notification, and your
+          hours and pay for it appear under <strong>Menu &gt; My payroll</strong>.
+        </Key>
       </Section>
 
       <Section icon="directions_car" title="Mileage and transport">

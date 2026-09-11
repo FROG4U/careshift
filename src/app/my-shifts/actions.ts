@@ -276,9 +276,26 @@ export async function addShiftNotes(formData: FormData) {
   const shift = await workerShift(String(formData.get("shiftId") ?? ""));
   const note = String(formData.get("note") ?? "").trim();
   if (!note) return { error: "Please write your shift notes." };
+
+  // Once the coordinator approves the shift, its notes are part of an
+  // approved record. Changing them would leave an approval the coordinator
+  // never gave to what's now written, so it has to go back through them.
+  if (shift.approval === "APPROVED") {
+    return {
+      error:
+        "Your coordinator has approved this shift, so its notes are locked. Ask them if something needs changing.",
+    };
+  }
+
+  const previous = shift.progressNote?.trim() ?? "";
   await prisma.shift.update({
     where: { id: shift.id },
-    data: { progressNote: note },
+    data: {
+      progressNote: note,
+      // Only an EDIT of notes already submitted is marked; writing them the
+      // first time isn't.
+      ...(previous && previous !== note ? { progressNoteEditedAt: new Date() } : {}),
+    },
   });
   revalidatePath("/my-shifts");
   revalidatePath("/timesheets");

@@ -3,18 +3,14 @@ import { notFound, redirect } from "next/navigation";
 import { requireTenant } from "@/lib/tenant";
 import { prisma } from "@/lib/prisma";
 import { fmtDate } from "@/lib/format";
-import { costShift, dateKey, money } from "@/lib/payroll";
-import { effectiveRates } from "@/lib/rates";
-import { calendarDateKey, fmtInTz, tzForState } from "@/lib/timezone";
-import { approvePayrollPeriod, reopenPayrollPeriod } from "../actions";
-import {
-  PayrollTable,
-  type WorkerRow,
-  type DayLine,
-} from "./PayrollTable";
+import { money } from "@/lib/payroll";
+import { buildPayReport } from "@/lib/payReport";
+import { isManager } from "@/lib/roles";
+import { reopenPayrollPeriod } from "../actions";
+import { CompleteRunsButton } from "../CompleteRunsButton";
+import { PayrollTable } from "./PayrollTable";
 import { ExportMenu, PrintTrigger } from "./ExportMenu";
 
-import { isManager } from "@/lib/roles";
 export default async function PayrollReportPage({
   params,
   searchParams,
@@ -29,7 +25,7 @@ export default async function PayrollReportPage({
 
   const { id } = await params;
   const { print } = await searchParams;
-  // print mode: "all" or a staff id → hide chrome and auto-open the print
+  // print mode: "all" or a staff id -> hide chrome and auto-open the print
   // dialog (used by "Save as PDF").
   const printMode = print != null;
   const printStaff = print && print !== "all" ? print : null;
@@ -39,146 +35,31 @@ export default async function PayrollReportPage({
   });
   if (!period) notFound();
 
-  // Completed shifts in the window for this branch.
-  const shifts = await prisma.shift.findMany({
-    where: {
-      tenantId: tenant.id,
-      status: "COMPLETED",
-      staffId: printStaff ? printStaff : { not: null },
-      ...(period.branchId ? { branchId: period.branchId } : {}),
-      start: { gte: period.startDate, lte: period.endDate },
-    },
-    include: {
-      client: true,
-      pauses: true,
-      transports: true,
-      staff: { include: { payLevel: { include: { rates: true } }, rateOverrides: true } },
-    },
-    orderBy: { start: "asc" },
-  });
-
-  // Public holidays in this window. Holidays differ by state, so we take the
-  // national ones (state = null) plus any for this branch's state, and any
-  // pinned directly to this branch.
-  const branchState = period.branch?.state ?? null;
-  const holidayRows = await prisma.publicHoliday.findMany({
-    where: {
-      tenantId: tenant.id,
-      date: { gte: period.startDate, lte: period.endDate },
-      OR: [
-        { state: null, branchId: null },
-        ...(branchState ? [{ state: branchState }] : []),
-        ...(period.branchId ? [{ branchId: period.branchId }] : []),
-      ],
-    },
-  });
-  // Every date decision below — penalty band, weekend, holiday match, and the
-  // times shown on the payslip — is made in this branch's local time, not the
-  // server's.
-  const tz = tzForState(branchState);
-  const holidays = new Set(holidayRows.map((h) => calendarDateKey(h.date)));
-  const holidayName = new Map(
-    holidayRows.map((h) => [calendarDateKey(h.date), h.name]),
-  );
-
-  const dayLabel = (d: Date) =>
-    fmtInTz(d, tz, { weekday: "short", day: "numeric", month: "short" });
-  const timeLabel = (a: Date, b: Date) =>
-    `${fmtInTz(a, tz, { hour: "numeric", minute: "2-digit" })} – ${fmtInTz(b, tz, { hour: "numeric", minute: "2-digit" })}`;
-
-  // Roll up per worker.
-  const rows = new Map<string, WorkerRow>();
-
-  for (const s of shifts) {
-    if (!s.staff) continue;
-    // Award level, with any manual per-worker override applied.
-    const { grid, mileageRate } = effectiveRates(s.staff);
-
-    const line = costShift(
-      {
-        start: s.start,
-        end: s.end,
-        clockInAt: s.clockInAt,
-        clockOutAt: s.clockOutAt,
-        mileageKm: s.mileageKm,
-        client: { agreementType: s.client.agreementType },
-        pauses: s.pauses,
-        transports: s.transports,
-      },
-      grid,
-      s.staff.employmentType,
-      mileageRate,
-      holidays,
-      tz,
-    );
-
-    const key = s.staff.id;
-    const row =
-      rows.get(key) ??
-      ({
-        staffId: key,
-        name: `${s.staff.firstName} ${s.staff.lastName}`,
-        level: s.staff.payLevel?.name ?? "No level",
-        employment: s.staff.employmentType,
-        shifts: 0,
-        hours: 0,
-        km: 0,
-        wagePay: 0,
-        kmPay: 0,
-        total: 0,
-        bands: {},
-        unrated: false,
-        lines: [] as DayLine[],
-      } as WorkerRow);
-
-    row.lines.push({
-      id: s.id,
-      dateLabel: dayLabel(new Date(s.start)),
-      timeLabel: timeLabel(new Date(s.start), new Date(s.end)),
-      clientName: `${s.client.firstName} ${s.client.lastName}`,
-      dayType: line.dayType,
-      holidayName: holidayName.get(dateKey(new Date(s.start), tz)) ?? null,
-      hours: line.hours,
-      rate: line.rate,
-      km: line.km,
-      kmPay: line.km * mileageRate,
-      pay: line.pay,
-    });
-
-    row.shifts += 1;
-    row.hours += line.hours;
-    row.km += line.km;
-    row.wagePay += line.hours * line.rate;
-    row.kmPay += line.km * mileageRate;
-    row.total += line.pay;
-    row.bands[line.dayType] = (row.bands[line.dayType] ?? 0) + line.hours;
-    if (line.rate === 0) row.unrated = true;
-    rows.set(key, row);
-  }
-
-  const report = [...rows.values()].sort((a, b) => a.name.localeCompare(b.name));
-  const totals = report.reduce(
-    (t, r) => ({
-      hours: t.hours + r.hours,
-      km: t.km + r.km,
-      wagePay: t.wagePay + r.wagePay,
-      kmPay: t.kmPay + r.kmPay,
-      total: t.total + r.total,
-    }),
-    { hours: 0, km: 0, wagePay: 0, kmPay: 0, total: 0 },
+  // The same calculation the CSV, the PDF and the worker's frozen copy use.
+  const {
+    rows: report,
+    totals,
+    shiftCount,
+    pendingCount,
+    holidayCount,
+    states,
+  } = await buildPayReport(
+    tenant.id,
+    { startDate: period.startDate, endDate: period.endDate, branchId: period.branchId },
+    { staffId: printStaff },
   );
 
   const approved = period.status === "APPROVED";
   const anyUnrated = report.some((r) => r.unrated);
-
   const workerOptions = report.map((r) => ({ id: r.staffId, name: r.name }));
+  const stateLabel = states.length ? ` (${states.join(", ")})` : "";
 
   return (
     <div className="p-6 lg:p-8 max-w-6xl mx-auto print-report">
       {printMode && <PrintTrigger />}
       {!printMode && (
         <Link
-          href={`/payroll?branch=${period.branchId ?? ""}`}
+          href={`/payroll?branch=${period.branchId ?? "none"}`}
           className="no-print mb-3 inline-flex items-center gap-1 text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
         >
           <span className="material-symbols-rounded text-[18px]">arrow_back</span>
@@ -190,7 +71,7 @@ export default async function PayrollReportPage({
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold tracking-tight text-[var(--text-primary)]">
-              {fmtDate(period.startDate)} – {fmtDate(period.endDate)}
+              {fmtDate(period.startDate)} - {fmtDate(period.endDate)}
             </h1>
             <span
               className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
@@ -199,16 +80,15 @@ export default async function PayrollReportPage({
                   : "bg-amber-50 text-amber-700"
               }`}
             >
-              {period.status.toLowerCase()}
+              {approved ? "completed" : "draft"}
             </span>
           </div>
           <p className="text-sm text-[var(--text-secondary)]">
-            {period.branch?.name ?? "All branches"}
-            {branchState ? ` (${branchState})` : ""} ·{" "}
-            {report.length} worker{report.length === 1 ? "" : "s"} ·{" "}
-            {shifts.length} completed shift{shifts.length === 1 ? "" : "s"}
-            {holidayRows.length > 0
-              ? ` · ${holidayRows.length} public holiday${holidayRows.length === 1 ? "" : "s"}`
+            {period.branch?.name ?? "No branch - covers every worker"}
+            {stateLabel} · {report.length} worker{report.length === 1 ? "" : "s"} ·{" "}
+            {shiftCount} approved shift{shiftCount === 1 ? "" : "s"}
+            {holidayCount > 0
+              ? ` · ${holidayCount} public holiday${holidayCount === 1 ? "" : "s"}`
               : ""}
           </p>
         </div>
@@ -223,20 +103,35 @@ export default async function PayrollReportPage({
                   Re-open
                 </button>
               </form>
-            ) : (
-              <form action={approvePayrollPeriod}>
-                <input type="hidden" name="id" value={period.id} />
-                <button
-                  disabled={report.length === 0}
-                  className="rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-90 disabled:opacity-50"
-                >
-                  ✓ Accept payroll
-                </button>
-              </form>
-            )}
+            ) : period.branchId ? (
+              <CompleteRunsButton
+                ids={[period.id]}
+                label="✓ Complete payroll"
+                size="lg"
+                confirmTitle="Complete this pay run?"
+                confirmBody={`The figures below are frozen and each of the ${report.length} worker${report.length === 1 ? "" : "s"} is notified that their pay is ready. You can re-open it later if a timesheet needs correcting.`}
+              />
+            ) : null}
           </div>
         )}
       </header>
+
+      {!period.branchId && !approved && (
+        <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          This run has no branch, so it covers every worker in every branch. It
+          was most likely left behind when a branch was deleted. It can&apos;t be
+          completed - use the branch runs for these dates, and delete this one.
+        </div>
+      )}
+
+      {pendingCount > 0 && !approved && (
+        <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          {pendingCount} shift{pendingCount === 1 ? " is" : "s are"} still awaiting
+          approval and {pendingCount === 1 ? "is" : "are"} not included below.
+          Approve or reject {pendingCount === 1 ? "it" : "them"} in Timesheets before
+          completing, so nothing is left unpaid.
+        </div>
+      )}
 
       {/* Summary */}
       <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -261,17 +156,17 @@ export default async function PayrollReportPage({
       {anyUnrated && (
         <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           Some shifts have no matching rate (worker has no pay level, or the
-          level has no rate for that stream/day). Those lines are costed at $0 —
+          level has no rate for that stream/day). Those lines are costed at $0 -
           set the worker&apos;s pay level to fix.
         </div>
       )}
 
-      {/* Worker report — click a worker to see their day-by-day detail */}
+      {/* Worker report - click a worker to see their day-by-day detail */}
       <PayrollTable report={report} totals={totals} />
 
       {approved && (
         <p className="mt-3 text-xs text-emerald-700">
-          Approved by {period.approvedBy} on {fmtDate(period.approvedAt)}.
+          Completed by {period.approvedBy} on {fmtDate(period.approvedAt)}.
         </p>
       )}
     </div>

@@ -356,6 +356,7 @@ export default async function TimesheetsPage({
                   };
                 })(),
                 note: s.progressNote ?? "",
+                notesEdited: s.progressNoteEditedAt != null,
                 handover: s.handoverNote
                   ? {
                       body: s.handoverNote,

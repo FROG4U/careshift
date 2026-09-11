@@ -84,6 +84,7 @@ model Tenant {
   adminInvites   AdminInvite[]
   incidents      Incident[]
   broadcasts     Broadcast[]
+  payrollLines   PayrollLine[]
 }
 
 /// A message broadcast from the office to a group of people (a branch's
@@ -271,8 +272,39 @@ model PayrollPeriod {
   approvedAt DateTime?
   createdAt  DateTime  @default(now())
 
+  lines      PayrollLine[]
+
   @@index([tenantId])
   @@index([branchId])
+}
+
+/// One worker's pay for a completed run, frozen at the moment it was completed.
+///
+/// Pay is otherwise computed live from shifts, so editing a shift afterwards
+/// would quietly change a figure that has already been paid. This is the record
+/// of what was actually paid, and what the worker sees in their app. Written on
+/// completion; deleted if the run is re-opened, because it is no longer final.
+model PayrollLine {
+  id        String        @id @default(cuid())
+  tenantId  String
+  tenant    Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  periodId  String
+  period    PayrollPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+  staffId   String?
+  staff     Staff?        @relation(fields: [staffId], references: [id], onDelete: SetNull)
+  /// Kept even if the staff record is later deleted.
+  name      String
+  shifts    Int
+  hours     Float
+  km        Float
+  wagePay   Float
+  kmPay     Float
+  total     Float
+  createdAt DateTime      @default(now())
+
+  @@index([tenantId])
+  @@index([periodId])
+  @@index([staffId])
 }
 
 /// A login account. role ∈ ADMIN | COORDINATOR | WORKER.
@@ -845,6 +877,7 @@ model Staff {
   availabilities Availability[]
   incidents   Incident[]
   rateOverrides StaffRate[]
+  payrollLines  PayrollLine[]
 
   @@index([tenantId])
   @@index([branchId])
@@ -974,6 +1007,9 @@ model Shift {
   // Timesheet approval
   approval     String  @default("PENDING")
   progressNote String?
+  // Set when a worker changes notes they had already submitted, so the office
+  // can see the text isn't what was first written.
+  progressNoteEditedAt DateTime?
 
   // Handover to the next worker for this participant. The note and its
   // acknowledgement both live on the shift that WROTE it: the incoming worker

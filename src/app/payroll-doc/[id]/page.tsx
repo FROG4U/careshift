@@ -2,11 +2,10 @@ import { notFound, redirect } from "next/navigation";
 import { requireTenant } from "@/lib/tenant";
 import { prisma } from "@/lib/prisma";
 import { fmtDate } from "@/lib/format";
-import { costShift, dateKey, money } from "@/lib/payroll";
-import { effectiveRates } from "@/lib/rates";
+import { money } from "@/lib/payroll";
 import { DAY_TYPE_LABELS, type DayType } from "@/lib/constants";
-import { calendarDateKey, tzForState } from "@/lib/timezone";
 import { AutoPrint } from "./AutoPrint";
+import { buildPayReport } from "@/lib/payReport";
 
 import { isManager } from "@/lib/roles";
 /**
@@ -39,111 +38,36 @@ export default async function PayrollDoc({
   });
   if (!period) notFound();
 
-  const branchState = period.branch?.state ?? null;
-
-  const [shifts, holidayRows] = await Promise.all([
-    prisma.shift.findMany({
-      where: {
-        tenantId: tenant.id,
-        status: "COMPLETED",
-        staffId: staffFilter ? staffFilter : { not: null },
-        ...(period.branchId ? { branchId: period.branchId } : {}),
-        start: { gte: period.startDate, lte: period.endDate },
-      },
-      include: {
-        client: true,
-        pauses: true,
-        transports: true,
-        staff: { include: { payLevel: { include: { rates: true } }, rateOverrides: true } },
-      },
-      orderBy: { start: "asc" },
-    }),
-    prisma.publicHoliday.findMany({
-      where: {
-        tenantId: tenant.id,
-        date: { gte: period.startDate, lte: period.endDate },
-        OR: [
-          { state: null, branchId: null },
-          ...(branchState ? [{ state: branchState }] : []),
-          ...(period.branchId ? [{ branchId: period.branchId }] : []),
-        ],
-      },
-    }),
-  ]);
-  // Penalty bands are decided in this branch's local time, not the server's.
-  const tz = tzForState(branchState);
-  const holidays = new Set(holidayRows.map((h) => calendarDateKey(h.date)));
-
-  type Row = {
-    name: string;
-    level: string;
-    emp: string;
-    shifts: number;
-    hours: number;
-    km: number;
-    wages: number;
-    mileage: number;
-    total: number;
-    bands: Record<string, number>;
-  };
-  const rows = new Map<string, Row>();
-  for (const s of shifts) {
-    if (!s.staff) continue;
-    // Award level, with any manual per-worker override applied.
-    const { grid, mileageRate } = effectiveRates(s.staff);
-    const line = costShift(
-      {
-        start: s.start,
-        end: s.end,
-        clockInAt: s.clockInAt,
-        clockOutAt: s.clockOutAt,
-        mileageKm: s.mileageKm,
-        client: { agreementType: s.client.agreementType },
-        pauses: s.pauses,
-        transports: s.transports,
-      },
-      grid,
-      s.staff.employmentType,
-      mileageRate,
-      holidays,
-      tz,
-    );
-    const key = s.staff.id;
-    const r =
-      rows.get(key) ??
-      ({
-        name: `${s.staff.firstName} ${s.staff.lastName}`,
-        level: s.staff.payLevel?.name ?? "No level",
-        emp: s.staff.employmentType,
-        shifts: 0,
-        hours: 0,
-        km: 0,
-        wages: 0,
-        mileage: 0,
-        total: 0,
-        bands: {},
-      } as Row);
-    r.shifts += 1;
-    r.hours += line.hours;
-    r.km += line.km;
-    r.wages += line.hours * line.rate;
-    r.mileage += line.km * mileageRate;
-    r.total += line.pay;
-    r.bands[line.dayType] = (r.bands[line.dayType] ?? 0) + line.hours;
-    rows.set(key, r);
-  }
-
-  const report = [...rows.values()].sort((a, b) => a.name.localeCompare(b.name));
-  const totals = report.reduce(
-    (t, r) => ({
-      hours: t.hours + r.hours,
-      km: t.km + r.km,
-      wages: t.wages + r.wages,
-      mileage: t.mileage + r.mileage,
-      total: t.total + r.total,
-    }),
-    { hours: 0, km: 0, wages: 0, mileage: 0, total: 0 },
+  // The same calculation the report screen, CSV and worker copy use, so the
+  // document can never disagree with them.
+  const payReport = await buildPayReport(
+    tenant.id,
+    { startDate: period.startDate, endDate: period.endDate, branchId: period.branchId },
+    { staffId: staffFilter ?? null },
   );
+  // Mapped onto the names this document already renders with.
+  const report = payReport.rows.map((r) => ({
+    name: r.name,
+    level: r.level,
+    emp: r.employment,
+    shifts: r.shifts,
+    hours: r.hours,
+    km: r.km,
+    wages: r.wagePay,
+    mileage: r.kmPay,
+    total: r.total,
+    bands: r.bands,
+  }));
+  const totals = {
+    hours: payReport.totals.hours,
+    km: payReport.totals.km,
+    wages: payReport.totals.wagePay,
+    mileage: payReport.totals.kmPay,
+    total: payReport.totals.total,
+  };
+  const branchState = payReport.states.length ? payReport.states.join(", ") : null;
+  const shiftCount = payReport.shiftCount;
+  const holidayCount = payReport.holidayCount;
 
   const brand = tenant.brandColor || "#2563a8";
   const generated = new Date().toLocaleString("en-AU", {
@@ -197,10 +121,10 @@ export default async function PayrollDoc({
         <p className="text-sm text-slate-600">
           {period.branch?.name ?? "All branches"}
           {branchState ? ` (${branchState})` : ""} · {report.length} worker
-          {report.length === 1 ? "" : "s"} · {shifts.length} completed shift
-          {shifts.length === 1 ? "" : "s"}
-          {holidayRows.length
-            ? ` · ${holidayRows.length} public holiday${holidayRows.length === 1 ? "" : "s"}`
+          {report.length === 1 ? "" : "s"} · {shiftCount} approved shift
+          {shiftCount === 1 ? "" : "s"}
+          {holidayCount
+            ? ` · ${holidayCount} public holiday${holidayCount === 1 ? "" : "s"}`
             : ""}
         </p>
       </div>

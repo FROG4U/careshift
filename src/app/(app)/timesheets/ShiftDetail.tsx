@@ -19,6 +19,8 @@ export type ShiftDetailData = {
   breaks: string[];
   totalKm: number;
   note: string;
+  /** The worker changed their notes after first submitting them. */
+  notesEdited: boolean;
   /** Passed to the next worker at clock-out, with who read it and when. */
   handover: { body: string; ackBy: string | null; ackAt: string | null } | null;
   /** Set only when they finished outside the participant's radius. */
@@ -510,6 +512,11 @@ export function ShiftDetail({ data }: { data: ShiftDetailData }) {
                   <span className="flex items-center gap-1">
                     <Icon name="edit_note" className="text-[16px] text-slate-400" />
                     Shift notes
+                    {data.notesEdited && (
+                      <span className="ml-1 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
+                        edited by worker
+                      </span>
+                    )}
                     {data.needsNotes && (
                       <span className="ml-1 text-xs font-normal text-amber-600">
                         ⚠ required before this shift is payable

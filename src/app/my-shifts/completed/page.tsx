@@ -3,6 +3,7 @@ import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { fmtDate, fmtTime } from "@/lib/format";
 import { ShiftNotes } from "@/components/ShiftNotes";
+import { SubmittedNotes } from "@/components/SubmittedNotes";
 import { netHoursOf } from "@/lib/payroll";
 
 export default async function CompletedShiftsPage() {
@@ -167,9 +168,12 @@ export default async function CompletedShiftsPage() {
 
                   <div className="mt-3">
                     {hasNotes ? (
-                      <span className="text-xs font-medium text-emerald-600">
-                        ✓ Notes submitted
-                      </span>
+                      <SubmittedNotes
+                        shiftId={s.id}
+                        note={s.progressNote ?? ""}
+                        approved={s.approval === "APPROVED"}
+                        edited={s.progressNoteEditedAt != null}
+                      />
                     ) : (
                       <div id={`notes-${s.id}`}>
                         <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-amber-600">
