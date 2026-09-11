@@ -1,7 +1,7 @@
 import { requireTenant } from "@/lib/tenant";
 import { prisma } from "@/lib/prisma";
 import { fmtDate, fmtTime, initials } from "@/lib/format";
-import { netHoursOf } from "@/lib/payroll";
+import { kmOf, netHoursOf } from "@/lib/payroll";
 import { setApproval } from "./actions";
 import { ShiftDetail, type ShiftDetailData } from "./ShiftDetail";
 import { ManualShiftForm } from "./ManualShiftForm";
@@ -303,7 +303,9 @@ export default async function TimesheetsPage({
               const net = netHoursOf(s);
               const clockedNet = Math.max(0, gross - breakHrs);
               const trimmed = clockedNet - net > 0.01;
-              const km = s.transports.reduce((sum, t) => sum + t.km, 0);
+              // Tracked trips, or the figure typed in for a manual entry -
+              // the same rule pay uses.
+              const km = kmOf(s);
               // A completed shift isn't payable until the worker adds notes.
               const needsNotes = !s.progressNote?.trim();
 
@@ -351,6 +353,7 @@ export default async function TimesheetsPage({
                     (p) => `${fmtTime(p.startAt)}–${fmtTime(p.endAt)}`,
                   ),
                 totalKm: km,
+                typedKm: s.mileageKm ?? null,
                 driving: (() => {
                   const speeds = s.transports
                     .flatMap((t) => t.points.map((p) => p.speedKmh))

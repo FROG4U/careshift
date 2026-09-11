@@ -89,7 +89,18 @@ export async function updateShiftDetail(formData: FormData) {
     }
   }
 
+  // Typed mileage - only used when there are no tracked trips (see kmOf).
+  const typedRaw = formData.get("mileageKm");
+  if (shift.transports.length === 0 && typedRaw !== null) {
+    const t = String(typedRaw).trim();
+    const km = t === "" ? null : Number(t);
+    if (km === null || (Number.isFinite(km) && km >= 0)) {
+      await prisma.shift.update({ where: { id: shift.id }, data: { mileageKm: km } });
+    }
+  }
+
   revalidatePath("/timesheets");
+  revalidatePath("/payroll");
   revalidatePath("/dashboard");
 }
 

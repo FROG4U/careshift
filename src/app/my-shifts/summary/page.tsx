@@ -70,7 +70,7 @@ export default async function SummaryPage({
   for (const s of shifts) {
     if (!s.clockInAt || !s.clockOutAt) continue;
     const worked = netHoursOf(s);
-    const km = s.transports.reduce((sum, t) => sum + t.km, 0);
+    const km = (s.transports.reduce((sum, t) => sum + t.km, 0) || (s.mileageKm ?? 0));
 
     totalHours += worked;
     totalKm += km;

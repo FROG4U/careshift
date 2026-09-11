@@ -88,7 +88,7 @@ export default async function WorkerShiftPage({
       }
     : null;
 
-  const totalKm = shift.transports.reduce((sum, t) => sum + t.km, 0);
+  const totalKm = (shift.transports.reduce((sum, t) => sum + t.km, 0) || (shift.mileageKm ?? 0));
   const canSwap =
     new Date(shift.start).getTime() - Date.now() > 24 * 3_600_000;
 

@@ -18,6 +18,8 @@ export type ShiftDetailData = {
   breakHours: number;
   breaks: string[];
   totalKm: number;
+  /** Mileage typed in by hand (manual entries), used when there are no trips. */
+  typedKm: number | null;
   note: string;
   /** The worker changed their notes after first submitting them. */
   notesEdited: boolean;
@@ -423,6 +425,24 @@ export function ShiftDetail({ data }: { data: ShiftDetailData }) {
                       </div>
                     ))}
                   </div>
+                )}
+
+                {data.transports.length === 0 && (
+                  <label className="block text-sm font-medium text-slate-700">
+                    <span className="flex items-center gap-1">
+                      <Icon name="directions_car" className="text-[14px] text-violet-600" />
+                      Mileage (km)
+                    </span>
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      name="mileageKm"
+                      defaultValue={data.typedKm ?? ""}
+                      placeholder="0"
+                      className={box}
+                    />
+                  </label>
                 )}
 
                 {data.manualEntry && (

@@ -48,7 +48,7 @@ export default async function CompletedShiftsPage() {
     return netHoursOf(s);
   };
   const kmOf = (s: (typeof shifts)[number]) =>
-    s.transports.reduce((sum, t) => sum + t.km, 0);
+    (s.transports.reduce((sum, t) => sum + t.km, 0) || (s.mileageKm ?? 0));
 
   // Group by month.
   const groups = new Map<string, typeof shifts>();
