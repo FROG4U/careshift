@@ -5,6 +5,9 @@ import { netHoursOf } from "@/lib/payroll";
 import { setApproval } from "./actions";
 import { ShiftDetail, type ShiftDetailData } from "./ShiftDetail";
 import { ManualShiftForm } from "./ManualShiftForm";
+import { DayShiftRepair } from "@/components/DayShiftRepair";
+import { isDayShifted } from "@/lib/dayShift";
+import { hmInTz, tzForState } from "@/lib/timezone";
 import type { LatLng } from "@/components/ShiftMap";
 import { DEFAULT_GEOFENCE_FT } from "@/lib/constants";
 import { gpsQualityOf } from "@/lib/gpsQuality";
@@ -14,11 +17,6 @@ function grossHours(a: Date | null, b: Date | null) {
   return (new Date(b).getTime() - new Date(a).getTime()) / 3_600_000;
 }
 
-function hhmm(d: Date | null) {
-  if (!d) return "";
-  const x = new Date(d);
-  return `${String(x.getHours()).padStart(2, "0")}:${String(x.getMinutes()).padStart(2, "0")}`;
-}
 const FT_PER_M = 3.28084;
 
 const approvalStyle: Record<string, string> = {
@@ -87,6 +85,7 @@ export default async function TimesheetsPage({
       client: true,
       staff: true,
       pauses: true,
+      branch: { select: { state: true } },
       transports: {
         include: {
           points: { orderBy: { at: "asc" } },
@@ -132,6 +131,23 @@ export default async function TimesheetsPage({
     }),
   ]);
 
+  // Clock times the old edit form saved a day early (see lib/dayShift).
+  const dayShifted = (
+    await prisma.shift.findMany({
+      where: { tenantId: tenant.id, clockInAt: { not: null }, clockOutAt: { not: null } },
+      select: {
+        id: true,
+        start: true,
+        end: true,
+        clockInAt: true,
+        clockOutAt: true,
+        staff: { select: { firstName: true, lastName: true } },
+        client: { select: { firstName: true, lastName: true } },
+      },
+      orderBy: { start: "asc" },
+    })
+  ).filter(isDayShifted);
+
   // The shift-notes PDF inherits whatever the page is currently filtered to.
   const notesParams = new URLSearchParams();
   if (client) notesParams.set("client", client);
@@ -156,6 +172,13 @@ export default async function TimesheetsPage({
           .
         </p>
       </header>
+
+      <DayShiftRepair
+        items={dayShifted.map((d) => ({
+          id: d.id,
+          label: `${fmtDate(d.start)} · ${d.staff ? `${d.staff.firstName} ${d.staff.lastName}` : "Unassigned"} · ${d.client.firstName} ${d.client.lastName}`,
+        }))}
+      />
 
       <ManualShiftForm
         staff={staffOptions.map((x) => ({
@@ -316,8 +339,8 @@ export default async function TimesheetsPage({
                 client: `${s.client.firstName} ${s.client.lastName}`,
                 dateLabel: fmtDate(s.start),
                 scheduledLabel: `${fmtTime(s.start)} – ${fmtTime(s.end)}`,
-                clockInTime: hhmm(s.clockInAt),
-                clockOutTime: hhmm(s.clockOutAt),
+                clockInTime: s.clockInAt ? hmInTz(s.clockInAt, tzForState(s.branch?.state ?? null)) : "",
+                clockOutTime: s.clockOutAt ? hmInTz(s.clockOutAt, tzForState(s.branch?.state ?? null)) : "",
                 clockInLabel: s.clockInAt ? fmtTime(s.clockInAt) : "—",
                 clockOutLabel: s.clockOutAt ? fmtTime(s.clockOutAt) : "—",
                 netHours: net,

@@ -7,6 +7,7 @@ import { isManager } from "@/lib/roles";
 import { fmtDate } from "@/lib/format";
 import { notifyWorker } from "@/lib/notify";
 import { buildPayReport } from "@/lib/payReport";
+import { isDayShifted } from "@/lib/dayShift";
 import { tzForState, zonedTimeToUtc } from "@/lib/timezone";
 
 const str = (v: FormDataEntryValue | null) => String(v ?? "").trim();
@@ -150,6 +151,27 @@ async function completeOne(
       message: `${label}: ${n} shift${n === 1 ? " is" : "s are"} still awaiting approval. Approve or reject ${n === 1 ? "it" : "them"} in Timesheets first, so nothing is left unpaid.`,
     };
   }
+  // Clock times saved a day early (see lib/dayShift) cost real work at zero.
+  // Completing now would freeze that underpayment into the payslip.
+  const clockedInRun = await prisma.shift.findMany({
+    where: {
+      tenantId,
+      branchId: period.branchId,
+      status: "COMPLETED",
+      start: { gte: period.startDate, lte: period.endDate },
+      clockInAt: { not: null },
+      clockOutAt: { not: null },
+    },
+    select: { start: true, end: true, clockInAt: true, clockOutAt: true },
+  });
+  const shifted = clockedInRun.filter(isDayShifted).length;
+  if (shifted > 0) {
+    return {
+      ok: false,
+      message: `${label}: ${shifted} shift${shifted === 1 ? " has" : "s have"} clock times saved a day early and would be paid 0 hours. Press "Fix" in the red panel on the Payroll or Timesheets page first.`,
+    };
+  }
+
   if (report.rows.length === 0) {
     return { ok: false, message: `${label} has no approved shifts to pay.` };
   }

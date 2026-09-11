@@ -4,7 +4,14 @@ import { revalidatePath } from "next/cache";
 import { requireTenant } from "@/lib/tenant";
 import { prisma } from "@/lib/prisma";
 import { isManager } from "@/lib/roles";
-import { tzForState, zonedTimeToUtc } from "@/lib/timezone";
+import {
+  tzForState,
+  zonedTimeToUtc,
+  dateKeyInTz,
+  hmInTz,
+  addDaysInTz,
+} from "@/lib/timezone";
+import { isDayShifted, DAY_MS } from "@/lib/dayShift";
 
 export async function setApproval(formData: FormData) {
   const { tenant } = await requireTenant();
@@ -27,19 +34,38 @@ export async function updateShiftDetail(formData: FormData) {
   const shiftId = String(formData.get("shiftId") ?? "");
   const shift = await prisma.shift.findFirst({
     where: { id: shiftId, tenantId: tenant.id },
-    include: { transports: true },
+    include: { transports: true, branch: { select: { state: true } } },
   });
   if (!shift) return;
 
-  // Combine the shift's date with the edited HH:MM times.
-  const dayIso = new Date(shift.start).toISOString().slice(0, 10);
-  const toDate = (v: FormDataEntryValue | null) => {
-    const t = String(v ?? "").trim();
-    return t ? new Date(`${dayIso}T${t}:00`) : null;
+  // Clock times are wall-clock times where the participant lives. This used to
+  // take the shift's UTC date and parse the time in the server's zone, so any
+  // shift starting before 10am Brisbane landed a day early - and saving this
+  // form, even just to change the notes, zeroed that shift's paid hours.
+  const tz = tzForState(shift.branch?.state ?? null);
+  const dayKey = dateKeyInTz(shift.start, tz);
+
+  // Only rewrite a clock time the admin actually changed. Round-tripping an
+  // untouched value through HH:MM is how a formatting bug here silently
+  // rewrote shifts nobody meant to edit.
+  const edited = (field: string, current: Date | null) => {
+    const t = String(formData.get(field) ?? "").trim();
+    if (!/^\d{2}:\d{2}$/.test(t)) return current;
+    if (current && hmInTz(current, tz) === t) return current;
+    return zonedTimeToUtc(dayKey, t, tz) ?? current;
   };
 
-  const clockInAt = toDate(formData.get("clockInTime"));
-  const clockOutAt = toDate(formData.get("clockOutTime"));
+  const clockInAt = edited("clockInTime", shift.clockInAt);
+  let clockOutAt = edited("clockOutTime", shift.clockOutAt);
+  // An overnight shift finishes the next day.
+  if (
+    clockOutAt !== shift.clockOutAt &&
+    clockInAt &&
+    clockOutAt &&
+    clockOutAt <= clockInAt
+  ) {
+    clockOutAt = addDaysInTz(clockOutAt, 1, tz);
+  }
   const note = String(formData.get("note") ?? "").trim() || null;
 
   await prisma.shift.update({
@@ -178,4 +204,53 @@ export async function createManualShift(formData: FormData) {
   revalidatePath("/timesheets");
   revalidatePath("/schedule");
   return { ok: true, worker: `${staff.firstName} ${staff.lastName}`, hours };
+}
+
+/**
+ * Move day-shifted clock times forward 24 hours. See lib/dayShift.
+ *
+ * Skips any shift inside a completed pay run: its paid figure is frozen, and
+ * correcting the timesheet underneath it would leave the two disagreeing.
+ */
+export async function repairDayShiftedShifts(): Promise<{ fixed: number; skipped: number }> {
+  const { tenant, session } = await requireTenant();
+  if (!isManager(session.role)) return { fixed: 0, skipped: 0 };
+
+  const [clocked, completedRuns] = await Promise.all([
+    prisma.shift.findMany({
+      where: { tenantId: tenant.id, clockInAt: { not: null }, clockOutAt: { not: null } },
+      select: { id: true, start: true, end: true, clockInAt: true, clockOutAt: true, branchId: true },
+    }),
+    prisma.payrollPeriod.findMany({
+      where: { tenantId: tenant.id, status: "APPROVED" },
+      select: { branchId: true, startDate: true, endDate: true },
+    }),
+  ]);
+
+  let fixed = 0;
+  let skipped = 0;
+  for (const s of clocked.filter(isDayShifted)) {
+    const frozen = completedRuns.some(
+      (r) =>
+        (r.branchId === null || r.branchId === s.branchId) &&
+        s.start >= r.startDate &&
+        s.start <= r.endDate,
+    );
+    if (frozen) {
+      skipped += 1;
+      continue;
+    }
+    await prisma.shift.update({
+      where: { id: s.id },
+      data: {
+        clockInAt: new Date(s.clockInAt!.getTime() + DAY_MS),
+        clockOutAt: new Date(s.clockOutAt!.getTime() + DAY_MS),
+      },
+    });
+    fixed += 1;
+  }
+
+  revalidatePath("/timesheets");
+  revalidatePath("/payroll");
+  return { fixed, skipped };
 }

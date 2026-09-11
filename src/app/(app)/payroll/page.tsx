@@ -10,6 +10,8 @@ import { CompleteRunsButton } from "./CompleteRunsButton";
 import { CreateRunForm } from "./CreateRunForm";
 import { DeleteOrphansButton } from "./DeleteOrphansButton";
 import { AssignBranchForm } from "./AssignBranchForm";
+import { DayShiftRepair } from "@/components/DayShiftRepair";
+import { isDayShifted } from "@/lib/dayShift";
 
 export default async function PayrollPage({
   searchParams,
@@ -29,7 +31,7 @@ export default async function PayrollPage({
   }
 
   const { branch, tab, q, from, to } = await searchParams;
-  const [branches, allRuns, unbranched] = await Promise.all([
+  const [branches, allRuns, unbranched, clocked] = await Promise.all([
     prisma.branch.findMany({
       where: { tenantId: tenant.id },
       orderBy: { createdAt: "asc" },
@@ -57,7 +59,22 @@ export default async function PayrollPage({
       },
       orderBy: { start: "asc" },
     }),
+    prisma.shift.findMany({
+      where: { tenantId: tenant.id, clockInAt: { not: null }, clockOutAt: { not: null } },
+      select: {
+        id: true,
+        start: true,
+        end: true,
+        clockInAt: true,
+        clockOutAt: true,
+        staff: { select: { firstName: true, lastName: true } },
+        client: { select: { firstName: true, lastName: true } },
+      },
+      orderBy: { start: "asc" },
+    }),
   ]);
+  // Clock times the old Timesheets form saved a day early - paid at zero.
+  const dayShifted = clocked.filter(isDayShifted);
 
   // Runs with no branch are leftovers from a deleted branch. They cover every
   // worker, so they get their own clearly-marked view rather than sitting
@@ -175,6 +192,13 @@ export default async function PayrollPage({
           </Link>
         </div>
       )}
+
+      <DayShiftRepair
+        items={dayShifted.map((d) => ({
+          id: d.id,
+          label: `${fmtDate(d.start)} · ${d.staff ? `${d.staff.firstName} ${d.staff.lastName}` : "Unassigned"} · ${d.client.firstName} ${d.client.lastName}`,
+        }))}
+      />
 
       {branches.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-[var(--border)] bg-white p-12 text-center">
