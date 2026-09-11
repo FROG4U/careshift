@@ -364,9 +364,23 @@ export default async function PayrollPage({
                   return (
                     <li key={g.key} className="flex flex-wrap items-center gap-3 px-5 py-3.5">
                       <div className="min-w-0 flex-1">
-                        <div className="font-semibold text-[var(--text-primary)]">
+                        {/* The period opens every branch together; the chips
+                            below open one branch each. */}
+                        <Link
+                          href={
+                            g.runs.length > 1
+                              ? `/payroll/combined?ids=${g.runs.map((r) => r.id).join(",")}`
+                              : `/payroll/${g.first.id}`
+                          }
+                          className="font-semibold text-[var(--text-primary)] hover:text-[var(--brand)]"
+                        >
                           {fmtDate(g.first.startDate)} - {fmtDate(g.first.endDate)}
-                        </div>
+                          {g.runs.length > 1 && (
+                            <span className="ml-2 text-xs font-medium text-[var(--brand)]">
+                              View all branches together
+                            </span>
+                          )}
+                        </Link>
                         <div className="mt-1 flex flex-wrap gap-1.5">
                           {g.runs.map((r) => (
                             <Link

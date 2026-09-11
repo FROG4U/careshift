@@ -6,6 +6,7 @@ import { fmtDate } from "@/lib/format";
 import { money } from "@/lib/payroll";
 import { buildPayReport } from "@/lib/payReport";
 import { isManager } from "@/lib/roles";
+import { dateKeyInTz, tzForState } from "@/lib/timezone";
 import { reopenPayrollPeriod } from "../actions";
 import { CompleteRunsButton } from "../CompleteRunsButton";
 import { PayrollTable } from "./PayrollTable";
@@ -34,6 +35,36 @@ export default async function PayrollReportPage({
     include: { branch: true },
   });
   if (!period) notFound();
+
+  // The other branches' runs for the same pay period. This page only shows
+  // one branch, which otherwise looks like half the timesheets are missing.
+  const periodTz = tzForState(period.branch?.state ?? null);
+  const periodKey = `${dateKeyInTz(period.startDate, periodTz)}|${dateKeyInTz(period.endDate, periodTz)}`;
+  const DAY = 86_400_000;
+  const siblings = period.branchId
+    ? (
+        await prisma.payrollPeriod.findMany({
+          where: {
+            tenantId: tenant.id,
+            branchId: { not: null },
+            id: { not: period.id },
+            startDate: {
+              gte: new Date(period.startDate.getTime() - DAY),
+              lte: new Date(period.startDate.getTime() + DAY),
+            },
+          },
+          select: {
+            id: true,
+            startDate: true,
+            endDate: true,
+            branch: { select: { name: true, state: true } },
+          },
+        })
+      ).filter((r) => {
+        const tz = tzForState(r.branch?.state ?? null);
+        return `${dateKeyInTz(r.startDate, tz)}|${dateKeyInTz(r.endDate, tz)}` === periodKey;
+      })
+    : [];
 
   // The same calculation the CSV, the PDF and the worker's frozen copy use.
   const {
@@ -115,6 +146,23 @@ export default async function PayrollReportPage({
           </div>
         )}
       </header>
+
+      {siblings.length > 0 && !printMode && (
+        <div className="no-print mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+          <p className="flex-1">
+            This is the <strong>{period.branch?.name}</strong> run only.{" "}
+            {siblings.map((r) => r.branch?.name).join(" and ")}{" "}
+            {siblings.length === 1 ? "has its own run" : "have their own runs"} for
+            these dates.
+          </p>
+          <Link
+            href={`/payroll/combined?ids=${[period.id, ...siblings.map((r) => r.id)].join(",")}`}
+            className="rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-sky-800 shadow-sm"
+          >
+            See all branches together
+          </Link>
+        </div>
+      )}
 
       {!period.branchId && !approved && (
         <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
