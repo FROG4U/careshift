@@ -10,6 +10,7 @@ import {
   dateKeyInTz,
   hmInTz,
   addDaysInTz,
+  fmtInTz,
 } from "@/lib/timezone";
 import { isDayShifted, DAY_MS } from "@/lib/dayShift";
 
@@ -153,35 +154,61 @@ export async function createManualShift(formData: FormData) {
   const hours = (end.getTime() - start.getTime()) / 3_600_000;
   if (hours > 24) return { error: "That's longer than 24 hours. Check the times." };
 
-  // A shift already covering this worker and time is nearly always a mistake -
-  // the roster entry they forgot to clock into, about to be double-paid.
-  const clash = await prisma.shift.findFirst({
+  // Only hours actually worked can clash. A worker can do several shifts in a
+  // day; what must never happen is the same hours being paid twice. So compare
+  // against clocked time (or a shift they're clocked into right now), not
+  // against roster entries nobody clocked into.
+  const nearby = await prisma.shift.findMany({
     where: {
       tenantId: tenant.id,
       staffId: staff.id,
       status: { not: "CANCELLED" },
-      start: { lt: end },
-      end: { gt: start },
+      OR: [
+        { clockInAt: { lt: end }, clockOutAt: { gt: start } },
+        { clockInAt: { lt: end }, clockOutAt: null },
+        { clockInAt: null, start: { lt: end }, end: { gt: start } },
+      ],
     },
-    select: { id: true, start: true, status: true },
+    select: {
+      id: true,
+      start: true,
+      end: true,
+      status: true,
+      clockInAt: true,
+      clockOutAt: true,
+      clientId: true,
+      client: { select: { firstName: true, lastName: true } },
+    },
   });
-  if (clash) {
+  const now = new Date();
+  const workedClash = nearby.find((s) => {
+    if (!s.clockInAt) return false;
+    // Still clocked in: they're working until now, or the rostered end.
+    const workedTo = s.clockOutAt ?? (s.end > now ? s.end : now);
+    return s.clockInAt < end && workedTo > start;
+  });
+  if (workedClash) {
+    const t = (d: Date) => fmtInTz(d, tz, { hour: "numeric", minute: "2-digit" });
+    const from = workedClash.clockInAt!;
+    const to = workedClash.clockOutAt;
     return {
-      error: `${staff.firstName} already has a shift overlapping that time. Edit that one in Timesheets instead, so the hours aren't counted twice.`,
+      error: `${staff.firstName} already worked ${t(from)} - ${to ? t(to) : "now (still clocked in)"} with ${workedClash.client.firstName} ${workedClash.client.lastName} on ${fmtInTz(from, tz, { weekday: "short", day: "numeric", month: "short" })}, which overlaps these times. Change the times, or edit that timesheet instead, so the hours aren't paid twice.`,
     };
   }
+
+  // The rostered shift for this participant that nobody clocked into - the
+  // usual reason for a manual entry. The entry takes it over; left on the
+  // roster it could still be clocked into later and paid a second time.
+  const roster = nearby.find(
+    (s) => !s.clockInAt && s.status === "SCHEDULED" && s.clientId === client.id,
+  );
 
   const km = kmRaw ? Number(kmRaw) : null;
   if (km != null && (!Number.isFinite(km) || km < 0)) {
     return { error: "Mileage must be a number." };
   }
 
-  await prisma.shift.create({
-    data: {
-      tenantId: tenant.id,
-      clientId: client.id,
-      staffId: staff.id,
-      branchId: client.branchId ?? staff.branchId ?? null,
+  const entry = {
       start,
       end,
       // The work is done, so it skips the publish/accept dance - but it still
@@ -198,12 +225,29 @@ export async function createManualShift(formData: FormData) {
       manualEntryBy: session.name,
       manualEntryAt: new Date(),
       manualEntryReason: reason,
-    },
-  });
+  };
+  if (roster) {
+    await prisma.shift.update({ where: { id: roster.id }, data: entry });
+  } else {
+    await prisma.shift.create({
+      data: {
+        ...entry,
+        tenantId: tenant.id,
+        clientId: client.id,
+        staffId: staff.id,
+        branchId: client.branchId ?? staff.branchId ?? null,
+      },
+    });
+  }
 
   revalidatePath("/timesheets");
   revalidatePath("/schedule");
-  return { ok: true, worker: `${staff.firstName} ${staff.lastName}`, hours };
+  return {
+    ok: true,
+    worker: `${staff.firstName} ${staff.lastName}`,
+    hours,
+    replacedRoster: Boolean(roster),
+  };
 }
 
 /**
