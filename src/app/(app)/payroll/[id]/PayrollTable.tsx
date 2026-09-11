@@ -27,10 +27,39 @@ export function PayrollTable({
   report: WorkerRow[];
   totals: Totals;
 }) {
-  const [open, setOpen] = useState<string | null>(null);
+  // Every worker starts open so each shift in the run is visible, the same way
+  // Timesheets lists them. Collapsed rows read as "the shifts are missing".
+  const [open, setOpen] = useState<Set<string>>(
+    () => new Set(report.map((r) => r.staffId)),
+  );
+  const allOpen = report.length > 0 && report.every((r) => open.has(r.staffId));
+  const shiftTotal = report.reduce((n, r) => n + r.lines.length, 0);
+  const toggle = (id: string) =>
+    setOpen((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
 
   return (
     <section className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-white shadow-sm">
+      {report.length > 0 && (
+        <div className="no-print flex items-center justify-between gap-3 border-b border-[var(--border)] px-5 py-2.5 text-sm">
+          <span className="text-[var(--text-secondary)]">
+            {shiftTotal} shift{shiftTotal === 1 ? "" : "s"} across {report.length} worker
+            {report.length === 1 ? "" : "s"}
+          </span>
+          <button
+            onClick={() =>
+              setOpen(allOpen ? new Set() : new Set(report.map((r) => r.staffId)))
+            }
+            className="rounded-lg border border-[var(--border)] px-3 py-1 text-xs font-semibold text-[var(--text-secondary)] hover:bg-[var(--background)]"
+          >
+            {allOpen ? "Hide shifts" : "Show every shift"}
+          </button>
+        </div>
+      )}
       <table className="w-full text-sm">
         <thead className="border-b border-[var(--border)] bg-[var(--background)] text-left text-xs uppercase tracking-wide text-[var(--text-secondary)]">
           <tr>
@@ -46,11 +75,11 @@ export function PayrollTable({
         </thead>
         <tbody className="divide-y divide-[var(--border)]">
           {report.map((r) => {
-            const isOpen = open === r.staffId;
+            const isOpen = open.has(r.staffId);
             return (
               <Fragment key={r.staffId}>
                 <tr
-                  onClick={() => setOpen(isOpen ? null : r.staffId)}
+                  onClick={() => toggle(r.staffId)}
                   className="cursor-pointer hover:bg-[var(--background)]"
                 >
                   <td className="px-5 py-3">
