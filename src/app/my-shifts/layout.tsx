@@ -13,6 +13,8 @@ import { LocationPinger } from "@/components/worker/LocationPinger";
 import { InstallPrompt } from "@/components/InstallPrompt";
 import { PushRegistrar } from "@/components/PushRegistrar";
 import { PresenceHeartbeat } from "@/components/PresenceHeartbeat";
+import { UpdateWatcher } from "@/components/UpdateWatcher";
+import { buildId } from "@/lib/buildId";
 
 export default async function WorkerLayout({
   children,
@@ -110,6 +112,7 @@ export default async function WorkerLayout({
       )}
       <InstallPrompt />
       <PushRegistrar />
+      <UpdateWatcher buildId={buildId()} />
       <PresenceHeartbeat />
     </>
   );

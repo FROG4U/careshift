@@ -11,6 +11,8 @@ import { InstallPrompt } from "@/components/InstallPrompt";
 import { PushRegistrar } from "@/components/PushRegistrar";
 import { AdminBottomNav } from "@/components/AdminBottomNav";
 import { PresenceHeartbeat } from "@/components/PresenceHeartbeat";
+import { UpdateWatcher } from "@/components/UpdateWatcher";
+import { buildId } from "@/lib/buildId";
 
 export default async function AppLayout({
   children,
@@ -153,6 +155,7 @@ export default async function AppLayout({
       {broadcast && <BroadcastGuard item={broadcast} />}
       <InstallPrompt />
       <PushRegistrar />
+      <UpdateWatcher buildId={buildId()} />
       <PresenceHeartbeat />
     </div>
   );

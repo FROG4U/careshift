@@ -12,6 +12,7 @@ import {
   reportClockProblem,
 } from "@/app/my-shifts/actions";
 import { ON_SITE_REASON } from "@/lib/constants";
+import { CHECK_UPDATE_EVENT } from "@/components/UpdateWatcher";
 
 const OTHER_REASON = "Something else";
 
@@ -141,6 +142,34 @@ export function ShiftClock(props: ShiftClockProps) {
   const [locating, setLocating] = useState(false);
   const [note, setNote] = useState(props.note);
   const [handover, setHandover] = useState(props.handoverNote ?? "");
+
+  // Notes typed during a shift live only on the phone until clock-out. Keep a
+  // copy in its storage so an app refresh, a crash or a flat battery doesn't
+  // wipe them.
+  const draftKey = `careshift:draft:${props.shiftId}`;
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(draftKey) ?? "null") as {
+        note?: string;
+        handover?: string;
+      } | null;
+      /* eslint-disable react-hooks/set-state-in-effect -- restoring a draft
+         from storage, which only exists in the browser */
+      if (saved?.note && !props.note) setNote(saved.note);
+      if (saved?.handover && !props.handoverNote) setHandover(saved.handover);
+      /* eslint-enable react-hooks/set-state-in-effect */
+    } catch {
+      /* storage unavailable */
+    }
+  }, [draftKey, props.note, props.handoverNote]);
+  useEffect(() => {
+    if (props.status !== "IN_PROGRESS") return;
+    try {
+      if (note || handover) localStorage.setItem(draftKey, JSON.stringify({ note, handover }));
+    } catch {
+      /* storage unavailable */
+    }
+  }, [draftKey, note, handover, props.status]);
   // Set when the server says they're finishing away from the participant's
   // home and wants a reason before it will record the clock-out.
   const [awayPrompt, setAwayPrompt] = useState<{
@@ -214,6 +243,10 @@ export function ShiftClock(props: ShiftClockProps) {
           }),
         );
         if (!cancelled && res && typeof res.km === "number") setKm(res.km);
+      } catch {
+        // Most often the app was updated while this page was open. Check, and
+        // refresh if so, so tracking resumes instead of silently stopping.
+        window.dispatchEvent(new Event(CHECK_UPDATE_EVENT));
       } finally {
         inFlight = false;
       }
@@ -284,6 +317,7 @@ export function ShiftClock(props: ShiftClockProps) {
         // A dropped connection or a server error used to fail silently. Say so,
         // and leave a record for the office when it was a clock action.
         setError(FAILED_MESSAGE);
+        window.dispatchEvent(new Event(CHECK_UPDATE_EVENT));
         if (kind) {
           const fd = new FormData();
           fd.set("shiftId", props.shiftId);
@@ -545,6 +579,13 @@ export function ShiftClock(props: ShiftClockProps) {
         return;
       }
       setAwayPrompt(null);
+      if (res && "ok" in res && res.ok) {
+        try {
+          localStorage.removeItem(draftKey);
+        } catch {
+          /* storage unavailable */
+        }
+      }
       return res;
     }, "OUT");
 
