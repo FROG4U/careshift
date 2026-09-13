@@ -156,6 +156,19 @@ export function LiveShiftsView({ shifts }: { shifts: LiveShift[] }) {
                   </span>
                 </button>
 
+                {/* Tried and failed: the first thing to know about a worker
+                    who hasn't clocked in. */}
+                {!s.clockInIso && s.attempts.length > 0 && (
+                  <div className="border-t border-red-100 bg-red-50 px-4 py-2 text-xs text-red-800">
+                    <span className="font-semibold">
+                      Tried to clock in {s.attempts.length === 5 ? "5+" : s.attempts.length} time
+                      {s.attempts.length === 1 ? "" : "s"}.
+                    </span>{" "}
+                    Last at {time(s.attempts[0].atIso, s.timeZone)}
+                    {s.attempts[0].message ? `: ${s.attempts[0].message}` : ""}
+                  </div>
+                )}
+
                 {open && (
                   <div className="border-t border-[var(--border)] p-4">
                     {(s.status === "LATE" || s.status === "AWAITING") && (

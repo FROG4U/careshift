@@ -33,6 +33,8 @@ export type LiveShift = {
   timeZone: string;
   /** Rostered start as HH:MM in the branch's zone, for the office clock-in. */
   startHm: string;
+  /** Clock-ins that didn't go through, newest first. */
+  attempts: { atIso: string; outcome: string; message: string | null }[];
 };
 
 const MIN = 60_000;
@@ -62,7 +64,17 @@ export async function runLiveChecks(
       // however long ago the shift was meant to end, until they clock out).
       OR: [{ end: { gte: new Date(now - TRAIL) } }, { status: "IN_PROGRESS" }],
     },
-    include: { staff: true, client: true, branch: { select: { state: true } } },
+    include: {
+      staff: true,
+      client: true,
+      branch: { select: { state: true } },
+      clockAttempts: {
+        where: { kind: "IN" },
+        orderBy: { createdAt: "desc" },
+        take: 5,
+        select: { createdAt: true, outcome: true, message: true },
+      },
+    },
     orderBy: { start: "asc" },
   });
 
@@ -163,6 +175,11 @@ export async function runLiveChecks(
       workerSeenIso: s.staff!.lastSeenAt?.toISOString() ?? null,
       timeZone,
       startHm,
+      attempts: s.clockAttempts.map((a) => ({
+        atIso: a.createdAt.toISOString(),
+        outcome: a.outcome,
+        message: a.message,
+      })),
     });
   }
 

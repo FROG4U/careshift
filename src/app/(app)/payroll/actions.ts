@@ -8,6 +8,7 @@ import { fmtDate } from "@/lib/format";
 import { notifyWorker } from "@/lib/notify";
 import { buildPayReport } from "@/lib/payReport";
 import { isDayShifted } from "@/lib/dayShift";
+import { findShortTrips } from "@/lib/tripRepair";
 import { tzForState, zonedTimeToUtc } from "@/lib/timezone";
 
 const str = (v: FormDataEntryValue | null) => String(v ?? "").trim();
@@ -162,13 +163,25 @@ async function completeOne(
       clockInAt: { not: null },
       clockOutAt: { not: null },
     },
-    select: { start: true, end: true, clockInAt: true, clockOutAt: true },
+    select: { id: true, start: true, end: true, clockInAt: true, clockOutAt: true },
   });
   const shifted = clockedInRun.filter(isDayShifted).length;
   if (shifted > 0) {
     return {
       ok: false,
       message: `${label}: ${shifted} shift${shifted === 1 ? " has" : "s have"} clock times saved a day early and would be paid 0 hours. Press "Fix" in the red panel on the Payroll or Timesheets page first.`,
+    };
+  }
+
+  // Mileage the old trip code lost (see lib/tripRepair). Completing would pay
+  // those drives short, and freeze it.
+  const shortTrips = await findShortTrips(tenantId, {
+    shiftIds: clockedInRun.map((s) => s.id),
+  });
+  if (shortTrips.length > 0) {
+    return {
+      ok: false,
+      message: `${label}: ${shortTrips.length} trip${shortTrips.length === 1 ? " is" : "s are"} missing mileage. Press "Fix" in the purple panel on the Payroll or Timesheets page first.`,
     };
   }
 

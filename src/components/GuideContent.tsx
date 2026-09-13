@@ -80,6 +80,11 @@ export function GuideContent({ s }: { s: GuideSettings }) {
           the shift so the office can see what happened, which is what protects
           you if anyone asks later.
         </p>
+        <p>
+          If the app won&apos;t clock you in, call the office straight away.
+          They can clock you in from their end, and every failed try is
+          recorded, so there&apos;s proof you were trying.
+        </p>
         <p className="text-slate-500">
           Clock in when you <em>arrive</em>. Starting early doesn&apos;t earn
           extra pay, and starting late is recorded. See Pay below.
@@ -188,13 +193,23 @@ export function GuideContent({ s }: { s: GuideSettings }) {
 
       <Section icon="directions_car" title="Mileage and transport">
         <p>
-          Driving the participant somewhere? Start a trip in the app before you
-          set off and end it when you arrive. Distance is tracked along the
-          real roads.
+          Driving the participant somewhere? Tap <strong>Driving</strong> and
+          start a trip before you set off, then <strong>End transport</strong>{" "}
+          when you arrive.
+        </p>
+        <Key>
+          Keep CareShift open on your screen for the whole trip. Your phone only
+          sends its location while the app is open, so the screen stays on
+          while a trip is running.
+        </Key>
+        <p>
+          If the app does get closed or the screen locks, keep going and end the
+          trip as normal. The part that wasn&apos;t tracked is worked out along
+          the roads between where you were last seen and where you ended.
         </p>
         <p className="text-slate-500">
-          Only trips recorded in the app can be paid. A drive nobody recorded
-          isn&apos;t on the shift.
+          Only trips started in the app can be paid. Forgot to start one? Tell
+          the office the same day, with where you drove, so they can add it.
         </p>
       </Section>
 

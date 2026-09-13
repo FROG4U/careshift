@@ -988,6 +988,7 @@ model Shift {
   pauses     ShiftPause[]
   // Transport trips (e.g. taking the participant to the doctor/shops).
   transports Transport[]
+  clockAttempts ClockAttempt[]
 
   // Publish / acceptance lifecycle.
   // publishState ∈ DRAFT | PUBLISHED | ACCEPTED | REJECTED
@@ -1100,6 +1101,9 @@ model Transport {
   startAt  DateTime  @default(now())
   endAt    DateTime?
   km       Float     @default(0)
+  /// Set when an admin changes the distance by hand. A deliberate correction
+  /// is never overwritten by the automatic mileage repair.
+  kmEditedAt DateTime?
 
   startLat Float?
   startLng Float?
@@ -1113,6 +1117,31 @@ model Transport {
   speedEvents SpeedEvent[]
 
   @@index([shiftId])
+}
+
+/// A clock-in or clock-out that didn't go through cleanly: refused, asked for a
+/// reason, failed with an error, or went through without the phone's location.
+///
+/// Without this, "I tried to clock in and the app wouldn't let me" left no
+/// trace at all, and the office had nothing to check the claim against.
+model ClockAttempt {
+  id        String   @id @default(cuid())
+  tenantId  String
+  shiftId   String
+  shift     Shift    @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  staffId   String?
+  /// IN | OUT
+  kind      String
+  /// REFUSED | ASKED_WHERE | ERROR | NO_LOCATION
+  outcome   String
+  message   String?
+  lat       Float?
+  lng       Float?
+  distanceM Float?
+  createdAt DateTime @default(now())
+
+  @@index([shiftId])
+  @@index([tenantId, createdAt])
 }
 
 /// One GPS sample along a transport trip (builds the route polyline).

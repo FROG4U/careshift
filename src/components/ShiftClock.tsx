@@ -9,6 +9,7 @@ import {
   startTransport,
   pingTransport,
   endTransport,
+  reportClockProblem,
 } from "@/app/my-shifts/actions";
 import { ON_SITE_REASON } from "@/lib/constants";
 
@@ -39,29 +40,53 @@ const AWAY_REASONS = [
 
 type Coords = { lat: number; lng: number; speed: number | null } | null;
 
-function getLocation(): Promise<Coords> {
+/** Why the phone gave no location, in words the office can act on. */
+function geoErrorText(err: GeolocationPositionError | null) {
+  if (!err) return "This phone or browser doesn't support location.";
+  if (err.code === err.PERMISSION_DENIED) return "Location permission is turned off for CareShift.";
+  if (err.code === err.POSITION_UNAVAILABLE) return "The phone couldn't work out where it is.";
+  if (err.code === err.TIMEOUT) return "The phone took too long to find its location.";
+  return err.message || "Unknown location error.";
+}
+
+function getLocation(): Promise<{ coords: Coords; error: string | null }> {
   return new Promise((resolve) => {
-    if (!("geolocation" in navigator)) return resolve(null);
+    if (!("geolocation" in navigator)) {
+      return resolve({ coords: null, error: geoErrorText(null) });
+    }
     navigator.geolocation.getCurrentPosition(
       (pos) =>
         resolve({
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude,
-          // Device speed in m/s (null if unsupported); server → km/h.
-          speed:
-            pos.coords.speed != null && pos.coords.speed >= 0
-              ? pos.coords.speed
-              : null,
+          coords: {
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+            // Device speed in m/s (null if unsupported); server → km/h.
+            speed:
+              pos.coords.speed != null && pos.coords.speed >= 0
+                ? pos.coords.speed
+                : null,
+          },
+          error: null,
         }),
-      () => resolve(null),
+      (err) => resolve({ coords: null, error: geoErrorText(err) }),
       { enableHighAccuracy: true, timeout: 8000, maximumAge: 5000 },
     );
   });
 }
 
-function withCoords(shiftId: string, coords: Coords, extra?: Record<string, string>) {
+/** Shown when a clock action fails before the server could answer. */
+const FAILED_MESSAGE =
+  "That didn't go through, so nothing was saved. Check your internet and try again. If it keeps happening, call the office - they can clock you in.";
+
+function withCoords(
+  shiftId: string,
+  coords: Coords,
+  extra?: Record<string, string>,
+  geoError?: string | null,
+) {
   const fd = new FormData();
   fd.set("shiftId", shiftId);
+  if (!coords && geoError) fd.set("geoError", geoError);
   if (coords) {
     fd.set("lat", String(coords.lat));
     fd.set("lng", String(coords.lng));
@@ -143,6 +168,10 @@ export function ShiftClock(props: ShiftClockProps) {
   const [purpose, setPurpose] = useState(props.transportPurpose ?? "");
   const [showTripForm, setShowTripForm] = useState(false);
   const [tripPurpose, setTripPurpose] = useState("");
+  // Set when the app was closed or the screen locked mid-trip, so the worker
+  // knows the gap is covered rather than wondering if the km are lost.
+  const [trackingGap, setTrackingGap] = useState(false);
+  const [geoError, setGeoError] = useState<string | null>(null);
 
   const busy = pending || locating;
 
@@ -196,17 +225,42 @@ export function ShiftClock(props: ShiftClockProps) {
       timeout: 30_000,
     });
 
+    // Keep the screen on for the trip. A locked screen is what stops the
+    // browser reporting location, and that is how drives went missing.
+    let lock: WakeLockSentinel | null = null;
+    const acquire = async () => {
+      try {
+        if ("wakeLock" in navigator && document.visibilityState === "visible") {
+          lock = await navigator.wakeLock.request("screen");
+        }
+      } catch {
+        /* not supported or refused - tracking still works while open */
+      }
+    };
+    void acquire();
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        void acquire();
+      } else {
+        setTrackingGap(true);
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+
     return () => {
       cancelled = true;
       navigator.geolocation.clearWatch(id);
+      document.removeEventListener("visibilitychange", onVisibility);
+      void lock?.release().catch(() => {});
     };
   }, [transporting, props.shiftId]);
 
   async function locate() {
     setLocating(true);
-    const c = await getLocation();
+    const { coords: c, error: err } = await getLocation();
     setLocating(false);
-    return c;
+    setGeoError(err);
+    return { c, err };
   }
 
   function handle(
@@ -219,11 +273,25 @@ export function ShiftClock(props: ShiftClockProps) {
         }
       | void
     >,
+    kind?: "IN" | "OUT",
   ) {
     setError(null);
     startTx(async () => {
-      const res = await fn();
-      if (res && "error" in res && res.error) setError(res.error);
+      try {
+        const res = await fn();
+        if (res && "error" in res && res.error) setError(res.error);
+      } catch (e) {
+        // A dropped connection or a server error used to fail silently. Say so,
+        // and leave a record for the office when it was a clock action.
+        setError(FAILED_MESSAGE);
+        if (kind) {
+          const fd = new FormData();
+          fd.set("shiftId", props.shiftId);
+          fd.set("kind", kind);
+          fd.set("message", e instanceof Error ? e.message : String(e));
+          reportClockProblem(fd).catch(() => {});
+        }
+      }
     });
   }
 
@@ -246,7 +314,7 @@ export function ShiftClock(props: ShiftClockProps) {
     const blocked = props.blockedReason ?? null;
     const startIn = (declared?: { reason: string; place: string }) =>
       handle(async () => {
-        const c = await locate();
+        const { c, err } = await locate();
         const res = await clockIn(
           withCoords(
             props.shiftId,
@@ -254,6 +322,7 @@ export function ShiftClock(props: ShiftClockProps) {
             declared
               ? { startReason: declared.reason, startPlace: declared.place }
               : {},
+            err,
           ),
         );
         if (res && "needsStartReason" in res && res.needsStartReason) {
@@ -265,7 +334,7 @@ export function ShiftClock(props: ShiftClockProps) {
           setStartPrompt(null);
         }
         return res;
-      });
+      }, "IN");
 
     if (props.hero) {
       return (
@@ -316,6 +385,12 @@ export function ShiftClock(props: ShiftClockProps) {
           </p>
         )}
         {error && <p className="text-sm text-red-600">{error}</p>}
+        {geoError && !error && (
+          <p className="text-xs text-amber-700">
+            {geoError} You can still clock in; turning location on keeps your
+            record accurate.
+          </p>
+        )}
         {/* Outside the radius. Two different situations land here: a phone
             reading badly at the right address, and a shift that genuinely
             starts somewhere else. Ask which, and where. */}
@@ -392,8 +467,9 @@ export function ShiftClock(props: ShiftClockProps) {
             <div className="text-2xl font-bold text-violet-700">
               {km.toFixed(1)} km
             </div>
-            <div className="text-xs text-violet-500">
-              Tracking your journey automatically…
+            <div className="text-xs text-violet-600">
+              Keep CareShift open on your screen until you arrive. Your screen
+              will stay on while the trip is running.
             </div>
           </div>
           <span className="flex h-3 w-3">
@@ -401,13 +477,20 @@ export function ShiftClock(props: ShiftClockProps) {
             <span className="inline-flex h-3 w-3 rounded-full bg-violet-500" />
           </span>
         </div>
+        {trackingGap && (
+          <p className="rounded-lg bg-white px-3 py-2 text-xs text-violet-800">
+            CareShift was closed for part of this trip. That&apos;s OK - when you
+            end the trip, the missing part is worked out along the roads.
+          </p>
+        )}
         <button
           onClick={() =>
             handle(async () => {
-              const c = await locate();
+              const { c } = await locate();
               const res = await endTransport(withCoords(props.shiftId, c));
               if (res && "km" in res && typeof res.km === "number") setKm(res.km);
               setTransporting(false);
+              setTrackingGap(false);
               return;
             })
           }
@@ -443,13 +526,18 @@ export function ShiftClock(props: ShiftClockProps) {
   // --- IN_PROGRESS: working (default) ---
   const endShift = (outReason?: string) =>
     handle(async () => {
-      const c = await locate();
+      const { c, err } = await locate();
       const res = await clockOut(
-        withCoords(props.shiftId, c, {
-          note,
-          handover,
-          ...(outReason ? { outReason } : {}),
-        }),
+        withCoords(
+          props.shiftId,
+          c,
+          {
+            note,
+            handover,
+            ...(outReason ? { outReason } : {}),
+          },
+          err,
+        ),
       );
       // Finishing away from the participant's home: allowed, but say why.
       if (res && "needsReason" in res && res.needsReason) {
@@ -458,7 +546,7 @@ export function ShiftClock(props: ShiftClockProps) {
       }
       setAwayPrompt(null);
       return res;
-    });
+    }, "OUT");
 
   return (
     <div className="flex flex-col items-center">
@@ -519,7 +607,7 @@ export function ShiftClock(props: ShiftClockProps) {
             <button
               onClick={() =>
                 handle(async () => {
-                  const c = await locate();
+                  const { c } = await locate();
                   await startTransport(
                     withCoords(props.shiftId, c, { purpose: tripPurpose }),
                   );

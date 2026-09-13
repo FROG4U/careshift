@@ -13,6 +13,7 @@ import {
   fmtInTz,
 } from "@/lib/timezone";
 import { isDayShifted, DAY_MS } from "@/lib/dayShift";
+import { repairShortTrips } from "@/lib/tripRepair";
 
 export async function setApproval(formData: FormData) {
   const { tenant } = await requireTenant();
@@ -83,8 +84,14 @@ export async function updateShiftDetail(formData: FormData) {
     const raw = formData.get(`km_${t.id}`);
     if (raw !== null) {
       const km = Number(String(raw));
-      if (!Number.isNaN(km) && km >= 0) {
-        await prisma.transport.update({ where: { id: t.id }, data: { km } });
+      // The box shows the km to one decimal. Submitting it untouched must not
+      // round the real figure, or mark a trip as corrected by hand.
+      const unchanged = Math.abs(km - Number(t.km.toFixed(1))) < 0.001;
+      if (!Number.isNaN(km) && km >= 0 && !unchanged) {
+        await prisma.transport.update({
+          where: { id: t.id },
+          data: { km, kmEditedAt: new Date() },
+        });
       }
     }
   }
@@ -308,4 +315,18 @@ export async function repairDayShiftedShifts(): Promise<{ fixed: number; skipped
   revalidatePath("/timesheets");
   revalidatePath("/payroll");
   return { fixed, skipped };
+}
+
+/** Recalculate trips saved shorter than their GPS trail. See lib/tripRepair. */
+export async function repairTripMileage(): Promise<{
+  fixed: number;
+  skipped: number;
+  kmAdded: number;
+}> {
+  const { tenant, session } = await requireTenant();
+  if (!isManager(session.role)) return { fixed: 0, skipped: 0, kmAdded: 0 };
+  const result = await repairShortTrips(tenant.id);
+  revalidatePath("/timesheets");
+  revalidatePath("/payroll");
+  return result;
 }

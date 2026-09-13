@@ -6,6 +6,8 @@ import { setApproval } from "./actions";
 import { ShiftDetail, type ShiftDetailData } from "./ShiftDetail";
 import { ManualShiftForm } from "./ManualShiftForm";
 import { DayShiftRepair } from "@/components/DayShiftRepair";
+import { TripRepair } from "@/components/TripRepair";
+import { findShortTrips } from "@/lib/tripRepair";
 import { isDayShifted } from "@/lib/dayShift";
 import { hmInTz, tzForState } from "@/lib/timezone";
 import type { LatLng } from "@/components/ShiftMap";
@@ -86,6 +88,7 @@ export default async function TimesheetsPage({
       staff: true,
       pauses: true,
       branch: { select: { state: true } },
+      clockAttempts: { orderBy: { createdAt: "asc" } },
       transports: {
         include: {
           points: { orderBy: { at: "asc" } },
@@ -148,6 +151,9 @@ export default async function TimesheetsPage({
     })
   ).filter(isDayShifted);
 
+  // Trips saved shorter than their own GPS trail (see lib/tripRepair).
+  const shortTrips = await findShortTrips(tenant.id);
+
   // The shift-notes PDF inherits whatever the page is currently filtered to.
   const notesParams = new URLSearchParams();
   if (client) notesParams.set("client", client);
@@ -177,6 +183,13 @@ export default async function TimesheetsPage({
         items={dayShifted.map((d) => ({
           id: d.id,
           label: `${fmtDate(d.start)} · ${d.staff ? `${d.staff.firstName} ${d.staff.lastName}` : "Unassigned"} · ${d.client.firstName} ${d.client.lastName}`,
+        }))}
+      />
+
+      <TripRepair
+        items={shortTrips.map((t) => ({
+          id: t.id,
+          label: `${fmtDate(t.shiftStart)} · ${t.worker} · ${t.client}: saved ${t.savedKm.toFixed(1)} km, GPS shows at least ${t.gpsKm.toFixed(1)} km`,
         }))}
       />
 
@@ -354,6 +367,14 @@ export default async function TimesheetsPage({
                   ),
                 totalKm: km,
                 typedKm: s.mileageKm ?? null,
+                attempts: s.clockAttempts.map((a) => ({
+                  when: `${fmtDate(a.createdAt)} ${fmtTime(a.createdAt)}`,
+                  kind: a.kind,
+                  outcome: a.outcome,
+                  message: a.message,
+                  distanceFt:
+                    a.distanceM != null ? Math.round(a.distanceM * FT_PER_M) : null,
+                })),
                 driving: (() => {
                   const speeds = s.transports
                     .flatMap((t) => t.points.map((p) => p.speedKmh))

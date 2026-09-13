@@ -5,8 +5,7 @@ import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { notifyManagers } from "@/lib/notify";
 import { notesDueFor, hasOverdueNotes } from "@/lib/notesDue";
-import { roadDistanceKm } from "@/lib/roadDistance";
-import { gpsQualityOf } from "@/lib/gpsQuality";
+import { finaliseTripKm } from "@/lib/tripDistance";
 import { ON_SITE_REASON } from "@/lib/constants";
 import {
   speedLimitAt,
@@ -106,19 +105,80 @@ function geofenceError(
   return `You're about ${overFt} ft too far from ${client.firstName}'s place. Move closer and try again.`;
 }
 
+type AttemptShift = { id: string; tenantId: string; staffId: string | null };
+
+/**
+ * Keep a record of a clock-in or clock-out that didn't go through cleanly.
+ * Never allowed to break the clock action itself.
+ */
+async function logAttempt(
+  shift: AttemptShift,
+  data: {
+    kind: "IN" | "OUT";
+    outcome: "REFUSED" | "ASKED_WHERE" | "ERROR" | "NO_LOCATION";
+    message?: string | null;
+    lat?: number | null;
+    lng?: number | null;
+    distanceM?: number | null;
+  },
+) {
+  try {
+    await prisma.clockAttempt.create({
+      data: {
+        tenantId: shift.tenantId,
+        shiftId: shift.id,
+        staffId: shift.staffId,
+        kind: data.kind,
+        outcome: data.outcome,
+        message: data.message?.slice(0, 500) ?? null,
+        lat: data.lat ?? null,
+        lng: data.lng ?? null,
+        distanceM: data.distanceM ?? null,
+      },
+    });
+  } catch {
+    /* the log is for the office; it must never stop a worker clocking */
+  }
+}
+
+/** Why the phone gave no location, as reported by the app (or unknown). */
+function geoErrorOf(formData: FormData) {
+  return String(formData.get("geoError") ?? "").trim() || "The phone didn't give a location.";
+}
+
+/**
+ * The app reports a clock-in or clock-out that failed before the server could
+ * answer - a dropped connection, a crash - so it leaves a record too.
+ */
+export async function reportClockProblem(formData: FormData) {
+  try {
+    const shift = await workerShift(String(formData.get("shiftId") ?? ""));
+    const kind = formData.get("kind") === "OUT" ? "OUT" : "IN";
+    await logAttempt(shift, {
+      kind,
+      outcome: "ERROR",
+      message: String(formData.get("message") ?? "").trim() || "Unknown error",
+    });
+  } catch {
+    /* nothing more we can do */
+  }
+  return { ok: true };
+}
+
 export async function clockIn(formData: FormData) {
   const shift = await workerShift(String(formData.get("shiftId") ?? ""));
 
   // Block starting a new shift while any earlier shift's notes are >24h overdue.
   const dues = await notesDueFor(shift.tenantId, shift.staffId!);
+  const { lat, lng } = coords(formData);
+
   if (hasOverdueNotes(dues)) {
-    return {
-      error:
-        "You have overdue shift notes. Fill them in Completed Shifts before starting a new shift.",
-    };
+    const error =
+      "You have overdue shift notes. Fill them in Completed Shifts before starting a new shift.";
+    await logAttempt(shift, { kind: "IN", outcome: "REFUSED", message: error, lat, lng });
+    return { error };
   }
 
-  const { lat, lng } = coords(formData);
   const reason = String(formData.get("startReason") ?? "").trim() || null;
   const place = String(formData.get("startPlace") ?? "").trim() || null;
   const outsideM = metresOutside(shift.client, lat, lng);
@@ -134,6 +194,14 @@ export async function clockIn(formData: FormData) {
   // So the shift starts either way, and the answer is kept next to the GPS fix
   // for the office to review.
   if (outsideM != null && !reason) {
+    await logAttempt(shift, {
+      kind: "IN",
+      outcome: "ASKED_WHERE",
+      message: "Outside the participant's radius - asked where they are",
+      lat,
+      lng,
+      distanceM: outsideM,
+    });
     return {
       error: geofenceError(shift.client, lat, lng) ?? undefined,
       needsStartReason: true,
@@ -158,6 +226,13 @@ export async function clockIn(formData: FormData) {
       clockInPlace: outsideM != null && reason !== ON_SITE_REASON ? place : null,
     },
   });
+  if (lat == null || lng == null) {
+    await logAttempt(shift, {
+      kind: "IN",
+      outcome: "NO_LOCATION",
+      message: `Clocked in without a location: ${geoErrorOf(formData)}`,
+    });
+  }
   revalidatePath("/my-shifts");
   return { ok: true };
 }
@@ -194,22 +269,25 @@ export async function clockOut(formData: FormData) {
   // Auto-close any still-open transport trip, adding a final distance leg.
   const openT = shift.transports.find((t) => !t.endAt);
   if (openT) {
-    let km = openT.km;
-    if (openT.lastLat != null && openT.lastLng != null && lat != null && lng != null) {
-      const d = distanceMetres(openT.lastLat, openT.lastLng, lat, lng) / 1000;
-      if (d > 0.015 && d < 5) km += d;
-    }
     await prisma.transport.update({
       where: { id: openT.id },
-      data: { endAt: now, km, endLat: lat, endLng: lng, lastLat: lat, lastLng: lng },
+      data: {
+        endAt: now,
+        endLat: lat,
+        endLng: lng,
+        lastLat: lat,
+        lastLng: lng,
+        points:
+          lat != null && lng != null ? { create: [{ lat, lng }] } : undefined,
+      },
     });
 
-    // A trip closed by clocking out is still a trip that gets paid, so give it
-    // the same treatment as one the worker ended themselves.
+    // A trip closed by clocking out is still a trip that gets paid, so its
+    // distance is worked out the same way as one the worker ended themselves.
     try {
-      await snapSparseTripToRoads(openT.id, km);
+      await finaliseTripKm(openT.id);
     } catch {
-      /* road snapping is non-critical */
+      /* the repair on Timesheets catches anything missed here */
     }
   }
 
@@ -230,6 +308,13 @@ export async function clockOut(formData: FormData) {
       clockOutDistanceM: outsideM,
     },
   });
+  if (lat == null || lng == null) {
+    await logAttempt(shift, {
+      kind: "OUT",
+      outcome: "NO_LOCATION",
+      message: `Clocked out without a location: ${geoErrorOf(formData)}`,
+    });
+  }
   revalidatePath("/my-shifts");
   revalidatePath("/timesheets");
   revalidatePath("/dashboard");
@@ -393,37 +478,12 @@ export async function startTransport(formData: FormData) {
 }
 
 /**
- * Periodic GPS ping while a trip is active. Accumulates distance from the last
- * recorded point, ignoring GPS jitter (<15 m) and implausible jumps (>5 km in
- * one window). Does NOT revalidate — the client tracks the running km itself.
+ * Periodic GPS ping while a trip is active. Adds the distance from the last
+ * reading, ignoring jitter (<15 m) and readings no car could produce (over
+ * 200 km/h). A long jump after the phone slept is real driving and is kept;
+ * the old 5 km cut-off threw it away. The final figure is worked out again,
+ * along the roads, when the trip ends (see lib/tripDistance).
  */
-/**
- * Replace a trip's distance with a road-routed estimate ONLY when its GPS
- * trail is too sparse to have measured it properly.
- *
- * A dense trail is a real measurement and is left alone. Re-routing it through
- * OSRM would substitute a guess for a fact.
- */
-async function snapSparseTripToRoads(transportId: string, measuredKm: number) {
-  const pts = await prisma.transportPoint.findMany({
-    where: { transportId },
-    orderBy: { at: "asc" },
-    select: { lat: true, lng: true, at: true },
-  });
-
-  if (gpsQualityOf(pts).reliable) return;
-
-  const snapped = await roadDistanceKm(pts, measuredKm);
-  // Only ever correct upwards: a sparse trail undercounts, so a snapped
-  // figure below the measured one means the match went wrong.
-  if (snapped == null || snapped <= measuredKm) return;
-
-  await prisma.transport.update({
-    where: { id: transportId },
-    data: { km: snapped },
-  });
-}
-
 export async function pingTransport(formData: FormData) {
   const shift = await workerShift(String(formData.get("shiftId") ?? ""));
   const { lat, lng, speedKmh: reported } = coords(formData);
@@ -436,17 +496,18 @@ export async function pingTransport(formData: FormData) {
   let computedKmh: number | null = null;
   if (t.lastLat != null && t.lastLng != null) {
     const d = distanceMetres(t.lastLat, t.lastLng, lat, lng) / 1000;
-    if (d > 0.015 && d < 5) {
-      km += d;
+    if (d > 0.015) {
       const last = await prisma.transportPoint.findFirst({
         where: { transportId: t.id },
         orderBy: { at: "desc" },
         select: { at: true },
       });
-      if (last) {
-        const hrs = (Date.now() - last.at.getTime()) / 3_600_000;
-        if (hrs > 0) computedKmh = d / hrs;
-      }
+      const hrs = last ? (Date.now() - last.at.getTime()) / 3_600_000 : 0;
+      // A jump no car could make is a bad fix. Drop it without moving the
+      // last known position, so the next good reading measures from reality.
+      if (d > 1 && (hrs <= 0 || d / hrs > 200)) return { km };
+      km += d;
+      if (hrs > 0) computedKmh = d / hrs;
     }
   }
   const speedKmh = reported ?? computedKmh;
@@ -472,7 +533,7 @@ export async function endTransport(formData: FormData) {
   let km = t.km;
   if (t.lastLat != null && t.lastLng != null && lat != null && lng != null) {
     const d = distanceMetres(t.lastLat, t.lastLng, lat, lng) / 1000;
-    if (d > 0.015 && d < 5) km += d;
+    if (d > 0.015) km += d;
   }
   await prisma.transport.update({
     where: { id: t.id },
@@ -490,20 +551,12 @@ export async function endTransport(formData: FormData) {
     },
   });
 
-  // Mileage is paid, so only estimate when the measurement actually failed.
-  //
-  // While the phone is awake, pings are seconds apart, the trail is dense and
-  // the accumulated distance is genuinely accurate — snapping that to roads
-  // could only add error. It's the sleeping-phone case that breaks it: long
-  // gaps leave straight chords, and a leg over 5 km is dropped entirely by the
-  // guard in pingTransport, so the trip is undercounted.
-  //
-  // So: dense trail, keep what was measured. Sparse trail, fall back to a road
-  // estimate, which is a guess but a better one than a chord across suburbs.
+  // Work the distance out properly now the trip is over: measured where the
+  // phone reported, along the roads where it went quiet.
   try {
-    await snapSparseTripToRoads(t.id, km);
+    km = (await finaliseTripKm(t.id)) ?? km;
   } catch {
-    /* road snapping is non-critical */
+    /* the repair on Timesheets catches anything missed here */
   }
 
   // Safety pass: compare recorded speeds to street limits and store only the

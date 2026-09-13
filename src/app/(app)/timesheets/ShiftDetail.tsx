@@ -4,6 +4,13 @@ import { useState, useEffect } from "react";
 import { ShiftMap, type LatLng, type Trip } from "@/components/ShiftMap";
 import { updateShiftDetail, setApproval } from "./actions";
 
+const ATTEMPT_LABELS: Record<string, string> = {
+  REFUSED: "Refused",
+  ASKED_WHERE: "Outside the radius, asked where they were",
+  ERROR: "Failed (app or connection error)",
+  NO_LOCATION: "No location from the phone",
+};
+
 export type ShiftDetailData = {
   id: string;
   worker: string;
@@ -20,6 +27,14 @@ export type ShiftDetailData = {
   totalKm: number;
   /** Mileage typed in by hand (manual entries), used when there are no trips. */
   typedKm: number | null;
+  /** Clock-ins/outs that didn't go through cleanly, oldest first. */
+  attempts: {
+    when: string;
+    kind: string;
+    outcome: string;
+    message: string | null;
+    distanceFt: number | null;
+  }[];
   note: string;
   /** The worker changed their notes after first submitting them. */
   notesEdited: boolean;
@@ -355,6 +370,27 @@ export function ShiftDetail({ data }: { data: ShiftDetailData }) {
                     Limits from OpenStreetMap (best-effort); roads without limit
                     data aren&apos;t assessed.
                   </p>
+                </div>
+              )}
+
+              {data.attempts.length > 0 && (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                  <div className="flex items-center gap-1.5 text-sm font-semibold text-amber-900">
+                    <Icon name="report" className="text-[16px] text-amber-600" />
+                    Clock-in/out problems ({data.attempts.length})
+                  </div>
+                  <ul className="mt-2 space-y-1.5 text-xs text-amber-900">
+                    {data.attempts.map((a, i) => (
+                      <li key={i}>
+                        <span className="font-semibold">
+                          {a.when} · {a.kind === "OUT" ? "Clock-out" : "Clock-in"} ·{" "}
+                          {ATTEMPT_LABELS[a.outcome] ?? a.outcome}
+                        </span>
+                        {a.distanceFt != null && ` · ${a.distanceFt} ft away`}
+                        {a.message && <div className="text-amber-800">{a.message}</div>}
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               )}
 

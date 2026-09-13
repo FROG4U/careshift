@@ -11,6 +11,8 @@ import { CreateRunForm } from "./CreateRunForm";
 import { DeleteOrphansButton } from "./DeleteOrphansButton";
 import { AssignBranchForm } from "./AssignBranchForm";
 import { DayShiftRepair } from "@/components/DayShiftRepair";
+import { TripRepair } from "@/components/TripRepair";
+import { findShortTrips } from "@/lib/tripRepair";
 import { isDayShifted } from "@/lib/dayShift";
 
 export default async function PayrollPage({
@@ -75,6 +77,8 @@ export default async function PayrollPage({
   ]);
   // Clock times the old Timesheets form saved a day early - paid at zero.
   const dayShifted = clocked.filter(isDayShifted);
+  // Trips saved shorter than their GPS trail - mileage that would go unpaid.
+  const shortTrips = await findShortTrips(tenant.id);
 
   // Runs with no branch are leftovers from a deleted branch. They cover every
   // worker, so they get their own clearly-marked view rather than sitting
@@ -197,6 +201,13 @@ export default async function PayrollPage({
         items={dayShifted.map((d) => ({
           id: d.id,
           label: `${fmtDate(d.start)} · ${d.staff ? `${d.staff.firstName} ${d.staff.lastName}` : "Unassigned"} · ${d.client.firstName} ${d.client.lastName}`,
+        }))}
+      />
+
+      <TripRepair
+        items={shortTrips.map((t) => ({
+          id: t.id,
+          label: `${fmtDate(t.shiftStart)} · ${t.worker} · ${t.client}: saved ${t.savedKm.toFixed(1)} km, GPS shows at least ${t.gpsKm.toFixed(1)} km`,
         }))}
       />
 
