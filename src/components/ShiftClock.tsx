@@ -360,15 +360,41 @@ export function ShiftClock(props: ShiftClockProps) {
           ),
         );
         if (res && "needsStartReason" in res && res.needsStartReason) {
+          // Not a refusal: ask where they are. The "move closer" text that
+          // comes with it is for old app versions only.
           setStartPrompt({
             distanceFt: res.distanceFt,
             clientName: res.clientName,
           });
-        } else {
-          setStartPrompt(null);
+          return { needsStartReason: true };
         }
+        setStartPrompt(null);
         return res;
       }, "IN");
+
+    // Outside the radius. Two different situations land here: a phone reading
+    // badly at the right address, and a shift that genuinely starts somewhere
+    // else (a pickup from work). A pop-up, on every layout: it used to be an
+    // inline panel that the big Start screen - the one workers use - never
+    // rendered, so they only ever saw "move closer" and couldn't start.
+    const startPromptModal = startPrompt ? (
+      <StartAwayPrompt
+        distanceFt={startPrompt.distanceFt}
+        clientName={startPrompt.clientName}
+        reason={startReason}
+        onReason={setStartReason}
+        place={startPlace}
+        onPlace={setStartPlace}
+        busy={busy}
+        error={error}
+        onSubmit={() => startIn({ reason: startReason, place: startPlace })}
+        onCancel={() => {
+          setStartPrompt(null);
+          setStartReason("");
+          setStartPlace("");
+        }}
+      />
+    ) : null;
 
     if (props.hero) {
       return (
@@ -400,6 +426,7 @@ export function ShiftClock(props: ShiftClockProps) {
             </p>
           )}
           {error && <p className="mt-2 text-center text-sm text-red-600">{error}</p>}
+          {startPromptModal}
         </div>
       );
     }
@@ -425,66 +452,7 @@ export function ShiftClock(props: ShiftClockProps) {
             record accurate.
           </p>
         )}
-        {/* Outside the radius. Two different situations land here: a phone
-            reading badly at the right address, and a shift that genuinely
-            starts somewhere else. Ask which, and where. */}
-        {startPrompt && (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
-            <p className="text-sm font-semibold text-amber-900">
-              You&apos;re {startPrompt.distanceFt} ft from{" "}
-              {startPrompt.clientName}&apos;s place
-            </p>
-            <p className="mt-1 text-xs text-amber-900">
-              That&apos;s fine if the shift starts somewhere else today. Tell us
-              where and you can start.
-            </p>
-
-            <div className="mt-3 space-y-1.5">
-              {START_REASONS.map((r) => (
-                <button
-                  key={r}
-                  type="button"
-                  onClick={() => setStartReason(r)}
-                  className={`w-full rounded-lg border px-3 py-2 text-left text-sm font-medium transition ${
-                    startReason === r
-                      ? "border-amber-500 bg-white text-slate-900"
-                      : "border-amber-200 bg-white/60 text-slate-700"
-                  }`}
-                >
-                  {r}
-                </button>
-              ))}
-            </div>
-
-            {startReason && startReason !== ON_SITE_REASON && (
-              <label className="mt-2 block text-xs font-semibold text-amber-900">
-                Where are you?
-                <input
-                  value={startPlace}
-                  onChange={(e) => setStartPlace(e.target.value)}
-                  placeholder="e.g. Shamon's work, 12 Smith St"
-                  className="mt-1 w-full rounded-lg border border-amber-300 px-3 py-2 text-sm font-normal outline-none focus:border-[var(--brand)]"
-                />
-              </label>
-            )}
-
-            <button
-              onClick={() => startIn({ reason: startReason, place: startPlace })}
-              disabled={
-                busy ||
-                !startReason ||
-                (startReason !== ON_SITE_REASON && !startPlace.trim())
-              }
-              className="mt-3 w-full rounded-xl border border-amber-400 bg-white px-4 py-2.5 text-sm font-bold text-amber-800 transition hover:bg-amber-100 disabled:opacity-50"
-            >
-              {busy ? "Starting…" : "Clock me in"}
-            </button>
-            <p className="mt-2 text-[11px] text-amber-800">
-              Your answer and your location are saved with the shift for the
-              office.
-            </p>
-          </div>
-        )}
+        {startPromptModal}
       </div>
     );
   }
@@ -808,6 +776,104 @@ function HeroName({
           {address}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * "Where are you starting from?" - shown when a worker clocks in outside the
+ * participant's radius. Exported on its own so it can be checked in isolation.
+ */
+export function StartAwayPrompt({
+  distanceFt,
+  clientName,
+  reason,
+  onReason,
+  place,
+  onPlace,
+  busy,
+  error,
+  onSubmit,
+  onCancel,
+}: {
+  distanceFt: number;
+  clientName: string;
+  reason: string;
+  onReason: (r: string) => void;
+  place: string;
+  onPlace: (p: string) => void;
+  busy: boolean;
+  error: string | null;
+  onSubmit: () => void;
+  onCancel: () => void;
+}) {
+  const needsPlace = !!reason && reason !== ON_SITE_REASON;
+  return (
+    <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/50 p-4 sm:items-center">
+      <div className="max-h-[90dvh] w-full max-w-sm overflow-y-auto rounded-3xl bg-white p-6 text-left shadow-2xl">
+        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-amber-100 text-amber-600">
+          <span className="material-symbols-rounded text-[30px]">wrong_location</span>
+        </div>
+        <h2 className="text-center text-lg font-bold text-slate-900">
+          Starting away from {clientName}&apos;s place?
+        </h2>
+        <p className="mt-1 text-center text-sm text-slate-500">
+          You&apos;re about {`${distanceFt.toLocaleString()} ft`} away. That&apos;s fine
+          if the shift starts somewhere else today. Tell us where and you can
+          start.
+        </p>
+
+        <div className="mt-4 space-y-2">
+          {START_REASONS.map((r) => (
+            <button
+              key={r}
+              type="button"
+              onClick={() => onReason(r)}
+              className={`w-full rounded-xl border px-4 py-2.5 text-left text-sm font-medium transition ${
+                reason === r
+                  ? "border-[var(--brand)] bg-[var(--brand)]/5 text-slate-900"
+                  : "border-slate-300 text-slate-700 hover:bg-slate-50"
+              }`}
+            >
+              {r}
+            </button>
+          ))}
+        </div>
+
+        {needsPlace && (
+          <label className="mt-3 block text-xs font-semibold text-slate-700">
+            Where are you?
+            <input
+              value={place}
+              onChange={(e) => onPlace(e.target.value)}
+              placeholder="e.g. Shamon's work, 12 Smith St"
+              className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm font-normal outline-none focus:border-[var(--brand)] focus:ring-2 focus:ring-blue-100"
+            />
+          </label>
+        )}
+
+        {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+
+        <button
+          type="button"
+          onClick={onSubmit}
+          disabled={busy || !reason || (needsPlace && !place.trim())}
+          className="mt-5 w-full rounded-xl px-4 py-3 text-sm font-bold text-white shadow-sm transition hover:opacity-90 disabled:opacity-50"
+          style={{ background: "var(--brand)" }}
+        >
+          {busy ? "Starting…" : "Clock me in"}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="mt-2 w-full rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-500 transition hover:bg-slate-50"
+        >
+          Cancel
+        </button>
+        <p className="mt-2 text-center text-[11px] text-slate-400">
+          Your answer and your location are saved with the shift for the office.
+        </p>
+      </div>
     </div>
   );
 }
