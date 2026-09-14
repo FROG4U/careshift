@@ -66,14 +66,14 @@ export function GuideContent({ s }: { s: GuideSettings }) {
           <strong>{s.geofenceFt} ft</strong>.
         </p>
         <p>
-          If it says you&apos;re too far, it tells you how much closer to get.
-          Move nearer and try again.
+          At the participant&apos;s home but it says you&apos;re too far? Phones
+          read badly indoors. Step outside or towards the street and tap Start
+          again.
         </p>
         <Key>
           Starting somewhere else today, like picking the participant up from
-          work? Tell the app where you are and it will clock you in. Same if
-          you&apos;re at their door and the phone reads badly indoors: pick{" "}
-          <strong>&ldquo;I&apos;m at their place, my phone is wrong&rdquo;</strong>.
+          work? The app asks why and where you are. Pick the reason, type the
+          place, and it will clock you in.
         </Key>
         <p className="text-slate-500">
           Neither is a black mark. Your answer and your location are saved with

@@ -11,20 +11,18 @@ import {
   endTransport,
   reportClockProblem,
 } from "@/app/my-shifts/actions";
-import { ON_SITE_REASON } from "@/lib/constants";
 import { CHECK_UPDATE_EVENT } from "@/components/UpdateWatcher";
 
 const OTHER_REASON = "Something else";
 
 /**
- * Why a worker might be starting away from the participant's home.
- *
- * The first is the phone being wrong at the right address; the rest are the
- * shift genuinely beginning somewhere else, and ask for that place. Kept short
- * because it's read one-handed on a doorstep.
+ * Why a worker might be starting away from the participant's home. Every one
+ * is the shift genuinely beginning somewhere else, so every one asks for that
+ * place. There is deliberately no "my phone is wrong" option: a worker at the
+ * door with a bad signal steps outside and tries again. Kept short because
+ * it's read one-handed.
  */
 const START_REASONS = [
-  ON_SITE_REASON,
   "Picking the participant up from somewhere",
   "Meeting them somewhere else today",
   "Starting at an appointment or outing",
@@ -807,7 +805,7 @@ export function StartAwayPrompt({
   onSubmit: () => void;
   onCancel: () => void;
 }) {
-  const needsPlace = !!reason && reason !== ON_SITE_REASON;
+  const needsPlace = !!reason;
   return (
     <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/50 p-4 sm:items-center">
       <div className="max-h-[90dvh] w-full max-w-sm overflow-y-auto rounded-3xl bg-white p-6 text-left shadow-2xl">
