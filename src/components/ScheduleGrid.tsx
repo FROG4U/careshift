@@ -37,6 +37,10 @@ export type GridShift = {
   km: number | null;
 };
 
+/** Column widths. Narrower than this and the cards start truncating. */
+const STAFF_COL_PX = 176;
+const DAY_COL_PX = 150;
+
 const pubBadge: Record<string, { label: string; cls: string }> = {
   DRAFT: { label: "Draft", cls: "bg-slate-100 text-slate-500" },
   PUBLISHED: { label: "Sent", cls: "bg-amber-100 text-amber-700" },
@@ -219,7 +223,7 @@ export function ScheduleGrid({
       >
         <div className="flex items-center gap-1.5">
           <span className={`h-2 w-2 shrink-0 rounded-full ${statusDot[s.status] ?? "bg-slate-400"}`} />
-          <span className="min-w-0 truncate text-xs font-semibold text-slate-800">
+          <span className="min-w-0 truncate whitespace-nowrap text-xs font-semibold text-slate-800">
             {s.timeLabel}
           </span>
           {s.overAgreement && (
@@ -268,31 +272,40 @@ export function ScheduleGrid({
             clocked times mid-shift would read as a finished total. */}
         {s.status === "COMPLETED" && (s.clockLabel || s.km) && (
           <div className="mt-1 space-y-0.5 border-t border-black/5 pt-1">
+            {/* The clocked range gets its own line: sharing one with the paid
+                hours left it truncated to "9:00am - 1..." in a day column. */}
             {s.clockLabel && (
               <div
                 className="flex items-center gap-1 text-[10px] text-slate-600"
-                title="Clocked in – clocked out, and paid hours after breaks"
+                title="Clocked in and clocked out"
               >
                 <span className="material-symbols-rounded text-[13px] leading-none">
                   schedule
                 </span>
                 <span className="truncate">{s.clockLabel}</span>
+              </div>
+            )}
+            {(s.workedHours != null || s.km != null) && (
+              <div className="flex items-center gap-2 text-[10px]">
                 {s.workedHours != null && (
-                  <span className="ml-auto shrink-0 font-semibold text-slate-700">
+                  <span
+                    className="font-semibold text-slate-700"
+                    title="Paid hours after breaks"
+                  >
                     {s.workedHours.toFixed(2)}h
                   </span>
                 )}
-              </div>
-            )}
-            {s.km != null && (
-              <div
-                className="flex items-center gap-1 text-[10px] text-slate-600"
-                title="Mileage recorded on this shift"
-              >
-                <span className="material-symbols-rounded text-[13px] leading-none">
-                  directions_car
-                </span>
-                <span>{s.km.toFixed(1)} km</span>
+                {s.km != null && (
+                  <span
+                    className="flex items-center gap-1 text-slate-600"
+                    title="Mileage recorded on this shift"
+                  >
+                    <span className="material-symbols-rounded text-[13px] leading-none">
+                      directions_car
+                    </span>
+                    {s.km.toFixed(1)} km
+                  </span>
+                )}
               </div>
             )}
           </div>
@@ -419,16 +432,26 @@ export function ScheduleGrid({
         </div>
       </div>
       <div className="overflow-x-auto">
-      <table className="w-full min-w-[900px] table-fixed border-collapse">
+      {/* Every day column gets a usable width and the grid scrolls sideways.
+          A fixed 900px table split 15 filtered days into ~48px each, which cut
+          "9:00am-1:00pm" down to "9am-…" and the participant to "Shamo…". */}
+      <table
+        className="w-full table-fixed border-collapse"
+        style={{ minWidth: STAFF_COL_PX + days.length * DAY_COL_PX }}
+      >
         <thead>
           <tr>
-            <th className="sticky left-0 z-10 w-44 border-b border-slate-200 bg-white p-3 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
+            <th
+              className="sticky left-0 z-10 border-b border-slate-200 bg-white p-3 text-left text-xs font-medium uppercase tracking-wide text-slate-500"
+              style={{ width: STAFF_COL_PX }}
+            >
               {byClient ? "Participant" : "Staff"}
             </th>
             {days.map((d) => (
               <th
                 key={d.iso}
                 className="border-b border-l border-slate-100 p-2 text-center"
+                style={{ width: DAY_COL_PX }}
               >
                 <div className="text-xs font-medium uppercase tracking-wide text-slate-400">
                   {d.weekday}
