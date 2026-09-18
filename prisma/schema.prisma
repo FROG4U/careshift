@@ -1053,6 +1053,9 @@ model Shift {
   // couldn't. Separate from manualEntry, which is a whole shift entered after
   // the fact; here only the clock-in was stated rather than measured.
   clockInByOffice String?
+  // Set when the office ended the shift because the worker's own clock-out
+  // didn't go through. Their name, for the audit trail.
+  clockOutByOffice String?
 
   // Set true when this shift was rostered beyond the participant's agreed
   // weekly hours and a manager authorised the overrun. `authorisedBy` records

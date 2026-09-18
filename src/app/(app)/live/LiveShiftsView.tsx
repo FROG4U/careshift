@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { LiveShift, LiveStatus } from "@/lib/liveShifts";
 import { OfficeClockIn } from "./OfficeClockIn";
+import { OfficeClockOut } from "./OfficeClockOut";
 import { TrackMap } from "@/components/TrackMap";
 
 function haversineKm(aLat: number, aLng: number, bLat: number, bLng: number) {
@@ -180,6 +181,18 @@ export function LiveShiftsView({ shifts }: { shifts: LiveShift[] }) {
                           shiftId={s.id}
                           worker={s.worker}
                           rosteredStartHm={s.startHm}
+                        />
+                      </div>
+                    )}
+                    {(s.status === "ON_SHIFT" || s.status === "OVERRUN") && (
+                      <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl bg-[var(--background)] px-3 py-2.5">
+                        <span className="flex-1 text-sm text-[var(--text-secondary)]">
+                          Their clock-out didn&apos;t go through? End it for them.
+                        </span>
+                        <OfficeClockOut
+                          shiftId={s.id}
+                          worker={s.worker}
+                          rosteredEndHm={s.endHm}
                         />
                       </div>
                     )}

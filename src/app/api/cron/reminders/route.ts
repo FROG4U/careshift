@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { runTaskReminders } from "@/lib/taskReminders";
+import { runLiveChecks } from "@/lib/liveShifts";
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
@@ -24,5 +26,21 @@ export async function GET(req: NextRequest) {
   }
 
   const result = await runTaskReminders();
-  return NextResponse.json({ ok: true, ...result });
+
+  // Late and overrun alerts. These only ran when someone had Live Shifts open,
+  // so a shift overrunning at 8pm wasn't flagged until an admin looked the next
+  // morning. Each alert still fires once per shift.
+  const tenants = await prisma.tenant.findMany({
+    select: { id: true, lateGraceMin: true },
+  });
+  let liveShifts = 0;
+  for (const t of tenants) {
+    try {
+      liveShifts += (await runLiveChecks(t.id, t.lateGraceMin ?? 5)).length;
+    } catch (e) {
+      console.error("[cron] live checks failed", e);
+    }
+  }
+
+  return NextResponse.json({ ok: true, ...result, liveShifts });
 }

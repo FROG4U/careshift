@@ -28,11 +28,16 @@ export function TrackMap({
       const el = ref.current as HTMLDivElement & { _leaflet_id?: number };
       if (el._leaflet_id != null) delete el._leaflet_id;
 
-      const map = L.map(ref.current, { scrollWheelZoom: false, attributionControl: false });
+      const map = L.map(ref.current, { scrollWheelZoom: false });
       mapRef.current = map;
       L.tileLayer(
-        "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
-        { subdomains: "abcd", maxZoom: 20 },
+        "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+        {
+          // OpenStreetMap asks for this credit; CARTO's free tiles now need a
+          // key and were showing "API KEY REQUIRED" over the map.
+          maxZoom: 19,
+          attribution: "&copy; OpenStreetMap contributors",
+        },
       ).addTo(map);
 
       const pts: [number, number][] = [];

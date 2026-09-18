@@ -308,20 +308,29 @@ export function ShiftClock(props: ShiftClockProps) {
   ) {
     setError(null);
     startTx(async () => {
-      try {
-        const res = await fn();
-        if (res && "error" in res && res.error) setError(res.error);
-      } catch (e) {
-        // A dropped connection or a server error used to fail silently. Say so,
-        // and leave a record for the office when it was a clock action.
-        setError(FAILED_MESSAGE);
-        window.dispatchEvent(new Event(CHECK_UPDATE_EVENT));
-        if (kind) {
-          const fd = new FormData();
-          fd.set("shiftId", props.shiftId);
-          fd.set("kind", kind);
-          fd.set("message", e instanceof Error ? e.message : String(e));
-          reportClockProblem(fd).catch(() => {});
+      // Clock actions try three times before giving up. A single dropped
+      // connection or database blip lost a clock-out and left a shift running
+      // all night. Safe to repeat: the server ignores a second clock-in/out.
+      const tries = kind ? 3 : 1;
+      for (let attempt = 1; attempt <= tries; attempt++) {
+        try {
+          const res = await fn();
+          if (res && "error" in res && res.error) setError(res.error);
+          return;
+        } catch (e) {
+          if (attempt < tries) {
+            await new Promise((r) => setTimeout(r, 2000 * attempt));
+            continue;
+          }
+          setError(FAILED_MESSAGE);
+          window.dispatchEvent(new Event(CHECK_UPDATE_EVENT));
+          if (kind) {
+            const fd = new FormData();
+            fd.set("shiftId", props.shiftId);
+            fd.set("kind", kind);
+            fd.set("message", e instanceof Error ? e.message : String(e));
+            reportClockProblem(fd).catch(() => {});
+          }
         }
       }
     });

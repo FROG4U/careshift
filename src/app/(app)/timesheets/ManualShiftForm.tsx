@@ -37,7 +37,7 @@ export function ManualShiftForm({
         return;
       }
       setDone(
-        `Added ${res?.hours?.toFixed(2)} h for ${res?.worker}. It's waiting for approval below.${res?.replacedRoster ? " It replaces the rostered shift that wasn't clocked into." : ""}`,
+        `Added ${res?.hours?.toFixed(2)} h for ${res?.worker}. It's waiting for approval below.${res?.replacedRoster ? " It replaces the rostered shift that wasn't clocked into." : ""}${res?.closedOpenShift ? " It ends the shift they were still clocked into." : ""}`,
       );
       formRef.current?.reset();
       router.refresh();

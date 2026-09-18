@@ -33,6 +33,8 @@ export type LiveShift = {
   timeZone: string;
   /** Rostered start as HH:MM in the branch's zone, for the office clock-in. */
   startHm: string;
+  /** Rostered finish as HH:MM, for the office clock-out. */
+  endHm: string;
   /** Clock-ins that didn't go through, newest first. */
   attempts: { atIso: string; outcome: string; message: string | null }[];
 };
@@ -115,6 +117,13 @@ export async function runLiveChecks(
       timeZone,
     });
 
+    const endHm = s.end.toLocaleTimeString("en-GB", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+      timeZone,
+    });
+
     // ── Late: not clocked in past the grace window ──
     if (status === "LATE" && !s.lateAlertedAt) {
       await prisma.shift.update({
@@ -175,6 +184,7 @@ export async function runLiveChecks(
       workerSeenIso: s.staff!.lastSeenAt?.toISOString() ?? null,
       timeZone,
       startHm,
+      endHm,
       attempts: s.clockAttempts.map((a) => ({
         atIso: a.createdAt.toISOString(),
         outcome: a.outcome,

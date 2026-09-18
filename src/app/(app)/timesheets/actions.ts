@@ -205,7 +205,14 @@ export async function createManualShift(formData: FormData) {
     const workedTo = s.clockOutAt ?? (s.end > now ? s.end : now);
     return s.clockInAt < end && workedTo > start;
   });
-  if (workedClash) {
+  // Still clocked into this same participant: this entry is what closes that
+  // shift, usually because the worker's own clock-out never went through.
+  // Refusing it left the office no way to stop a shift running all night.
+  const openShift =
+    workedClash && !workedClash.clockOutAt && workedClash.clientId === client.id
+      ? workedClash
+      : null;
+  if (workedClash && !openShift) {
     const t = (d: Date) => fmtInTz(d, tz, { hour: "numeric", minute: "2-digit" });
     const from = workedClash.clockInAt!;
     const to = workedClash.clockOutAt;
@@ -244,7 +251,21 @@ export async function createManualShift(formData: FormData) {
       manualEntryAt: new Date(),
       manualEntryReason: reason,
   };
-  if (roster) {
+  if (openShift) {
+    await prisma.shiftPause.updateMany({
+      where: { shiftId: openShift.id, endAt: null },
+      data: { endAt: end },
+    });
+    await prisma.transport.updateMany({
+      where: { shiftId: openShift.id, endAt: null },
+      data: { endAt: end },
+    });
+    // Keep the rostered times: pay is the overlap of these hours and the roster.
+    await prisma.shift.update({
+      where: { id: openShift.id },
+      data: { ...entry, start: openShift.start, end: openShift.end, overrunAlertedAt: new Date() },
+    });
+  } else if (roster) {
     await prisma.shift.update({ where: { id: roster.id }, data: entry });
   } else {
     await prisma.shift.create({
@@ -264,7 +285,8 @@ export async function createManualShift(formData: FormData) {
     ok: true,
     worker: `${staff.firstName} ${staff.lastName}`,
     hours,
-    replacedRoster: Boolean(roster),
+    replacedRoster: Boolean(roster) && !openShift,
+    closedOpenShift: Boolean(openShift),
   };
 }
 

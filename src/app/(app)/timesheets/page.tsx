@@ -424,6 +424,7 @@ export default async function TimesheetsPage({
                       }
                     : null,
                 clockedInByOffice: s.clockInByOffice,
+                clockedOutByOffice: s.clockOutByOffice,
                 // Shown whenever they started outside the radius, not only
                 // when they claimed to be on site - a shift that genuinely
                 // began elsewhere is the case worth reading.

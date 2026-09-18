@@ -54,6 +54,8 @@ export type ShiftDetailData = {
   manualEntry: { by: string; at: string; reason: string } | null;
   /** Set when the office clocked the worker in on their behalf. */
   clockedInByOffice: string | null;
+  /** Set when the office ended the shift for the worker. */
+  clockedOutByOffice: string | null;
   approval: string;
   needsNotes: boolean;
   hasMap: boolean;
@@ -507,6 +509,20 @@ export function ShiftDetail({ data }: { data: ShiftDetailData }) {
                       {data.clockedInByOffice} started this shift on the
                       worker&apos;s behalf, so the start time was stated rather
                       than measured and no clock-in location was recorded.
+                    </p>
+                  </div>
+                )}
+
+                {data.clockedOutByOffice && (
+                  <div className="rounded-xl border border-violet-200 bg-violet-50 p-3">
+                    <div className="flex items-center gap-1 text-sm font-medium text-slate-700">
+                      <Icon name="pan_tool_alt" className="text-[16px] text-violet-600" />
+                      Clocked out by the office
+                    </div>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {data.clockedOutByOffice} ended this shift on the
+                      worker&apos;s behalf, so the finish time was stated rather
+                      than measured and no clock-out location was recorded.
                     </p>
                   </div>
                 )}

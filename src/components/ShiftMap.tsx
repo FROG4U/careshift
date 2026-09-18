@@ -45,11 +45,12 @@ export function ShiftMap({
       mapRef.current = map;
       // Clean, modern, colourful basemap (Carto Voyager) — free, no key.
       L.tileLayer(
-        "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
+        "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
         {
-          subdomains: "abcd",
-          maxZoom: 20,
-          attribution: "© OpenStreetMap © CARTO",
+          // OpenStreetMap asks for this credit; CARTO's free tiles now need a
+          // key and were showing "API KEY REQUIRED" over the map.
+          maxZoom: 19,
+          attribution: "&copy; OpenStreetMap contributors",
         },
       ).addTo(map);
 

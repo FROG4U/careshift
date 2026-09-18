@@ -169,6 +169,9 @@ export async function reportClockProblem(formData: FormData) {
 
 export async function clockIn(formData: FormData) {
   const shift = await workerShift(String(formData.get("shiftId") ?? ""));
+  // A retry after a dropped connection: the first try already went through.
+  if (shift.status === "IN_PROGRESS") return { ok: true };
+  if (shift.status === "COMPLETED") return { error: "This shift is already finished." };
 
   // Block starting a new shift while any earlier shift's notes are >24h overdue.
   const dues = await notesDueFor(shift.tenantId, shift.staffId!);
@@ -241,6 +244,8 @@ export async function clockIn(formData: FormData) {
 
 export async function clockOut(formData: FormData) {
   const shift = await workerShift(String(formData.get("shiftId") ?? ""));
+  // A retry after a dropped connection: the first try already went through.
+  if (shift.status === "COMPLETED") return { ok: true };
   const { lat, lng } = coords(formData);
   const note = String(formData.get("note") ?? "").trim() || null;
   const handover = String(formData.get("handover") ?? "").trim() || null;
