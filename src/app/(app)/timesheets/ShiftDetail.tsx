@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { ShiftMap, type LatLng, type Trip } from "@/components/ShiftMap";
 import { updateShiftDetail, setApproval } from "./actions";
 
@@ -135,6 +136,38 @@ function Stat({
 
 export function ShiftDetail({ data }: { data: ShiftDetailData }) {
   const [open, setOpen] = useState(false);
+  const router = useRouter();
+  const [pending, startTx] = useTransition();
+  // Which button is working, so it can say so and the others can't be pressed.
+  const [busy, setBusy] = useState<"SAVE" | "APPROVED" | "REJECTED" | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  // Approving used to submit a plain form: the panel stayed open and looked
+  // exactly the same afterwards, so there was no way to tell whether it had
+  // worked. Now the panel closes and the row behind it shows the new status.
+  function run(what: "SAVE" | "APPROVED" | "REJECTED", send: () => Promise<unknown>) {
+    setBusy(what);
+    setError(null);
+    startTx(async () => {
+      try {
+        await send();
+        setOpen(false);
+        router.refresh();
+      } catch {
+        // Stay open and say so: closing on a failure would look like success.
+        setError("That didn't save. Check your connection and try again.");
+      } finally {
+        setBusy(null);
+      }
+    });
+  }
+
+  function approval(value: "APPROVED" | "REJECTED") {
+    const fd = new FormData();
+    fd.set("shiftId", data.id);
+    fd.set("approval", value);
+    run(value, () => setApproval(fd));
+  }
 
   useEffect(() => {
     if (!open) return;
@@ -398,7 +431,11 @@ export function ShiftDetail({ data }: { data: ShiftDetailData }) {
 
               {/* Edit form */}
               <form
-                action={updateShiftDetail}
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const fd = new FormData(e.currentTarget);
+                  run("SAVE", () => updateShiftDetail(fd));
+                }}
                 className="space-y-4 rounded-2xl border border-slate-200 p-4"
               >
                 <input type="hidden" name="shiftId" value={data.id} />
@@ -604,29 +641,38 @@ export function ShiftDetail({ data }: { data: ShiftDetailData }) {
                   />
                 </label>
 
-                <button className="w-full rounded-xl bg-[var(--brand)] px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:opacity-90 active:scale-[0.99]">
-                  Save changes
+                <button
+                  disabled={pending}
+                  className="w-full rounded-xl bg-[var(--brand)] px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:opacity-90 active:scale-[0.99] disabled:opacity-60"
+                >
+                  {busy === "SAVE" ? "Saving…" : "Save changes"}
                 </button>
               </form>
+
+              {error && (
+                <p className="rounded-xl bg-red-50 px-3 py-2.5 text-sm font-medium text-red-700">
+                  {error}
+                </p>
+              )}
 
               {/* Approve / reject */}
               {!data.needsNotes && (
                 <div className="flex gap-2.5">
-                  <form action={setApproval} className="flex-1">
-                    <input type="hidden" name="shiftId" value={data.id} />
-                    <input type="hidden" name="approval" value="APPROVED" />
-                    <button className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700">
-                      <Icon name="check_circle" className="text-[18px]" />
-                      Approve shift
-                    </button>
-                  </form>
-                  <form action={setApproval} className="flex-1">
-                    <input type="hidden" name="shiftId" value={data.id} />
-                    <input type="hidden" name="approval" value="REJECTED" />
-                    <button className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-600 transition hover:bg-slate-50">
-                      Reject
-                    </button>
-                  </form>
+                  <button
+                    onClick={() => approval("APPROVED")}
+                    disabled={pending}
+                    className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60"
+                  >
+                    <Icon name="check_circle" className="text-[18px]" />
+                    {busy === "APPROVED" ? "Approving…" : "Approve shift"}
+                  </button>
+                  <button
+                    onClick={() => approval("REJECTED")}
+                    disabled={pending}
+                    className="flex-1 rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 disabled:opacity-60"
+                  >
+                    {busy === "REJECTED" ? "Rejecting…" : "Reject"}
+                  </button>
                 </div>
               )}
             </div>
