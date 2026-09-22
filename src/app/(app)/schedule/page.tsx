@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { requireTenant } from "@/lib/tenant";
+import { requireScope } from "@/lib/tenant";
+import { visibleBranchWhere } from "@/lib/scope";
 import { prisma } from "@/lib/prisma";
 import {
   ScheduleGrid,
@@ -68,7 +69,7 @@ export default async function SchedulePage({
     client?: string;
   }>;
 }) {
-  const { tenant, session } = await requireTenant();
+  const { tenant, session, scope } = await requireScope();
   const { week, branch, from, to, staff: staffFilter, client: clientFilter } =
     await searchParams;
   const isAdmin =
@@ -94,8 +95,10 @@ export default async function SchedulePage({
   const end = addDays(start, dayCount);
   const todayIso = isoDate(new Date());
 
+  // Only the branches this account may see: a branch manager gets their own
+  // tab and nothing else.
   const branchRecords = await prisma.branch.findMany({
-    where: { tenantId: tenant.id },
+    where: { tenantId: tenant.id, ...visibleBranchWhere(scope) },
     orderBy: { createdAt: "asc" },
   });
   const branches = branchRecords.map((b) => ({ id: b.id, name: b.name }));
@@ -170,7 +173,10 @@ export default async function SchedulePage({
       where: {
         tenantId: tenant.id,
         active: true,
-        OR: [{ branchId: selected }, { branchId: null }],
+        // Participants not yet given a branch are head office's to place.
+        ...(scope.all
+          ? { OR: [{ branchId: selected }, { branchId: null }] }
+          : { branchId: selected }),
       },
       orderBy: { firstName: "asc" },
     }),
@@ -268,7 +274,7 @@ export default async function SchedulePage({
         branches={branches}
         selected={selected}
         week={week}
-        isAdmin={isAdmin}
+        isAdmin={isAdmin && scope.all}
       />
 
       {/* Filters: date range, worker, participant */}

@@ -13,6 +13,7 @@ import { AdminBottomNav } from "@/components/AdminBottomNav";
 import { PresenceHeartbeat } from "@/components/PresenceHeartbeat";
 import { UpdateWatcher } from "@/components/UpdateWatcher";
 import { buildId } from "@/lib/buildId";
+import { loadScope, canSeeAnyCharges, opsWhere, opsWhereVia } from "@/lib/scope";
 
 export default async function AppLayout({
   children,
@@ -33,6 +34,14 @@ export default async function AppLayout({
   const adminLevel =
     session.role === "ADMIN" || session.role === "SUPER_ADMIN";
   const superAdmin = session.role === "SUPER_ADMIN";
+  // Which screens their branch access opens (see lib/scope).
+  const scope = await loadScope(session);
+  const access = {
+    payroll: scope.all || scope.finance.length > 0,
+    charges: canSeeAnyCharges(scope, session.role),
+    headOffice: scope.all,
+    workerApp: Boolean(session.staffId),
+  };
 
   // Fetch everything the layout needs in ONE parallel batch. These used to run
   // sequentially — with the DB in Sydney and the app abroad, ~7 round-trips
@@ -62,13 +71,15 @@ export default async function AppLayout({
         tenantId: session.tenantId,
         approval: "PENDING",
         status: "COMPLETED",
+        // Badges count only what this account can open.
+        ...opsWhere(scope),
       },
     }),
     prisma.shiftSwap.count({
-      where: { tenantId: session.tenantId, status: "PENDING" },
+      where: { tenantId: session.tenantId, status: "PENDING", ...opsWhereVia(scope, "shift") },
     }),
     prisma.availability.count({
-      where: { tenantId: session.tenantId, status: "PENDING" },
+      where: { tenantId: session.tenantId, status: "PENDING", ...opsWhereVia(scope, "staff") },
     }),
     totalUnread(session.tenantId, session.id),
     isManager
@@ -94,6 +105,7 @@ export default async function AppLayout({
           where: {
             tenantId: session.tenantId,
             status: { in: ["SUBMITTED", "UNDER_REVIEW"] },
+            ...opsWhere(scope),
           },
         })
       : Promise.resolve(0),
@@ -126,6 +138,7 @@ export default async function AppLayout({
         isManager={isManager}
         isAdmin={adminLevel}
         isSuperAdmin={superAdmin}
+        access={access}
         counts={{
           unreadChat,
           pendingSwaps,

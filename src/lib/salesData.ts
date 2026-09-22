@@ -40,8 +40,10 @@ export async function loadPricedShifts(opts: {
   to: Date;
   clientId?: string;
   branchId?: string;
+  /** Limit to these branches (a branch-restricted account); omitted = all. */
+  branchIds?: string[] | null;
 }): Promise<{ shifts: PricedShift[]; totals: MarginTotals }> {
-  const { tenantId, from, to, clientId, branchId } = opts;
+  const { tenantId, from, to, clientId, branchId, branchIds } = opts;
 
   const [tenant, rawShifts, defaults, holidayRows] = await Promise.all([
     prisma.tenant.findUnique({
@@ -53,7 +55,7 @@ export async function loadPricedShifts(opts: {
         tenantId,
         status: "COMPLETED",
         ...(clientId ? { clientId } : {}),
-        ...(branchId ? { branchId } : {}),
+        ...(branchId ? { branchId } : branchIds ? { branchId: { in: branchIds } } : {}),
         start: { gte: from, lte: to },
       },
       include: {

@@ -243,6 +243,9 @@ model Branch {
   /// Australian state/territory this branch operates in (NSW, VIC, QLD, WA,
   /// SA, TAS, ACT, NT). Public holidays are matched against it.
   state     String?
+  /// Part of head office. "Whole of HQ" on an admin's profile ticks every
+  /// branch with this set; a branch run in its own right (Perth) has it off.
+  hq        Boolean  @default(true)
   createdAt DateTime @default(now())
 
   staff   Staff[]
@@ -251,8 +254,37 @@ model Branch {
   payrollPeriods PayrollPeriod[]
   incidents Incident[]
   broadcasts Broadcast[]
+  access  BranchAccess[]
 
   @@index([tenantId])
+}
+
+/// What one admin account may see of one branch.
+///
+/// Three separate ticks, because the questions are genuinely different: who
+/// runs the roster, who sees the money, and who may message those people. A
+/// branch manager gets rows only for their own branch; head office staff are
+/// usually left on User.allBranches instead.
+model BranchAccess {
+  id       String @id @default(cuid())
+  tenantId String
+  userId   String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  branchId String
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  /// Shifts, participants, workers, timesheets, incidents, leave, swaps.
+  ops     Boolean @default(true)
+  /// Wages, pay runs, participant charges and the money figures on reports.
+  finance Boolean @default(false)
+  /// Chat with, and announcements to, this branch's people.
+  message Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, branchId])
+  @@index([tenantId])
+  @@index([branchId])
 }
 
 /// A pay run for one branch over a date range. Opening it pulls every worker's
@@ -325,6 +357,10 @@ model User {
   phone        String?
   staffId      String?  @unique // set when this account is a support worker
   staff        Staff?   @relation(fields: [staffId], references: [id], onDelete: SetNull)
+  /// True (the default) means this account sees every branch. Set false to
+  /// restrict it to the branches listed in branchAccess - a branch manager who
+  /// must only ever see their own branch's people, shifts and money.
+  allBranches  Boolean  @default(true)
   createdAt    DateTime @default(now())
   /// Last time this user was active in the app (heartbeat while open) — drives
   /// the "Online" presence dot in chat. Online = seen within ~2 minutes.
@@ -339,6 +375,7 @@ model User {
   passwordResets    PasswordReset[]
   broadcastsSent    Broadcast[]          @relation("BroadcastAuthor")
   broadcastsGot     BroadcastRecipient[]
+  branchAccess      BranchAccess[]
 
   @@unique([tenantId, email])
   @@index([tenantId])

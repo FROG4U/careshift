@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { requireTenant } from "@/lib/tenant";
+import { requireScope } from "@/lib/tenant";
 import { prisma } from "@/lib/prisma";
 import { HolidaysClient, type HolidayRow } from "./HolidaysClient";
 
@@ -10,7 +10,9 @@ export default async function HolidaysPage({
 }: {
   searchParams: Promise<{ year?: string; state?: string }>;
 }) {
-  const { tenant, session } = await requireTenant();
+  const { tenant, session , scope } = await requireScope();
+  // Company-wide settings: head office only.
+  if (!scope.all) redirect("/dashboard");
   if (!isManager(session.role)) {
     redirect("/dashboard");
   }

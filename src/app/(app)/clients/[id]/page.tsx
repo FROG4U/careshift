@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { requireTenant } from "@/lib/tenant";
+import { requireScope } from "@/lib/tenant";
+import { opsWhere, canSeeCharges } from "@/lib/scope";
 import { prisma } from "@/lib/prisma";
-import { isManager, isSuperAdmin } from "@/lib/roles";
+import { isManager } from "@/lib/roles";
 import { fmtDate } from "@/lib/format";
 import { budgetFor, loadPricedShifts } from "@/lib/salesData";
 import { aud, aud2, chargeRatesFor } from "@/lib/billing";
@@ -22,14 +23,13 @@ export default async function ClientProfilePage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const { tenant, session } = await requireTenant();
+  const { tenant, session, scope } = await requireScope();
   if (!isManager(session.role)) redirect("/dashboard");
-  const showMoney = isSuperAdmin(session.role);
 
   const { id } = await params;
 
   const client = await prisma.client.findFirst({
-    where: { id, tenantId: tenant.id },
+    where: { id, tenantId: tenant.id, ...opsWhere(scope) },
     include: {
       branch: { select: { name: true, state: true } },
       carePlan: true,
@@ -38,6 +38,9 @@ export default async function ClientProfilePage({
     },
   });
   if (!client) notFound();
+  // Charges for this participant's branch: super admins, or a branch-restricted
+  // account with the Finances tick for it (see lib/scope).
+  const showMoney = canSeeCharges(scope, session.role, client.branchId);
 
   const tz = tzForState(client.branch?.state);
 

@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
-import { requireTenant } from "@/lib/tenant";
+import { requireScope } from "@/lib/tenant";
+import { opsWhere, opsWhereVia } from "@/lib/scope";
 import { prisma } from "@/lib/prisma";
 import { fmtDateTime, initials } from "@/lib/format";
 import {
@@ -12,7 +13,7 @@ import { AttendanceTable, type WorkerRow } from "./AttendanceTable";
 
 import { isManager } from "@/lib/roles";
 export default async function AttendancePage() {
-  const { tenant, session } = await requireTenant();
+  const { tenant, session, scope } = await requireScope();
   if (!isManager(session.role)) {
     redirect("/dashboard");
   }
@@ -28,7 +29,7 @@ export default async function AttendancePage() {
 
   const [staff, notices] = await Promise.all([
     prisma.staff.findMany({
-      where: { tenantId: tenant.id, active: true },
+      where: { tenantId: tenant.id, active: true, ...opsWhere(scope) },
       include: {
         branch: true,
         shifts: {
@@ -48,7 +49,7 @@ export default async function AttendancePage() {
       orderBy: { firstName: "asc" },
     }),
     prisma.lateNotice.findMany({
-      where: { tenantId: tenant.id },
+      where: { tenantId: tenant.id, ...opsWhereVia(scope, "staff") },
       include: { staff: true, shift: { include: { client: true } } },
       orderBy: { createdAt: "desc" },
       take: 50,

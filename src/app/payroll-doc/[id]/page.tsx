@@ -1,5 +1,6 @@
 import { notFound, redirect } from "next/navigation";
-import { requireTenant } from "@/lib/tenant";
+import { requireScope } from "@/lib/tenant";
+import { payrollBranchIds } from "@/lib/scope";
 import { prisma } from "@/lib/prisma";
 import { fmtDate } from "@/lib/format";
 import { money } from "@/lib/payroll";
@@ -22,9 +23,10 @@ export default async function PayrollDoc({
 }) {
   // Outside the (app) layout, so an auth failure would surface as a 500
   // rather than a login prompt.
-  const ctx = await requireTenant().catch(() => null);
+  const ctx = await requireScope().catch(() => null);
   if (!ctx) redirect("/login");
-  const { tenant, session } = ctx;
+  const { tenant, session, scope } = ctx;
+  const allowed = payrollBranchIds(scope);
   if (!isManager(session.role)) {
     redirect("/dashboard");
   }
@@ -33,7 +35,7 @@ export default async function PayrollDoc({
   const { staff: staffFilter } = await searchParams;
 
   const period = await prisma.payrollPeriod.findFirst({
-    where: { id, tenantId: tenant.id },
+    where: { id, tenantId: tenant.id, ...(allowed ? { branchId: { in: allowed } } : {}) },
     include: { branch: true },
   });
   if (!period) notFound();

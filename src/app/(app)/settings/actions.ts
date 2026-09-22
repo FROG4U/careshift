@@ -2,7 +2,7 @@
 
 import { randomInt } from "crypto";
 import { revalidatePath } from "next/cache";
-import { requireTenant } from "@/lib/tenant";
+import { requireScope } from "@/lib/tenant";
 import { prisma } from "@/lib/prisma";
 import { AU_STATES, AGREEMENT_TYPES } from "@/lib/constants";
 import { isAdmin, isManager } from "@/lib/roles";
@@ -22,7 +22,9 @@ function makeJoinCode(name: string) {
  * Admin-only. Rotating it means old codes stop working — hand out the new one.
  */
 export async function generateJoinCode() {
-  const { tenant, session } = await requireTenant();
+  const { tenant, session, scope } = await requireScope();
+  // Company-wide settings affect every branch: head office only.
+  if (!scope.all) return;
   if (!isAdmin(session.role)) return;
 
   // Retry on the (extremely unlikely) unique-collision.
@@ -43,7 +45,9 @@ export async function generateJoinCode() {
 
 /** Turn off self sign-up by clearing the code. Admin-only. */
 export async function clearJoinCode() {
-  const { tenant, session } = await requireTenant();
+  const { tenant, session, scope } = await requireScope();
+  // Company-wide settings affect every branch: head office only.
+  if (!scope.all) return;
   if (!isAdmin(session.role)) return;
   await prisma.tenant.update({
     where: { id: tenant.id },
@@ -53,7 +57,9 @@ export async function clearJoinCode() {
 }
 
 export async function updateBranding(formData: FormData) {
-  const { tenant } = await requireTenant();
+  const { tenant, scope } = await requireScope();
+  // Company-wide settings affect every branch: head office only.
+  if (!scope.all) return;
   const name = String(formData.get("name") ?? "").trim();
   const brandColor = String(formData.get("brandColor") ?? "").trim();
 
@@ -83,12 +89,20 @@ function branchState(formData: FormData): string | null {
 }
 
 export async function createBranch(formData: FormData) {
-  const { tenant, session } = await requireTenant();
+  const { tenant, session, scope } = await requireScope();
+  // Company-wide settings affect every branch: head office only.
+  if (!scope.all) return;
   if (!isAdmin(session.role)) return;
   const name = String(formData.get("name") ?? "").trim();
   if (!name) return;
   await prisma.branch.create({
-    data: { tenantId: tenant.id, name, state: branchState(formData) },
+    data: {
+      tenantId: tenant.id,
+      name,
+      state: branchState(formData),
+      // Part of head office unless it's run separately, like Perth.
+      hq: formData.get("hq") === "on",
+    },
   });
   revalidatePath("/settings");
   revalidatePath("/schedule");
@@ -96,14 +110,16 @@ export async function createBranch(formData: FormData) {
 
 /** Rename a branch and/or set the state driving its timezone + holidays. */
 export async function renameBranch(formData: FormData) {
-  const { tenant, session } = await requireTenant();
+  const { tenant, session, scope } = await requireScope();
+  // Company-wide settings affect every branch: head office only.
+  if (!scope.all) return;
   if (!isAdmin(session.role)) return;
   const id = String(formData.get("id") ?? "");
   const name = String(formData.get("name") ?? "").trim();
   if (!id || !name) return;
   await prisma.branch.updateMany({
     where: { id, tenantId: tenant.id },
-    data: { name, state: branchState(formData) },
+    data: { name, state: branchState(formData), hq: formData.get("hq") === "on" },
   });
   revalidatePath("/settings");
   revalidatePath("/schedule");
@@ -111,7 +127,9 @@ export async function renameBranch(formData: FormData) {
 }
 
 export async function deleteBranch(formData: FormData) {
-  const { tenant, session } = await requireTenant();
+  const { tenant, session, scope } = await requireScope();
+  // Company-wide settings affect every branch: head office only.
+  if (!scope.all) return;
   if (!isAdmin(session.role)) return;
   const id = String(formData.get("id") ?? "");
   // Staff/participants/shifts keep their records; branchId is set null (SetNull).
@@ -122,7 +140,9 @@ export async function deleteBranch(formData: FormData) {
 
 /** Attendance thresholds that drive the worker reliability score. */
 export async function updateAttendanceSettings(formData: FormData) {
-  const { tenant, session } = await requireTenant();
+  const { tenant, session, scope } = await requireScope();
+  // Company-wide settings affect every branch: head office only.
+  if (!scope.all) return;
   if (!isManager(session.role)) return;
 
   const num = (k: string, min: number, max: number, fallback: number) => {
@@ -154,7 +174,9 @@ export async function updateAttendanceSettings(formData: FormData) {
  * any band on their own profile.
  */
 export async function updateChargeDefaults(formData: FormData) {
-  const { tenant, session } = await requireTenant();
+  const { tenant, session, scope } = await requireScope();
+  // Company-wide settings affect every branch: head office only.
+  if (!scope.all) return;
   if (!isAdmin(session.role)) return;
 
   const agreementType = String(formData.get("agreementType") ?? "").trim();
@@ -190,7 +212,9 @@ export async function updateChargeDefaults(formData: FormData) {
 
 /** Superannuation rate used when costing shifts on the Sales screens. */
 export async function updateSuperRate(formData: FormData) {
-  const { tenant, session } = await requireTenant();
+  const { tenant, session, scope } = await requireScope();
+  // Company-wide settings affect every branch: head office only.
+  if (!scope.all) return;
   if (!isAdmin(session.role)) return;
   const pct = Number(String(formData.get("superPct") ?? "").trim());
   if (!Number.isFinite(pct) || pct < 0 || pct > 50) return;
@@ -204,7 +228,9 @@ export async function updateSuperRate(formData: FormData) {
 
 /** Leave & time-off allowances + whether workers see their balance. */
 export async function updateLeaveSettings(formData: FormData) {
-  const { tenant, session } = await requireTenant();
+  const { tenant, session, scope } = await requireScope();
+  // Company-wide settings affect every branch: head office only.
+  if (!scope.all) return;
   if (!isManager(session.role)) return;
 
   const num = (k: string, fallback: number) => {

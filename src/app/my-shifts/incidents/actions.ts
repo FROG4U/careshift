@@ -127,6 +127,7 @@ export async function createIncident(
       : `Incident reported: ${incidentLabel(type)}`,
     body: `${session.name} filed an incident report.`,
     url: `/incidents/${incident.id}`,
+    branchId: incident.branchId,
   });
 
   revalidatePath("/my-shifts/incidents");

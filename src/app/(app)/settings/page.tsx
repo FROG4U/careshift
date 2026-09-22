@@ -1,6 +1,7 @@
+import { redirect } from "next/navigation";
 import Link from "next/link";
 import { headers } from "next/headers";
-import { requireTenant } from "@/lib/tenant";
+import { requireScope } from "@/lib/tenant";
 import { prisma } from "@/lib/prisma";
 import {
   updateBranding,
@@ -20,7 +21,9 @@ const field =
   "mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100";
 
 export default async function SettingsPage() {
-  const { tenant, session } = await requireTenant();
+  const { tenant, session , scope } = await requireScope();
+  // Company-wide settings: head office only.
+  if (!scope.all) redirect("/dashboard");
   const isAdmin =
     session.role === "ADMIN" || session.role === "SUPER_ADMIN";
 
@@ -45,6 +48,7 @@ export default async function SettingsPage() {
     id: b.id,
     name: b.name,
     state: b.state,
+    hq: b.hq,
     staff: b._count.staff,
     clients: b._count.clients,
   }));

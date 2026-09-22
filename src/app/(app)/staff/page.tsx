@@ -1,4 +1,5 @@
-import { requireTenant } from "@/lib/tenant";
+import { requireScope } from "@/lib/tenant";
+import { opsWhere, visibleBranchWhere } from "@/lib/scope";
 import { prisma } from "@/lib/prisma";
 import { CASUAL_LOADING } from "@/lib/constants";
 import {
@@ -16,10 +17,10 @@ function isoDate(d: Date | null) {
 }
 
 export default async function StaffPage() {
-  const { tenant } = await requireTenant();
+  const { tenant, scope } = await requireScope();
   const [staff, levels, branchRecords] = await Promise.all([
     prisma.staff.findMany({
-      where: { tenantId: tenant.id },
+      where: { tenantId: tenant.id, ...opsWhere(scope) },
       include: { payLevel: { include: { rates: true } }, branch: true, rateOverrides: true },
       orderBy: { createdAt: "desc" },
     }),
@@ -29,7 +30,7 @@ export default async function StaffPage() {
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     }),
     prisma.branch.findMany({
-      where: { tenantId: tenant.id },
+      where: { tenantId: tenant.id, ...visibleBranchWhere(scope) },
       orderBy: { name: "asc" },
     }),
   ]);

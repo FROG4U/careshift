@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { requireTenant } from "@/lib/tenant";
+import { requireScope } from "@/lib/tenant";
+import { opsWhere } from "@/lib/scope";
 import { prisma } from "@/lib/prisma";
 import { isManager } from "@/lib/roles";
 import { TaskTemplates } from "./TaskTemplates";
@@ -12,12 +13,12 @@ export default async function ClientTasksPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const { tenant, session } = await requireTenant();
+  const { tenant, session, scope } = await requireScope();
   if (!isManager(session.role)) redirect("/dashboard");
 
   const { id } = await params;
   const client = await prisma.client.findFirst({
-    where: { id, tenantId: tenant.id },
+    where: { id, tenantId: tenant.id, ...opsWhere(scope) },
     select: { id: true, firstName: true, lastName: true },
   });
   if (!client) notFound();

@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
-import { requireTenant } from "@/lib/tenant";
+import { requireScope } from "@/lib/tenant";
+import { canSeeAnyCharges } from "@/lib/scope";
 import { prisma } from "@/lib/prisma";
 import { isSuperAdmin } from "@/lib/roles";
 import { loadPricedShifts, groupTotals } from "@/lib/salesData";
@@ -34,21 +35,23 @@ export default async function SalesDoc({
 }) {
   // These standalone doc pages sit outside the (app) layout, so a thrown
   // "Not authenticated" would surface as a 500 rather than a login prompt.
-  const ctx = await requireTenant().catch(() => null);
+  const ctx = await requireScope().catch(() => null);
   if (!ctx) redirect("/login");
-  const { tenant, session } = ctx;
-  if (!isSuperAdmin(session.role)) redirect("/dashboard");
+  const { tenant, session, scope } = ctx;
+  if (!canSeeAnyCharges(scope, session.role)) redirect("/dashboard");
+  const allowed = isSuperAdmin(session.role) ? null : scope.finance;
 
   const sp = await searchParams;
   const period: PeriodKind = parsePeriod(sp.period);
   const offset = Math.max(0, Math.min(24, Number(sp.offset ?? 0) || 0));
   const clientId = sp.client || undefined;
-  const branchId = sp.branch || undefined;
+  const branchId =
+    sp.branch && (!allowed || allowed.includes(sp.branch)) ? sp.branch : undefined;
   const custom = parseRange(sp.from, sp.to);
   const { from, to } = custom ?? rangeFor(period, offset);
 
   const [{ shifts, totals }, client, branch] = await Promise.all([
-    loadPricedShifts({ tenantId: tenant.id, from, to, clientId, branchId }),
+    loadPricedShifts({ tenantId: tenant.id, from, to, clientId, branchId, branchIds: allowed }),
     clientId
       ? prisma.client.findFirst({
           where: { id: clientId, tenantId: tenant.id },

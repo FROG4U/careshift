@@ -1,7 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireTenant } from "@/lib/tenant";
+import { requireScope } from "@/lib/tenant";
+import { resolveBranch } from "@/lib/scope";
 import { prisma } from "@/lib/prisma";
 import { notifyWorker } from "@/lib/notify";
 
@@ -13,11 +14,14 @@ function assertManager(role: string) {
 
 /** Approve a pending worker: activate their account + Staff record. */
 export async function approveWorker(formData: FormData) {
-  const { tenant, session } = await requireTenant();
+  const { tenant, session, scope } = await requireScope();
+  // A branch manager can only take new workers into their own branch.
+  const resolved = resolveBranch(scope, String(formData.get("branchId") ?? "").trim() || null);
+  if (!resolved.ok) return;
+  const branchId = resolved.branchId;
   if (!assertManager(session.role)) return;
 
   const userId = String(formData.get("userId") ?? "");
-  const branchId = String(formData.get("branchId") ?? "").trim();
   const employmentType = String(formData.get("employmentType") ?? "").trim();
   const payLevelId = String(formData.get("payLevelId") ?? "").trim();
 
@@ -59,7 +63,7 @@ export async function approveWorker(formData: FormData) {
 
 /** Decline a pending worker's sign-up request. */
 export async function rejectWorker(formData: FormData) {
-  const { tenant, session } = await requireTenant();
+  const { tenant, session } = await requireScope();
   if (!assertManager(session.role)) return;
 
   const userId = String(formData.get("userId") ?? "");

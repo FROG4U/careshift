@@ -9,6 +9,8 @@ export type BranchRow = {
   id: string;
   name: string;
   state: string | null;
+  /** Part of head office ("Whole of HQ" on admin profiles covers it). */
+  hq: boolean;
   staff: number;
   clients: number;
 };
@@ -20,6 +22,24 @@ const field =
 function tzLabel(state: string | null) {
   if (!state) return null;
   return STATE_TZ_LABELS[state as keyof typeof STATE_TZ_LABELS] ?? tzForState(state);
+}
+
+/** Whether a branch belongs to head office or is run in its own right. */
+function HqToggle({ defaultChecked = true }: { defaultChecked?: boolean }) {
+  return (
+    <label
+      className="flex items-center gap-1.5 text-xs text-slate-600"
+      title="Untick for a branch run separately by its own manager, like Perth"
+    >
+      <input
+        type="checkbox"
+        name="hq"
+        defaultChecked={defaultChecked}
+        className="h-4 w-4 rounded border-slate-300"
+      />
+      Part of HQ
+    </label>
+  );
 }
 
 function StateSelect({
@@ -58,6 +78,11 @@ export function BranchesManager({ branches }: { branches: BranchRow[] }) {
         <strong> timezone and public holidays</strong> — which decide shift
         penalty rates, so it must be right.
       </p>
+      <p className="mb-4 text-sm text-slate-500">
+        <strong>Part of HQ</strong> groups the branch under head office. Untick it
+        for a branch run by its own manager, like Perth, then give that manager
+        access to just their branch on the Admin page.
+      </p>
 
       {missingState && (
         <p className="mb-4 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
@@ -86,6 +111,7 @@ export function BranchesManager({ branches }: { branches: BranchRow[] }) {
                   className={`${field} flex-1`}
                 />
                 <StateSelect defaultValue={b.state} className="w-28" />
+                <HqToggle defaultChecked={b.hq} />
                 <button className="rounded-lg bg-[var(--brand)] px-3 py-2 text-sm font-semibold text-white">
                   Save
                 </button>
@@ -107,6 +133,13 @@ export function BranchesManager({ branches }: { branches: BranchRow[] }) {
                         {b.state}
                       </span>
                     )}
+                    <span
+                      className={`ml-1.5 rounded px-1.5 py-0.5 text-[11px] font-semibold ${
+                        b.hq ? "bg-[#003146]/10 text-[#003146]" : "bg-amber-100 text-amber-800"
+                      }`}
+                    >
+                      {b.hq ? "HQ" : "Separate branch"}
+                    </span>
                   </div>
                   <div className="text-xs text-slate-400">
                     {b.staff} staff · {b.clients} participants
@@ -144,6 +177,7 @@ export function BranchesManager({ branches }: { branches: BranchRow[] }) {
           className={`${field} flex-1`}
         />
         <StateSelect className="w-28" />
+        <HqToggle />
         <button className="rounded-lg bg-[var(--brand)] px-4 py-2 text-sm font-semibold text-white">
           + Add branch
         </button>

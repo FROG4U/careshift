@@ -1,11 +1,12 @@
 import Link from "next/link";
-import { requireTenant } from "@/lib/tenant";
+import { requireScope } from "@/lib/tenant";
+import { opsWhere } from "@/lib/scope";
 import { prisma } from "@/lib/prisma";
 import { fmtTime, initials } from "@/lib/format";
 import { todayActivity } from "@/lib/activity";
 
 export default async function DashboardPage() {
-  const { tenant, session } = await requireTenant();
+  const { tenant, session, scope } = await requireScope();
 
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
@@ -14,19 +15,20 @@ export default async function DashboardPage() {
 
   const [clientCount, staffCount, todayShifts, activity, pending] =
     await Promise.all([
-      prisma.client.count({ where: { tenantId: tenant.id, active: true } }),
-      prisma.staff.count({ where: { tenantId: tenant.id, active: true } }),
+      prisma.client.count({ where: { tenantId: tenant.id, active: true, ...opsWhere(scope) } }),
+      prisma.staff.count({ where: { tenantId: tenant.id, active: true, ...opsWhere(scope) } }),
       prisma.shift.findMany({
         where: {
           tenantId: tenant.id,
           start: { gte: startOfDay, lt: endOfDay },
+          ...opsWhere(scope),
         },
         include: { client: true, staff: true },
         orderBy: { start: "asc" },
       }),
-      todayActivity(tenant.id),
+      todayActivity(tenant.id, scope.all ? null : scope.ops),
       prisma.shift.count({
-        where: { tenantId: tenant.id, approval: "PENDING", status: "COMPLETED" },
+        where: { tenantId: tenant.id, approval: "PENDING", status: "COMPLETED", ...opsWhere(scope) },
       }),
     ]);
 

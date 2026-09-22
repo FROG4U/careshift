@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requireTenant } from "@/lib/tenant";
+import { requireScope } from "@/lib/tenant";
+import { opsWhere } from "@/lib/scope";
 import { prisma } from "@/lib/prisma";
 import { saveCarePlan, addGoal, toggleGoal, deleteGoal } from "./actions";
 
@@ -40,10 +41,10 @@ export default async function CarePlanPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const { tenant } = await requireTenant();
+  const { tenant, scope } = await requireScope();
 
   const client = await prisma.client.findFirst({
-    where: { id, tenantId: tenant.id },
+    where: { id, tenantId: tenant.id, ...opsWhere(scope) },
     include: {
       carePlan: true,
       careGoals: { orderBy: { createdAt: "asc" } },

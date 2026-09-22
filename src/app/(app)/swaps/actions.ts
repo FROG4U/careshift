@@ -1,7 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireTenant } from "@/lib/tenant";
+import { requireScope } from "@/lib/tenant";
+import { opsWhereVia } from "@/lib/scope";
 import { prisma } from "@/lib/prisma";
 import { notifyWorker } from "@/lib/notify";
 
@@ -20,12 +21,12 @@ function fmtWhen(d: Date) {
 
 /** Approve a swap: reassign the shift to the requested worker. */
 export async function approveSwap(formData: FormData) {
-  const { tenant, session } = await requireTenant();
+  const { tenant, session, scope } = await requireScope();
   if (!isManager(session.role)) return;
 
   const id = str(formData.get("id"));
   const swap = await prisma.shiftSwap.findFirst({
-    where: { id, tenantId: tenant.id, status: "PENDING" },
+    where: { id, tenantId: tenant.id, status: "PENDING", ...opsWhereVia(scope, "shift") },
     include: { shift: { include: { client: true } }, fromStaff: true, toStaff: true },
   });
   if (!swap) return;
@@ -82,12 +83,12 @@ export async function approveSwap(formData: FormData) {
 
 /** Reject a swap: the shift stays with the original worker. */
 export async function rejectSwap(formData: FormData) {
-  const { tenant, session } = await requireTenant();
+  const { tenant, session, scope } = await requireScope();
   if (!isManager(session.role)) return;
 
   const id = str(formData.get("id"));
   const swap = await prisma.shiftSwap.findFirst({
-    where: { id, tenantId: tenant.id, status: "PENDING" },
+    where: { id, tenantId: tenant.id, status: "PENDING", ...opsWhereVia(scope, "shift") },
     include: { shift: { include: { client: true } }, toStaff: true },
   });
   if (!swap) return;

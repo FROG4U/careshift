@@ -1,7 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireTenant } from "@/lib/tenant";
+import { requireScope } from "@/lib/tenant";
+import { opsWhere } from "@/lib/scope";
 import { prisma } from "@/lib/prisma";
 import { isManager } from "@/lib/roles";
 import {
@@ -16,13 +17,13 @@ import { isDayShifted, DAY_MS } from "@/lib/dayShift";
 import { repairShortTrips } from "@/lib/tripRepair";
 
 export async function setApproval(formData: FormData) {
-  const { tenant } = await requireTenant();
+  const { tenant, scope } = await requireScope();
   const shiftId = String(formData.get("shiftId") ?? "");
   const approval = String(formData.get("approval") ?? "");
   if (!["APPROVED", "REJECTED", "PENDING"].includes(approval)) return;
 
   await prisma.shift.updateMany({
-    where: { id: shiftId, tenantId: tenant.id },
+    where: { id: shiftId, tenantId: tenant.id, ...opsWhere(scope) },
     data: { approval },
   });
 
@@ -32,10 +33,10 @@ export async function setApproval(formData: FormData) {
 
 /** Admin edits a shift's clocked times, notes and per-trip mileage. */
 export async function updateShiftDetail(formData: FormData) {
-  const { tenant } = await requireTenant();
+  const { tenant, scope } = await requireScope();
   const shiftId = String(formData.get("shiftId") ?? "");
   const shift = await prisma.shift.findFirst({
-    where: { id: shiftId, tenantId: tenant.id },
+    where: { id: shiftId, tenantId: tenant.id, ...opsWhere(scope) },
     include: { transports: true, branch: { select: { state: true } } },
   });
   if (!shift) return;
@@ -127,7 +128,7 @@ export async function updateShiftDetail(formData: FormData) {
  * always tell stated time from measured time.
  */
 export async function createManualShift(formData: FormData) {
-  const { tenant, session } = await requireTenant();
+  const { tenant, session, scope } = await requireScope();
   if (!isManager(session.role)) return { error: "Managers only." };
 
   const staffId = String(formData.get("staffId") ?? "");
@@ -152,11 +153,11 @@ export async function createManualShift(formData: FormData) {
 
   const [staff, client] = await Promise.all([
     prisma.staff.findFirst({
-      where: { id: staffId, tenantId: tenant.id },
+      where: { id: staffId, tenantId: tenant.id, ...opsWhere(scope) },
       select: { id: true, firstName: true, lastName: true, branchId: true },
     }),
     prisma.client.findFirst({
-      where: { id: clientId, tenantId: tenant.id },
+      where: { id: clientId, tenantId: tenant.id, ...opsWhere(scope) },
       select: { id: true, branchId: true, branch: { select: { state: true } } },
     }),
   ]);
@@ -297,12 +298,12 @@ export async function createManualShift(formData: FormData) {
  * correcting the timesheet underneath it would leave the two disagreeing.
  */
 export async function repairDayShiftedShifts(): Promise<{ fixed: number; skipped: number }> {
-  const { tenant, session } = await requireTenant();
+  const { tenant, session, scope } = await requireScope();
   if (!isManager(session.role)) return { fixed: 0, skipped: 0 };
 
   const [clocked, completedRuns] = await Promise.all([
     prisma.shift.findMany({
-      where: { tenantId: tenant.id, clockInAt: { not: null }, clockOutAt: { not: null } },
+      where: { tenantId: tenant.id, clockInAt: { not: null }, clockOutAt: { not: null }, ...opsWhere(scope) },
       select: { id: true, start: true, end: true, clockInAt: true, clockOutAt: true, branchId: true },
     }),
     prisma.payrollPeriod.findMany({
@@ -345,9 +346,9 @@ export async function repairTripMileage(): Promise<{
   skipped: number;
   kmAdded: number;
 }> {
-  const { tenant, session } = await requireTenant();
+  const { tenant, session, scope } = await requireScope();
   if (!isManager(session.role)) return { fixed: 0, skipped: 0, kmAdded: 0 };
-  const result = await repairShortTrips(tenant.id);
+  const result = await repairShortTrips(tenant.id, scope.all ? null : scope.ops);
   revalidatePath("/timesheets");
   revalidatePath("/payroll");
   return result;

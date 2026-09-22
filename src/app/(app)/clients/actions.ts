@@ -1,7 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireTenant } from "@/lib/tenant";
+import { requireScope } from "@/lib/tenant";
+import { opsWhere, resolveBranch, canFinance } from "@/lib/scope";
 import { prisma } from "@/lib/prisma";
 import { resolveClientCoords } from "@/lib/geocode";
 import { DEFAULT_GEOFENCE_FT } from "@/lib/constants";
@@ -16,14 +17,27 @@ const date = (v: FormDataEntryValue | null) => {
 };
 const str = (v: FormDataEntryValue | null) => String(v ?? "").trim() || null;
 
+/** Charge-rate overrides. Blank = inherit the agreement's default. */
+function chargeFields(formData: FormData) {
+  return {
+    chargeWeekdayDay: num(formData.get("chargeWeekdayDay")),
+    chargeWeekdayEvening: num(formData.get("chargeWeekdayEvening")),
+    chargeWeekdayNight: num(formData.get("chargeWeekdayNight")),
+    chargeSaturday: num(formData.get("chargeSaturday")),
+    chargeSunday: num(formData.get("chargeSunday")),
+    chargePublicHoliday: num(formData.get("chargePublicHoliday")),
+    chargeMileageRate: num(formData.get("chargeMileageRate")),
+  };
+}
+
 /** Archive (deactivate) or restore a participant. Archived participants are
  *  excluded from the schedule (which only lists active clients). */
 export async function setClientArchived(formData: FormData) {
-  const { tenant } = await requireTenant();
+  const { tenant, scope } = await requireScope();
   const id = String(formData.get("id") ?? "");
   const archive = String(formData.get("archive") ?? "") === "true";
   await prisma.client.updateMany({
-    where: { id, tenantId: tenant.id },
+    where: { id, tenantId: tenant.id, ...opsWhere(scope) },
     data: { active: !archive },
   });
   revalidatePath("/clients");
@@ -31,10 +45,16 @@ export async function setClientArchived(formData: FormData) {
 }
 
 export async function createClient(formData: FormData) {
-  const { tenant } = await requireTenant();
+  const { tenant, scope } = await requireScope();
   const firstName = String(formData.get("firstName") ?? "").trim();
   const lastName = String(formData.get("lastName") ?? "").trim();
   if (!firstName || !lastName) return;
+  // A branch manager files participants under their own branch only.
+  const branch = resolveBranch(scope, str(formData.get("branchId")));
+  if (!branch.ok) return;
+  // Head office keeps the charge fields it always had; a branch manager only
+  // writes them with the Finances tick for that branch.
+  const chargesAllowed = scope.all || canFinance(scope, branch.branchId);
 
   // The participant's ADDRESS decides where the clock-in geofence sits, not
   // whoever happened to be at the keyboard.
@@ -62,15 +82,8 @@ export async function createClient(formData: FormData) {
       lat: coords.lat,
       lng: coords.lng,
       geofenceFt: Math.round(num(formData.get("geofenceFt")) ?? DEFAULT_GEOFENCE_FT),
-      branchId: str(formData.get("branchId")),
-      // Charge-rate overrides. Blank = inherit the agreement's default.
-      chargeWeekdayDay: num(formData.get("chargeWeekdayDay")),
-      chargeWeekdayEvening: num(formData.get("chargeWeekdayEvening")),
-      chargeWeekdayNight: num(formData.get("chargeWeekdayNight")),
-      chargeSaturday: num(formData.get("chargeSaturday")),
-      chargeSunday: num(formData.get("chargeSunday")),
-      chargePublicHoliday: num(formData.get("chargePublicHoliday")),
-      chargeMileageRate: num(formData.get("chargeMileageRate")),
+      branchId: branch.branchId,
+      ...(chargesAllowed ? chargeFields(formData) : {}),
     },
   });
 
@@ -78,11 +91,14 @@ export async function createClient(formData: FormData) {
 }
 
 export async function updateClient(formData: FormData) {
-  const { tenant } = await requireTenant();
+  const { tenant, scope } = await requireScope();
   const id = String(formData.get("id") ?? "");
   const firstName = String(formData.get("firstName") ?? "").trim();
   const lastName = String(formData.get("lastName") ?? "").trim();
   if (!id || !firstName || !lastName) return;
+  const branch = resolveBranch(scope, str(formData.get("branchId")));
+  if (!branch.ok) return;
+  const chargesAllowed = scope.all || canFinance(scope, branch.branchId);
 
   // Same rule on edit: the address decides the geofence.
   const address = str(formData.get("address"));
@@ -94,7 +110,7 @@ export async function updateClient(formData: FormData) {
 
   // Scope the update to this tenant so one customer can't edit another's data.
   await prisma.client.updateMany({
-    where: { id, tenantId: tenant.id },
+    where: { id, tenantId: tenant.id, ...opsWhere(scope) },
     data: {
       firstName,
       lastName,
@@ -110,15 +126,8 @@ export async function updateClient(formData: FormData) {
       lat: coords.lat,
       lng: coords.lng,
       geofenceFt: Math.round(num(formData.get("geofenceFt")) ?? DEFAULT_GEOFENCE_FT),
-      branchId: str(formData.get("branchId")),
-      // Charge-rate overrides. Blank = inherit the agreement's default.
-      chargeWeekdayDay: num(formData.get("chargeWeekdayDay")),
-      chargeWeekdayEvening: num(formData.get("chargeWeekdayEvening")),
-      chargeWeekdayNight: num(formData.get("chargeWeekdayNight")),
-      chargeSaturday: num(formData.get("chargeSaturday")),
-      chargeSunday: num(formData.get("chargeSunday")),
-      chargePublicHoliday: num(formData.get("chargePublicHoliday")),
-      chargeMileageRate: num(formData.get("chargeMileageRate")),
+      branchId: branch.branchId,
+      ...(chargesAllowed ? chargeFields(formData) : {}),
     },
   });
 

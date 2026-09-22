@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
-import { requireTenant } from "@/lib/tenant";
+import { requireScope } from "@/lib/tenant";
+import { opsWhere } from "@/lib/scope";
 import { prisma } from "@/lib/prisma";
 import { TeamClient, type TeamMember, type StaffOption } from "./TeamClient";
 
@@ -8,11 +9,11 @@ export default async function TeamPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const { tenant } = await requireTenant();
+  const { tenant, scope } = await requireScope();
   const { id } = await params;
 
   const client = await prisma.client.findFirst({
-    where: { id, tenantId: tenant.id },
+    where: { id, tenantId: tenant.id, ...opsWhere(scope) },
     include: {
       workers: {
         include: { staff: true },
@@ -23,7 +24,7 @@ export default async function TeamPage({
   if (!client) notFound();
 
   const allStaff = await prisma.staff.findMany({
-    where: { tenantId: tenant.id, active: true },
+    where: { tenantId: tenant.id, ...opsWhere(scope), active: true },
     orderBy: { firstName: "asc" },
   });
 

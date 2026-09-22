@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
-import { requireTenant } from "@/lib/tenant";
+import { requireScope } from "@/lib/tenant";
+import { opsWhere } from "@/lib/scope";
 import { prisma } from "@/lib/prisma";
 import { PlanClient, type PlanSlotView, type RateOption } from "./PlanClient";
 
@@ -8,11 +9,11 @@ export default async function PlanPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const { tenant } = await requireTenant();
+  const { tenant, scope } = await requireScope();
   const { id } = await params;
 
   const client = await prisma.client.findFirst({
-    where: { id, tenantId: tenant.id },
+    where: { id, tenantId: tenant.id, ...opsWhere(scope) },
     include: { planSlots: { orderBy: [{ dayOfWeek: "asc" }, { startTime: "asc" }] } },
   });
   if (!client) notFound();

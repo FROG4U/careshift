@@ -357,10 +357,19 @@ function LocationFields({
 export function ParticipantsClient({
   rows,
   branches,
+  financeBranchIds = null,
 }: {
   rows: ParticipantRow[];
   branches: BranchOption[];
+  /**
+   * Branches whose charges this account may see and edit; null means every
+   * branch (head office, unchanged). A branch manager without the Finances
+   * tick never sees or overwrites a participant's charge rates.
+   */
+  financeBranchIds?: string[] | null;
 }) {
+  const chargesFor = (branchId: string) =>
+    financeBranchIds === null || (branchId !== "" && financeBranchIds.includes(branchId));
   // null = closed; otherwise the participant being edited (EMPTY = new).
   const [editing, setEditing] = useState<ParticipantRow | null>(null);
   const [status, setStatus] = useState<"ACTIVE" | "ARCHIVED">("ACTIVE");
@@ -836,6 +845,8 @@ export function ParticipantsClient({
                 </label>
               </div>
 
+              {chargesFor(editing.branchId) && (
+              <>
               {/* ── Charge rates ── */}
               <div className="rounded-xl border border-[var(--border)] bg-[var(--background)] p-3">
                 <div className="text-sm font-semibold text-[var(--text-primary)]">
@@ -899,6 +910,8 @@ export function ParticipantsClient({
                   </label>
                 </div>
               </div>
+              </>
+              )}
               <p className="-mt-1 text-xs text-[var(--text-muted)]">
                 Weekly hours come from the service agreement. The roster will not
                 exceed this without manager authorisation.

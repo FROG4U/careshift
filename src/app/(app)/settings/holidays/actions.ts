@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireTenant } from "@/lib/tenant";
+import { requireScope } from "@/lib/tenant";
 import { prisma } from "@/lib/prisma";
 import { AU_STATES } from "@/lib/constants";
 import { calendarDateFromKey } from "@/lib/timezone";
@@ -10,8 +10,9 @@ import { isManager } from "@/lib/roles";
 const str = (v: FormDataEntryValue | null) => String(v ?? "").trim();
 
 async function requireManager() {
-  const ctx = await requireTenant();
-  if (!isManager(ctx.session.role)) {
+  const ctx = await requireScope();
+  // Holidays apply company-wide: head office only.
+  if (!isManager(ctx.session.role) || !ctx.scope.all) {
     throw new Error("Not authorised");
   }
   return ctx;

@@ -1,16 +1,17 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireTenant } from "@/lib/tenant";
+import { requireScope } from "@/lib/tenant";
+import { opsWhereVia } from "@/lib/scope";
 import { prisma } from "@/lib/prisma";
 import { notifyWorker } from "@/lib/notify";
 
 async function decide(id: string, status: "APPROVED" | "REJECTED") {
-  const { session, tenant } = await requireTenant();
+  const { session, tenant, scope } = await requireScope();
   if (session.role === "WORKER") return;
 
   const a = await prisma.availability.findFirst({
-    where: { id, tenantId: tenant.id },
+    where: { id, tenantId: tenant.id, ...opsWhereVia(scope, "staff") },
   });
   if (!a) return;
 
@@ -32,7 +33,7 @@ async function decide(id: string, status: "APPROVED" | "REJECTED") {
 
 /** Admin fully edits a time-off request (dates, type, reason). */
 export async function editAvailability(formData: FormData) {
-  const { session, tenant } = await requireTenant();
+  const { session, tenant, scope } = await requireScope();
   if (session.role === "WORKER") return;
 
   const id = String(formData.get("id") ?? "");
@@ -46,7 +47,7 @@ export async function editAvailability(formData: FormData) {
   if (!startDate) return;
 
   const a = await prisma.availability.findFirst({
-    where: { id, tenantId: tenant.id },
+    where: { id, tenantId: tenant.id, ...opsWhereVia(scope, "staff") },
   });
   if (!a) return;
 

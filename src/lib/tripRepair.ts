@@ -30,7 +30,7 @@ export type ShortTrip = {
 
 export async function findShortTrips(
   tenantId: string,
-  opts: { shiftIds?: string[] } = {},
+  opts: { shiftIds?: string[]; branchIds?: string[] | null } = {},
 ): Promise<ShortTrip[]> {
   if (opts.shiftIds && opts.shiftIds.length === 0) return [];
   const trips = await prisma.transport.findMany({
@@ -40,6 +40,7 @@ export async function findShortTrips(
       shift: {
         tenantId,
         ...(opts.shiftIds ? { id: { in: opts.shiftIds } } : {}),
+        ...(opts.branchIds ? { branchId: { in: opts.branchIds } } : {}),
       },
     },
     select: {
@@ -82,9 +83,10 @@ export async function findShortTrips(
  */
 export async function repairShortTrips(
   tenantId: string,
+  branchIds: string[] | null = null,
 ): Promise<{ fixed: number; skipped: number; kmAdded: number }> {
   const [short, completedRuns] = await Promise.all([
-    findShortTrips(tenantId),
+    findShortTrips(tenantId, { branchIds }),
     prisma.payrollPeriod.findMany({
       where: { tenantId, status: "APPROVED" },
       select: { branchId: true, startDate: true, endDate: true },

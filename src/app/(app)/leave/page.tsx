@@ -1,4 +1,5 @@
-import { requireTenant } from "@/lib/tenant";
+import { requireScope } from "@/lib/tenant";
+import { opsWhereVia } from "@/lib/scope";
 import { prisma } from "@/lib/prisma";
 import { fmtDate, initials } from "@/lib/format";
 import { LEAVE_LABELS } from "@/lib/leave";
@@ -35,10 +36,10 @@ function label(a: {
 }
 
 export default async function LeavePage() {
-  const { tenant } = await requireTenant();
+  const { tenant, scope } = await requireScope();
 
   const requests = await prisma.availability.findMany({
-    where: { tenantId: tenant.id },
+    where: { tenantId: tenant.id, ...opsWhereVia(scope, "staff") },
     include: { staff: true },
     orderBy: [{ status: "asc" }, { startDate: "desc" }],
     take: 80,

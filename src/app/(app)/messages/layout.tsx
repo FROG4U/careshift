@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
+import { messageableWhere } from "@/lib/messaging";
 import { prisma } from "@/lib/prisma";
 import { conversationTitle } from "@/lib/chat";
 import { isOnline } from "@/lib/presence";
@@ -68,9 +69,15 @@ export default async function MessagesLayout({
   );
   convos.sort((a, b) => b.lastAt.localeCompare(a.lastAt));
 
-  // Directory for starting new chats (everyone but me).
+  // Directory for starting new chats: the people they may message (see
+  // lib/messaging) - their own branches for a branch manager.
   const users = await prisma.user.findMany({
-    where: { tenantId: session.tenantId, id: { not: session.id } },
+    where: {
+      tenantId: session.tenantId,
+      id: { not: session.id },
+      status: "APPROVED",
+      ...(await messageableWhere(session)),
+    },
     select: { id: true, name: true, role: true },
     orderBy: { name: "asc" },
   });

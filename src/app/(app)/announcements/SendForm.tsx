@@ -13,11 +13,14 @@ import { sendBroadcast } from "./actions";
  */
 export function SendForm({
   branches,
+  allowAllBranches = true,
   canMessageAdmins,
   tenantName,
   fromLabels,
 }: {
   branches: { id: string; name: string }[];
+  /** False for a branch manager: they only ever reach their own branch. */
+  allowAllBranches?: boolean;
   canMessageAdmins: boolean;
   tenantName: string;
   fromLabels: string[];
@@ -75,7 +78,7 @@ export function SendForm({
             disabled={audience === "ADMINS"}
             className={`${field} disabled:opacity-50`}
           >
-            <option value="">All branches</option>
+            {allowAllBranches && <option value="">All branches</option>}
             {branches.map((b) => (
               <option key={b.id} value={b.id}>
                 {b.name}

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { requireTenant } from "@/lib/tenant";
+import { requireScope } from "@/lib/tenant";
+import { payrollBranchIds } from "@/lib/scope";
 import { prisma } from "@/lib/prisma";
 import { fmtDate } from "@/lib/format";
 import { money } from "@/lib/payroll";
@@ -27,7 +28,8 @@ export default async function CombinedPayRunPage({
 }: {
   searchParams: Promise<{ ids?: string }>;
 }) {
-  const { tenant, session } = await requireTenant();
+  const { tenant, session, scope } = await requireScope();
+  const allowed = payrollBranchIds(scope);
   if (!isManager(session.role)) redirect("/dashboard");
 
   const { ids } = await searchParams;
@@ -36,7 +38,11 @@ export default async function CombinedPayRunPage({
     .map((s) => s.trim())
     .filter(Boolean);
   const runs = await prisma.payrollPeriod.findMany({
-    where: { tenantId: tenant.id, id: { in: wanted }, branchId: { not: null } },
+    where: {
+      tenantId: tenant.id,
+      id: { in: wanted },
+      branchId: allowed ? { in: allowed } : { not: null },
+    },
     include: { branch: { select: { name: true } } },
   });
   if (runs.length === 0) notFound();

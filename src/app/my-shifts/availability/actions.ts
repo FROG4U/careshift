@@ -64,8 +64,13 @@ export async function addAvailability(
     },
   });
 
+  const mine = await prisma.staff.findUnique({
+    where: { id: session.staffId },
+    select: { branchId: true },
+  });
   await notifyManagers({
     tenantId: session.tenantId,
+    branchId: mine?.branchId ?? null,
     type: "AVAILABILITY",
     title: "Time-off request",
     body: `${session.name} requested time off — needs your approval.`,

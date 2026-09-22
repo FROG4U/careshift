@@ -1,16 +1,17 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireTenant } from "@/lib/tenant";
+import { requireScope } from "@/lib/tenant";
+import { opsWhere } from "@/lib/scope";
 import { prisma } from "@/lib/prisma";
 
 const str = (v: FormDataEntryValue | null) => String(v ?? "").trim() || null;
 
 /** Confirm the participant belongs to the signed-in tenant. */
 async function ownClient(clientId: string) {
-  const { tenant } = await requireTenant();
+  const { tenant, scope } = await requireScope();
   const client = await prisma.client.findFirst({
-    where: { id: clientId, tenantId: tenant.id },
+    where: { id: clientId, tenantId: tenant.id, ...opsWhere(scope) },
   });
   if (!client) throw new Error("Participant not found");
   return { tenant, client };

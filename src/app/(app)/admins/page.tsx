@@ -8,6 +8,8 @@ import { CopyLink } from "./CopyLink";
 import { AdminRowActions } from "./AdminRowActions";
 import { InviteForm } from "./InviteForm";
 import { RemovedAdmins } from "./RemovedAdmins";
+import { BranchPermissions } from "./BranchPermissions";
+import { PromoteWorker } from "./PromoteWorker";
 import {
   revokeInvite,
   approveAdmin,
@@ -53,7 +55,7 @@ export default async function AdminsPage() {
     );
   }
 
-  const [admins, pendingAdmins, invites, removedAdmins] = await Promise.all([
+  const [admins, pendingAdmins, invites, removedAdmins, branches, workers] = await Promise.all([
     prisma.user.findMany({
       where: {
         tenantId: tenant.id,
@@ -61,7 +63,17 @@ export default async function AdminsPage() {
         status: "APPROVED",
       },
       orderBy: [{ role: "asc" }, { name: "asc" }],
-      select: { id: true, name: true, email: true, role: true },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        allBranches: true,
+        staffId: true,
+        branchAccess: {
+          select: { branchId: true, ops: true, finance: true, message: true },
+        },
+      },
     }),
     prisma.user.findMany({
       where: {
@@ -84,6 +96,16 @@ export default async function AdminsPage() {
       },
       orderBy: { name: "asc" },
       select: { id: true, name: true, email: true },
+    }),
+    prisma.branch.findMany({
+      where: { tenantId: tenant.id },
+      orderBy: [{ hq: "desc" }, { createdAt: "asc" }],
+      select: { id: true, name: true, state: true, hq: true },
+    }),
+    prisma.user.findMany({
+      where: { tenantId: tenant.id, role: "WORKER", status: "APPROVED", staffId: { not: null } },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, staff: { select: { branch: { select: { name: true } } } } },
     }),
   ]);
 
@@ -177,6 +199,14 @@ export default async function AdminsPage() {
         </section>
       )}
 
+      <PromoteWorker
+        workers={workers.map((w) => ({
+          id: w.id,
+          name: w.name,
+          branch: w.staff?.branch?.name ?? null,
+        }))}
+      />
+
       {/* Current admins */}
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <h2 className="text-sm font-bold text-slate-900">Current admins</h2>
@@ -198,7 +228,14 @@ export default async function AdminsPage() {
                       </span>
                     )}
                   </p>
-                  <p className="text-xs text-slate-500">{u.email}</p>
+                  <p className="text-xs text-slate-500">
+                    {u.email}
+                    {u.staffId && (
+                      <span className="ml-2 rounded bg-emerald-50 px-1.5 py-0.5 text-[11px] font-semibold text-emerald-700">
+                        Also works shifts
+                      </span>
+                    )}
+                  </p>
                 </div>
                 <div className="flex items-center gap-3">
                   <span
@@ -224,9 +261,19 @@ export default async function AdminsPage() {
                     </form>
                   )}
                   {!isMe && (
-                    <AdminRowActions userId={u.id} name={u.name} />
+                    <AdminRowActions userId={u.id} name={u.name} worksShifts={Boolean(u.staffId)} />
                   )}
                 </div>
+                {/* Which branches this admin may see. Super admins see all. */}
+                {!isSuper && (
+                  <BranchPermissions
+                    userId={u.id}
+                    name={u.name.split(" ")[0]}
+                    allBranches={u.allBranches}
+                    branches={branches}
+                    access={u.branchAccess}
+                  />
+                )}
               </div>
             );
           })}

@@ -1,7 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireTenant } from "@/lib/tenant";
+import { requireScope } from "@/lib/tenant";
+import { opsWhere, opsWhereVia, type BranchScope } from "@/lib/scope";
 import { prisma } from "@/lib/prisma";
 
 const str = (v: FormDataEntryValue | null) => String(v ?? "").trim();
@@ -19,14 +20,14 @@ function weekStart(d: Date) {
   return date;
 }
 
-async function ownsClient(tenantId: string, clientId: string) {
-  return prisma.client.findFirst({ where: { id: clientId, tenantId } });
+async function ownsClient(tenantId: string, clientId: string, scope: BranchScope) {
+  return prisma.client.findFirst({ where: { id: clientId, tenantId, ...opsWhere(scope) } });
 }
 
 export async function addPlanSlot(formData: FormData) {
-  const { tenant } = await requireTenant();
+  const { tenant, scope } = await requireScope();
   const clientId = str(formData.get("clientId"));
-  if (!(await ownsClient(tenant.id, clientId))) return;
+  if (!(await ownsClient(tenant.id, clientId, scope))) return;
 
   const dayOfWeek = Number(str(formData.get("dayOfWeek")));
   const startTime = str(formData.get("startTime"));
@@ -49,13 +50,13 @@ export async function addPlanSlot(formData: FormData) {
 }
 
 export async function updatePlanSlot(formData: FormData) {
-  const { tenant } = await requireTenant();
+  const { tenant, scope } = await requireScope();
   const id = str(formData.get("id"));
   const clientId = str(formData.get("clientId"));
   if (!id) return;
 
   await prisma.planSlot.updateMany({
-    where: { id, tenantId: tenant.id },
+    where: { id, tenantId: tenant.id, ...opsWhereVia(scope, "client") },
     data: {
       dayOfWeek: Number(str(formData.get("dayOfWeek"))),
       startTime: str(formData.get("startTime")),
@@ -69,10 +70,12 @@ export async function updatePlanSlot(formData: FormData) {
 }
 
 export async function deletePlanSlot(formData: FormData) {
-  const { tenant } = await requireTenant();
+  const { tenant, scope } = await requireScope();
   const id = str(formData.get("id"));
   const clientId = str(formData.get("clientId"));
-  await prisma.planSlot.deleteMany({ where: { id, tenantId: tenant.id } });
+  await prisma.planSlot.deleteMany({
+    where: { id, tenantId: tenant.id, ...opsWhereVia(scope, "client") },
+  });
   revalidatePath(`/clients/${clientId}/plan`);
 }
 
@@ -82,9 +85,9 @@ export async function deletePlanSlot(formData: FormData) {
  * Skips slots that already have a matching shift so it's safe to re-run.
  */
 export async function generateRoster(formData: FormData) {
-  const { tenant } = await requireTenant();
+  const { tenant, scope } = await requireScope();
   const clientId = str(formData.get("clientId"));
-  const client = await ownsClient(tenant.id, clientId);
+  const client = await ownsClient(tenant.id, clientId, scope);
   if (!client) return;
 
   const weekISO = str(formData.get("week"));
@@ -116,6 +119,9 @@ export async function generateRoster(formData: FormData) {
       data: {
         tenantId: tenant.id,
         clientId,
+        // Filed under the participant's branch, so it appears in that
+        // branch's schedule and pay run instead of nobody's.
+        branchId: client.branchId,
         start,
         end,
         address: client.address ?? null,

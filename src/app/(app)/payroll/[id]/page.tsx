@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { requireTenant } from "@/lib/tenant";
+import { requireScope } from "@/lib/tenant";
+import { payrollBranchIds } from "@/lib/scope";
 import { prisma } from "@/lib/prisma";
 import { fmtDate } from "@/lib/format";
 import { money } from "@/lib/payroll";
@@ -19,7 +20,8 @@ export default async function PayrollReportPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ print?: string }>;
 }) {
-  const { tenant, session } = await requireTenant();
+  const { tenant, session, scope } = await requireScope();
+  const allowed = payrollBranchIds(scope);
   if (!isManager(session.role)) {
     redirect("/dashboard");
   }
@@ -31,7 +33,7 @@ export default async function PayrollReportPage({
   const printMode = print != null;
   const printStaff = print && print !== "all" ? print : null;
   const period = await prisma.payrollPeriod.findFirst({
-    where: { id, tenantId: tenant.id },
+    where: { id, tenantId: tenant.id, ...(allowed ? { branchId: { in: allowed } } : {}) },
     include: { branch: true },
   });
   if (!period) notFound();

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { requireTenant } from "@/lib/tenant";
+import { requireScope } from "@/lib/tenant";
+import { canSeeAnyCharges } from "@/lib/scope";
 import { prisma } from "@/lib/prisma";
 import { isSuperAdmin } from "@/lib/roles";
 import { loadPricedShifts, groupTotals } from "@/lib/salesData";
@@ -37,28 +38,33 @@ export default async function SalesPage({
     to?: string;
   }>;
 }) {
-  const { tenant, session } = await requireTenant();
-  if (!isSuperAdmin(session.role)) redirect("/dashboard");
+  const { tenant, session, scope } = await requireScope();
+  // Super admins, or a branch-restricted account with a Finances tick.
+  if (!canSeeAnyCharges(scope, session.role)) redirect("/dashboard");
+  // Which branches' money they may see: all for super admins.
+  const allowed = isSuperAdmin(session.role) ? null : scope.finance;
 
   const sp = await searchParams;
   const period: PeriodKind = parsePeriod(sp.period);
   const offset = Math.max(0, Math.min(24, Number(sp.offset ?? 0) || 0));
   const clientId = sp.client || undefined;
-  const branchId = sp.branch || undefined;
+  // A branch they can't see is ignored rather than trusted from the URL.
+  const branchId =
+    sp.branch && (!allowed || allowed.includes(sp.branch)) ? sp.branch : undefined;
 
   // A typed from/to wins over the week/month/year presets.
   const custom = parseRange(sp.from, sp.to);
   const { from, to } = custom ?? rangeFor(period, offset);
 
   const [{ shifts, totals }, clients, branches] = await Promise.all([
-    loadPricedShifts({ tenantId: tenant.id, from, to, clientId, branchId }),
+    loadPricedShifts({ tenantId: tenant.id, from, to, clientId, branchId, branchIds: allowed }),
     prisma.client.findMany({
-      where: { tenantId: tenant.id },
+      where: { tenantId: tenant.id, ...(allowed ? { branchId: { in: allowed } } : {}) },
       select: { id: true, firstName: true, lastName: true },
       orderBy: { firstName: "asc" },
     }),
     prisma.branch.findMany({
-      where: { tenantId: tenant.id },
+      where: { tenantId: tenant.id, ...(allowed ? { id: { in: allowed } } : {}) },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),

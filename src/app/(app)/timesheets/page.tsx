@@ -1,4 +1,5 @@
-import { requireTenant } from "@/lib/tenant";
+import { requireScope } from "@/lib/tenant";
+import { opsWhere } from "@/lib/scope";
 import { prisma } from "@/lib/prisma";
 import { fmtDate, fmtTime, initials } from "@/lib/format";
 import { kmOf, netHoursOf } from "@/lib/payroll";
@@ -39,7 +40,7 @@ export default async function TimesheetsPage({
     staff?: string;
   }>;
 }) {
-  const { tenant } = await requireTenant();
+  const { tenant, scope } = await requireScope();
   const { q, from, to, month, client, staff } = await searchParams;
   const query = (q ?? "").trim().toLowerCase();
 
@@ -72,6 +73,7 @@ export default async function TimesheetsPage({
     where: {
       tenantId: tenant.id,
       status: "COMPLETED",
+      ...opsWhere(scope),
       ...(client ? { clientId: client } : {}),
       ...(staff ? { staffId: staff } : {}),
       ...(start || end
@@ -123,12 +125,12 @@ export default async function TimesheetsPage({
   // Dropdown options for the participant / worker filters.
   const [clientOptions, staffOptions] = await Promise.all([
     prisma.client.findMany({
-      where: { tenantId: tenant.id },
+      where: { tenantId: tenant.id, ...opsWhere(scope) },
       select: { id: true, firstName: true, lastName: true },
       orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
     }),
     prisma.staff.findMany({
-      where: { tenantId: tenant.id },
+      where: { tenantId: tenant.id, ...opsWhere(scope) },
       select: { id: true, firstName: true, lastName: true },
       orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
     }),
@@ -137,7 +139,7 @@ export default async function TimesheetsPage({
   // Clock times the old edit form saved a day early (see lib/dayShift).
   const dayShifted = (
     await prisma.shift.findMany({
-      where: { tenantId: tenant.id, clockInAt: { not: null }, clockOutAt: { not: null } },
+      where: { tenantId: tenant.id, clockInAt: { not: null }, clockOutAt: { not: null }, ...opsWhere(scope) },
       select: {
         id: true,
         start: true,
@@ -152,7 +154,9 @@ export default async function TimesheetsPage({
   ).filter(isDayShifted);
 
   // Trips saved shorter than their own GPS trail (see lib/tripRepair).
-  const shortTrips = await findShortTrips(tenant.id);
+  const shortTrips = await findShortTrips(tenant.id, {
+    branchIds: scope.all ? null : scope.ops,
+  });
 
   // The shift-notes PDF inherits whatever the page is currently filtered to.
   const notesParams = new URLSearchParams();

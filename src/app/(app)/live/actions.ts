@@ -1,7 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireTenant } from "@/lib/tenant";
+import { requireScope } from "@/lib/tenant";
+import { opsWhere } from "@/lib/scope";
 import { prisma } from "@/lib/prisma";
 import { isManager } from "@/lib/roles";
 import { tzForState, zonedTimeToUtc, dateKeyInTz, addDaysInTz } from "@/lib/timezone";
@@ -20,14 +21,14 @@ import { finaliseTripKm } from "@/lib/tripDistance";
  * The office can override it when they genuinely started late.
  */
 export async function officeClockIn(formData: FormData) {
-  const { tenant, session } = await requireTenant();
+  const { tenant, session, scope } = await requireScope();
   if (!isManager(session.role)) return { error: "Managers only." };
 
   const shiftId = String(formData.get("shiftId") ?? "");
   const startTime = String(formData.get("startTime") ?? "").trim();
 
   const shift = await prisma.shift.findFirst({
-    where: { id: shiftId, tenantId: tenant.id },
+    where: { id: shiftId, tenantId: tenant.id, ...opsWhere(scope) },
     select: {
       id: true,
       start: true,
@@ -88,14 +89,14 @@ export async function officeClockIn(formData: FormData) {
  * Defaults to the rostered finish, or now if that hasn't come yet.
  */
 export async function officeClockOut(formData: FormData) {
-  const { tenant, session } = await requireTenant();
+  const { tenant, session, scope } = await requireScope();
   if (!isManager(session.role)) return { error: "Managers only." };
 
   const shiftId = String(formData.get("shiftId") ?? "");
   const endTime = String(formData.get("endTime") ?? "").trim();
 
   const shift = await prisma.shift.findFirst({
-    where: { id: shiftId, tenantId: tenant.id },
+    where: { id: shiftId, tenantId: tenant.id, ...opsWhere(scope) },
     select: {
       id: true,
       start: true,

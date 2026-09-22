@@ -8,6 +8,7 @@ import { getSession } from "@/lib/auth";
 import { requireTenant } from "@/lib/tenant";
 import { prisma } from "@/lib/prisma";
 import { notifyUser } from "@/lib/notify";
+import { messageableWhere } from "@/lib/messaging";
 
 const str = (v: FormDataEntryValue | null) => String(v ?? "").trim();
 
@@ -28,7 +29,7 @@ export async function startDirect(
   if (!otherId || otherId === session.id) return null;
 
   const other = await prisma.user.findFirst({
-    where: { id: otherId, tenantId: tenant.id },
+    where: { id: otherId, tenantId: tenant.id, ...(await messageableWhere(session)) },
   });
   if (!other) return null;
 
@@ -69,7 +70,7 @@ export async function createGroup(formData: FormData): Promise<string | null> {
 
   const ids = [...new Set([session.id, ...memberIds])];
   const valid = await prisma.user.findMany({
-    where: { id: { in: ids }, tenantId: tenant.id },
+    where: { id: { in: ids }, tenantId: tenant.id, ...(await messageableWhere(session)) },
     select: { id: true },
   });
 
@@ -315,7 +316,7 @@ export async function addGroupMembers(formData: FormData) {
   if (!convo) return;
 
   const valid = await prisma.user.findMany({
-    where: { id: { in: userIds }, tenantId: tenant.id },
+    where: { id: { in: userIds }, tenantId: tenant.id, ...(await messageableWhere(session)) },
     select: { id: true },
   });
 

@@ -23,6 +23,14 @@ type Item = {
   managerOnly?: boolean;
   adminOnly?: boolean;
   superAdminOnly?: boolean;
+  /** Needs pay access: head office, or a Finances tick (see lib/scope). */
+  needsPayroll?: boolean;
+  /** Needs participant charges: super admins, or a Finances tick. */
+  needsCharges?: boolean;
+  /** Company-wide screens a branch manager doesn't get. */
+  headOfficeOnly?: boolean;
+  /** Only for an admin who also works shifts. */
+  needsWorkerApp?: boolean;
 };
 
 type Group = { title: string; items: Item[] };
@@ -52,8 +60,8 @@ const GROUPS: Group[] = [
       { href: "/leave", label: "Availability", icon: "event_busy", badgeKey: "pendingLeave" },
       { href: "/incidents", label: "Incident Records", icon: "report", badgeKey: "openIncidents", managerOnly: true },
       { href: "/attendance", label: "Attendance", icon: "fact_check", managerOnly: true },
-      { href: "/payroll", label: "Payroll Period", icon: "payments", managerOnly: true },
-      { href: "/sales", label: "Sales & Profit", icon: "trending_up", superAdminOnly: true },
+      { href: "/payroll", label: "Payroll Period", icon: "payments", managerOnly: true, needsPayroll: true },
+      { href: "/sales", label: "Sales & Profit", icon: "trending_up", needsCharges: true },
     ],
   },
   {
@@ -67,8 +75,9 @@ const GROUPS: Group[] = [
     title: "Account",
     items: [
       { href: "/admins", label: "Admin", icon: "shield_person", badgeKey: "pendingAdmins", adminOnly: true },
+      { href: "/my-shifts", label: "My Shifts", icon: "punch_clock", needsWorkerApp: true },
       { href: "/guide", label: "Worker Guide", icon: "menu_book" },
-      { href: "/settings", label: "Settings", icon: "settings" },
+      { href: "/settings", label: "Settings", icon: "settings", headOfficeOnly: true },
     ],
   },
 ];
@@ -81,6 +90,7 @@ export function AdminSidebar({
   isManager,
   isAdmin,
   isSuperAdmin,
+  access = { payroll: true, charges: false, headOffice: true, workerApp: false },
   counts,
   logout,
 }: {
@@ -91,6 +101,7 @@ export function AdminSidebar({
   isManager: boolean;
   isAdmin: boolean;
   isSuperAdmin: boolean;
+  access?: { payroll: boolean; charges: boolean; headOffice: boolean; workerApp: boolean };
   counts: SidebarCounts;
   logout: (formData: FormData) => void;
 }) {
@@ -154,7 +165,11 @@ export function AdminSidebar({
             (i) =>
               (!i.managerOnly || isManager) &&
               (!i.adminOnly || isAdmin) &&
-              (!i.superAdminOnly || isSuperAdmin),
+              (!i.superAdminOnly || isSuperAdmin) &&
+              (!i.needsPayroll || access.payroll) &&
+              (!i.needsCharges || access.charges) &&
+              (!i.headOfficeOnly || access.headOffice) &&
+              (!i.needsWorkerApp || access.workerApp),
           );
           if (items.length === 0) return null;
           const isCollapsed = collapsed.has(group.title);

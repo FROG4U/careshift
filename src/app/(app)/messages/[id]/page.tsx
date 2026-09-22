@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { messageableWhere } from "@/lib/messaging";
 import { conversationTitle } from "@/lib/chat";
 import { ROLE_LABELS, type Role } from "@/lib/constants";
 import { isOnline, presenceLabel } from "@/lib/presence";
@@ -58,9 +59,13 @@ export default async function ThreadPage({
     data: { lastReadAt: new Date() },
   });
 
-  // Everyone in the tenant, for adding people to a group.
+  // People they may add to a group (see lib/messaging).
   const directoryRows = await prisma.user.findMany({
-    where: { tenantId: session.tenantId, status: "APPROVED" },
+    where: {
+      tenantId: session.tenantId,
+      status: "APPROVED",
+      ...(await messageableWhere(session)),
+    },
     select: { id: true, name: true, role: true },
     orderBy: { name: "asc" },
   });

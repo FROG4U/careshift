@@ -1,7 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireTenant } from "@/lib/tenant";
+import { requireScope } from "@/lib/tenant";
+import { canFinance, payrollBranchIds, type BranchScope } from "@/lib/scope";
 import { prisma } from "@/lib/prisma";
 import { isManager } from "@/lib/roles";
 import { fmtDate } from "@/lib/format";
@@ -13,13 +14,25 @@ import { tzForState, zonedTimeToUtc } from "@/lib/timezone";
 
 const str = (v: FormDataEntryValue | null) => String(v ?? "").trim();
 
-/** Payroll is manager-only - workers must never reach these actions. */
+/**
+ * Payroll is manager-only - workers must never reach these actions - and a
+ * branch-restricted manager only handles the branches they have the Finances
+ * tick for (see lib/scope).
+ */
 async function requireManager() {
-  const ctx = await requireTenant();
+  const ctx = await requireScope();
   if (!isManager(ctx.session.role)) {
     throw new Error("Not authorised");
   }
+  if (!ctx.scope.all && ctx.scope.finance.length === 0) {
+    throw new Error("Not authorised");
+  }
   return ctx;
+}
+
+/** A run this account may act on: its branch is one they handle pay for. */
+function mayHandle(scope: BranchScope, branchId: string | null) {
+  return canFinance(scope, branchId);
 }
 
 export type CreateRunResult = { error?: string; created?: number; skipped?: string[] };
@@ -38,15 +51,16 @@ export type CreateRunResult = { error?: string; created?: number; skipped?: stri
  * after midnight into the wrong pay run.
  */
 export async function createPayrollPeriod(formData: FormData): Promise<CreateRunResult> {
-  const { tenant } = await requireManager();
+  const { tenant, scope: access } = await requireManager();
   const from = str(formData.get("from"));
   const to = str(formData.get("to"));
   const scope = str(formData.get("scope"));
   if (!from || !to) return { error: "Choose both dates." };
   if (to < from) return { error: "The end date must be on or after the start date." };
 
+  const allowed = payrollBranchIds(access);
   const branches = await prisma.branch.findMany({
-    where: { tenantId: tenant.id },
+    where: { tenantId: tenant.id, ...(allowed ? { id: { in: allowed } } : {}) },
     select: { id: true, name: true, state: true },
     orderBy: { createdAt: "asc" },
   });
@@ -97,12 +111,16 @@ async function completeOne(
   tenantId: string,
   approvedBy: string,
   id: string,
+  access: BranchScope,
 ): Promise<RunResult> {
   const period = await prisma.payrollPeriod.findFirst({
     where: { id, tenantId },
     include: { branch: { select: { name: true } } },
   });
   if (!period) return { ok: false, message: "A pay run no longer exists." };
+  if (!mayHandle(access, period.branchId)) {
+    return { ok: false, message: "You don't handle pay for that branch." };
+  }
   if (period.status === "APPROVED") return { ok: true };
 
   const label = `${period.branch?.name ?? "No-branch run"} (${fmtDate(period.startDate)} - ${fmtDate(period.endDate)})`;
@@ -242,11 +260,11 @@ export type CompleteResult = { completed: number; errors: string[] };
  * earlier in the same batch.
  */
 export async function completePayrollRuns(ids: string[]): Promise<CompleteResult> {
-  const { tenant, session } = await requireManager();
+  const { tenant, session, scope: access } = await requireManager();
   let completed = 0;
   const errors: string[] = [];
   for (const id of ids) {
-    const r = await completeOne(tenant.id, session.name, String(id));
+    const r = await completeOne(tenant.id, session.name, String(id), access);
     if (r.ok) completed += 1;
     else if (r.message) errors.push(r.message);
   }
@@ -263,10 +281,16 @@ export async function completePayrollRuns(ids: string[]): Promise<CompleteResult
  * stop seeing it until it is completed again.
  */
 export async function reopenPayrollPeriod(formData: FormData) {
-  const { tenant } = await requireManager();
+  const { tenant, scope: access } = await requireManager();
   const id = str(formData.get("id"));
+  const allowed = payrollBranchIds(access);
   const res = await prisma.payrollPeriod.updateMany({
-    where: { id, tenantId: tenant.id, status: "APPROVED" },
+    where: {
+      id,
+      tenantId: tenant.id,
+      status: "APPROVED",
+      ...(allowed ? { branchId: { in: allowed } } : {}),
+    },
     data: { status: "DRAFT", approvedBy: null, approvedAt: null },
   });
   if (res.count > 0) {
@@ -279,10 +303,16 @@ export async function reopenPayrollPeriod(formData: FormData) {
 
 /** Drafts only. Deleting a completed run would erase the record of what was paid. */
 export async function deletePayrollPeriod(formData: FormData) {
-  const { tenant } = await requireManager();
+  const { tenant, scope: access } = await requireManager();
   const id = str(formData.get("id"));
+  const allowed = payrollBranchIds(access);
   await prisma.payrollPeriod.deleteMany({
-    where: { id, tenantId: tenant.id, status: "DRAFT" },
+    where: {
+      id,
+      tenantId: tenant.id,
+      status: "DRAFT",
+      ...(allowed ? { branchId: { in: allowed } } : {}),
+    },
   });
   revalidatePath("/payroll");
 }
@@ -296,7 +326,9 @@ export async function deletePayrollPeriod(formData: FormData) {
  * payment waiting to happen. Drafts only - nothing has been paid from them.
  */
 export async function deleteOrphanDrafts(): Promise<{ deleted: number }> {
-  const { tenant } = await requireManager();
+  const { tenant, scope: access } = await requireManager();
+  // Runs with no branch cover every branch: head office's to clear up.
+  if (!access.all) return { deleted: 0 };
   const res = await prisma.payrollPeriod.deleteMany({
     where: { tenantId: tenant.id, branchId: null, status: "DRAFT" },
   });
@@ -316,7 +348,9 @@ export async function assignShiftsToBranch(
   ids: string[],
   branchId: string,
 ): Promise<{ error?: string; updated?: number }> {
-  const { tenant } = await requireManager();
+  const { tenant, scope: access } = await requireManager();
+  // Shifts with no branch belong to nobody yet: head office places them.
+  if (!access.all) return { error: "Only head office can assign shifts to a branch." };
   const branch = await prisma.branch.findFirst({
     where: { id: branchId, tenantId: tenant.id },
     select: { id: true, name: true },

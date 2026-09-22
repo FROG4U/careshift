@@ -14,9 +14,12 @@ import { removeAdmin, resetAdminPassword } from "./actions";
 export function AdminRowActions({
   userId,
   name,
+  worksShifts = false,
 }: {
   userId: string;
   name: string;
+  /** Also a support worker: "removing" takes away admin, not their login. */
+  worksShifts?: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -55,7 +58,7 @@ export function AdminRowActions({
         onClick={() => setConfirming("remove")}
         className="text-xs font-semibold text-red-600 hover:underline"
       >
-        Remove
+        {worksShifts ? "Remove admin" : "Remove"}
       </button>
 
       {error && (
@@ -67,11 +70,19 @@ export function AdminRowActions({
           <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
             <h3 className="text-base font-bold text-slate-900">
               {confirming === "remove"
-                ? `Remove ${name}?`
+                ? worksShifts
+                  ? `Remove ${name}'s admin access?`
+                  : `Remove ${name}?`
                 : `Reset ${name}'s password?`}
             </h3>
             <p className="mt-2 text-sm text-slate-600">
-              {confirming === "remove" ? (
+              {confirming === "remove" && worksShifts ? (
+                <>
+                  They go back to being a support worker only. Their login,
+                  shifts and pay stay; they just lose the admin area at their
+                  next sign-in.
+                </>
+              ) : confirming === "remove" ? (
                 <>
                   They won&apos;t be able to log in again. Their messages and
                   any incident reports they filed stay on the record, and you

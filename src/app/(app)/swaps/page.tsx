@@ -1,4 +1,5 @@
-import { requireTenant } from "@/lib/tenant";
+import { requireScope } from "@/lib/tenant";
+import { opsWhereVia } from "@/lib/scope";
 import { prisma } from "@/lib/prisma";
 import { fmtDateTime, initials } from "@/lib/format";
 import { approveSwap, rejectSwap } from "./actions";
@@ -15,12 +16,12 @@ export default async function SwapsPage({
 }: {
   searchParams: Promise<{ q?: string }>;
 }) {
-  const { tenant } = await requireTenant();
+  const { tenant, scope } = await requireScope();
   const { q } = await searchParams;
   const query = (q ?? "").trim().toLowerCase();
 
   const all = await prisma.shiftSwap.findMany({
-    where: { tenantId: tenant.id },
+    where: { tenantId: tenant.id, ...opsWhereVia(scope, "shift") },
     include: {
       shift: { include: { client: true } },
       fromStaff: true,

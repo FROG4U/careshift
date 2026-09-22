@@ -1,7 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireTenant } from "@/lib/tenant";
+import { requireScope } from "@/lib/tenant";
+import { opsWhere, opsWhereVia, canOps } from "@/lib/scope";
 import { prisma } from "@/lib/prisma";
 import {
   tzForState,
@@ -159,7 +160,7 @@ async function tzForBranch(branchId: string | null): Promise<string> {
 export async function createShift(
   formData: FormData,
 ): Promise<CreateShiftResult> {
-  const { tenant, session } = await requireTenant();
+  const { tenant, session, scope } = await requireScope();
   const clientId = String(formData.get("clientId") ?? "");
   const date = String(formData.get("date") ?? "");
   const startTime = String(formData.get("startTime") ?? "");
@@ -170,7 +171,7 @@ export async function createShift(
   const staffId = String(formData.get("staffId") ?? "") || null;
 
   const client = await prisma.client.findFirst({
-    where: { id: clientId, tenantId: tenant.id },
+    where: { id: clientId, tenantId: tenant.id, ...opsWhere(scope) },
   });
   if (!client) return { ok: false, error: "Participant not found." };
 
@@ -251,6 +252,9 @@ export async function createShift(
   // participant's home branch.
   const branchId =
     String(formData.get("branchId") ?? "") || client.branchId || null;
+  if (!canOps(scope, branchId)) {
+    return { ok: false, error: "You can only add shifts to your own branch." };
+  }
 
   const created = await prisma.shift.create({
     data: {
@@ -281,7 +285,7 @@ export async function createShift(
 
 /** Move a shift to a different staff member and/or day (drag-and-drop). */
 export async function reassignShift(formData: FormData) {
-  const { tenant } = await requireTenant();
+  const { tenant, scope } = await requireScope();
   const shiftId = String(formData.get("shiftId") ?? "");
   const date = String(formData.get("date") ?? ""); // YYYY-MM-DD of the target day
   // staffId: "" means drop onto the Unassigned row.
@@ -293,7 +297,7 @@ export async function reassignShift(formData: FormData) {
     rawClient === null ? undefined : String(rawClient) || undefined;
 
   const shift = await prisma.shift.findFirst({
-    where: { id: shiftId, tenantId: tenant.id },
+    where: { id: shiftId, tenantId: tenant.id, ...opsWhere(scope) },
     include: { client: true },
   });
   if (!shift) return;
@@ -315,7 +319,7 @@ export async function reassignShift(formData: FormData) {
     // Keep the shift on the branch of whoever it's assigned to.
     if (staffId) {
       const st = await prisma.staff.findFirst({
-        where: { id: staffId, tenantId: tenant.id },
+        where: { id: staffId, tenantId: tenant.id, ...opsWhere(scope) },
         select: { branchId: true },
       });
       if (st?.branchId) data.branchId = st.branchId;
@@ -344,7 +348,7 @@ export async function reassignShift(formData: FormData) {
   // (and follows their address for geofenced clock-in).
   if (newClientId && newClientId !== shift.clientId) {
     const target = await prisma.client.findFirst({
-      where: { id: newClientId, tenantId: tenant.id },
+      where: { id: newClientId, tenantId: tenant.id, ...opsWhere(scope) },
     });
     if (target) {
       data.clientId = target.id;
@@ -388,9 +392,9 @@ export async function reassignShift(formData: FormData) {
 }
 
 export async function deleteShift(formData: FormData) {
-  const { tenant } = await requireTenant();
+  const { tenant, scope } = await requireScope();
   const shiftId = String(formData.get("shiftId") ?? "");
-  await prisma.shift.deleteMany({ where: { id: shiftId, tenantId: tenant.id } });
+  await prisma.shift.deleteMany({ where: { id: shiftId, tenantId: tenant.id, ...opsWhere(scope) } });
   revalidatePath("/schedule");
   revalidatePath("/dashboard");
 }
@@ -399,13 +403,14 @@ export async function deleteShift(formData: FormData) {
 export async function publishShifts(
   shiftIds: string[],
 ): Promise<{ published: number }> {
-  const { tenant } = await requireTenant();
+  const { tenant, scope } = await requireScope();
   if (!shiftIds?.length) return { published: 0 };
 
   const shifts = await prisma.shift.findMany({
     where: {
       id: { in: shiftIds },
       tenantId: tenant.id,
+      ...opsWhere(scope),
       staffId: { not: null },
       publishState: { in: ["DRAFT", "REJECTED"] },
     },
@@ -443,7 +448,8 @@ export async function publishShifts(
 export async function addScheduleBranch(
   name: string,
 ): Promise<{ id: string } | { error: string }> {
-  const { tenant, session } = await requireTenant();
+  const { tenant, session, scope } = await requireScope();
+  if (!scope.all) return { error: "Only head office can add, rename or delete branches." };
   if (!isAdmin(session.role))
     return { error: "Only admins can add a schedule." };
   const clean = name.trim();
@@ -458,7 +464,8 @@ export async function addScheduleBranch(
 
 /** Rename a branch schedule (admin-only). */
 export async function renameScheduleBranch(formData: FormData) {
-  const { tenant, session } = await requireTenant();
+  const { tenant, session, scope } = await requireScope();
+  if (!scope.all) return;
   if (!isAdmin(session.role)) return;
   const id = String(formData.get("branchId") ?? "");
   const name = String(formData.get("name") ?? "").trim();
@@ -473,7 +480,8 @@ export async function renameScheduleBranch(formData: FormData) {
 
 /** Delete a branch schedule and its shifts (admin-only). */
 export async function deleteScheduleBranch(formData: FormData) {
-  const { tenant, session } = await requireTenant();
+  const { tenant, session, scope } = await requireScope();
+  if (!scope.all) return;
   if (!isAdmin(session.role)) return;
   const id = String(formData.get("branchId") ?? "");
   if (!id) return;
@@ -486,14 +494,14 @@ export async function deleteScheduleBranch(formData: FormData) {
 
 /** Edit a single shift's start/end time (same day). */
 export async function updateShiftTime(formData: FormData) {
-  const { tenant } = await requireTenant();
+  const { tenant, scope } = await requireScope();
   const shiftId = String(formData.get("shiftId") ?? "");
   const startTime = String(formData.get("startTime") ?? "");
   const endTime = String(formData.get("endTime") ?? "");
   if (!shiftId || !startTime || !endTime) return;
 
   const shift = await prisma.shift.findFirst({
-    where: { id: shiftId, tenantId: tenant.id },
+    where: { id: shiftId, tenantId: tenant.id, ...opsWhere(scope) },
   });
   if (!shift) return;
 
@@ -515,10 +523,10 @@ export async function updateShiftTime(formData: FormData) {
 
 /** Publish a single assigned shift to its worker (notifies them). */
 export async function publishOneShift(formData: FormData) {
-  const { tenant } = await requireTenant();
+  const { tenant, scope } = await requireScope();
   const shiftId = String(formData.get("shiftId") ?? "");
   const shift = await prisma.shift.findFirst({
-    where: { id: shiftId, tenantId: tenant.id, staffId: { not: null } },
+    where: { id: shiftId, tenantId: tenant.id, staffId: { not: null }, ...opsWhere(scope) },
     include: { client: true },
   });
   if (!shift) return;
@@ -547,10 +555,10 @@ export async function publishOneShift(formData: FormData) {
 
 /** Pull a published/accepted shift back to draft (unpublish). */
 export async function unpublishShift(formData: FormData) {
-  const { tenant } = await requireTenant();
+  const { tenant, scope } = await requireScope();
   const shiftId = String(formData.get("shiftId") ?? "");
   const shift = await prisma.shift.findFirst({
-    where: { id: shiftId, tenantId: tenant.id },
+    where: { id: shiftId, tenantId: tenant.id, ...opsWhere(scope) },
     include: { client: true },
   });
   if (!shift || shift.status === "COMPLETED") return;
@@ -584,7 +592,7 @@ export async function unpublishShift(formData: FormData) {
  * safe to re-run. Copied shifts keep the worker + times, reset to DRAFT.
  */
 export async function copyWeek(formData: FormData) {
-  const { tenant } = await requireTenant();
+  const { tenant, scope } = await requireScope();
   const sourceWeek = String(formData.get("sourceWeek") ?? ""); // Monday YYYY-MM-DD
   const clientId = String(formData.get("clientId") ?? "") || null;
   if (!sourceWeek) return;
@@ -597,6 +605,7 @@ export async function copyWeek(formData: FormData) {
     where: {
       tenantId: tenant.id,
       start: { gte: srcStart, lt: srcEnd },
+      ...opsWhere(scope),
       ...(clientId ? { clientId } : {}),
     },
   });
@@ -648,7 +657,7 @@ export async function copyWeek(formData: FormData) {
  * certain weekdays — the repeating ones become a template on the participant.
  */
 export async function addShiftTask(formData: FormData) {
-  const { tenant, session } = await requireTenant();
+  const { tenant, session, scope } = await requireScope();
   if (!hasManagerRole(session.role)) return;
 
   const shiftId = String(formData.get("shiftId") ?? "");
@@ -656,7 +665,7 @@ export async function addShiftTask(formData: FormData) {
   if (!shiftId || !title) return;
 
   const shift = await prisma.shift.findFirst({
-    where: { id: shiftId, tenantId: tenant.id },
+    where: { id: shiftId, tenantId: tenant.id, ...opsWhere(scope) },
     select: { id: true, clientId: true },
   });
   if (!shift) return;
@@ -718,12 +727,12 @@ export async function addShiftTask(formData: FormData) {
  * it would quietly rewrite what happened on the visit.
  */
 export async function removeShiftTask(formData: FormData) {
-  const { tenant, session } = await requireTenant();
+  const { tenant, session, scope } = await requireScope();
   if (!hasManagerRole(session.role)) return;
 
   const id = String(formData.get("id") ?? "");
   const task = await prisma.shiftTask.findFirst({
-    where: { id, tenantId: tenant.id },
+    where: { id, tenantId: tenant.id, ...opsWhereVia(scope, "shift") },
     select: { id: true, completedAt: true },
   });
   if (!task || task.completedAt) return;

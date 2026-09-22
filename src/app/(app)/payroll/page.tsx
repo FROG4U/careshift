@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { requireTenant } from "@/lib/tenant";
+import { requireScope } from "@/lib/tenant";
+import { payrollBranchIds } from "@/lib/scope";
 import { prisma } from "@/lib/prisma";
 import { fmtDate } from "@/lib/format";
 import { isManager } from "@/lib/roles";
@@ -26,30 +27,37 @@ export default async function PayrollPage({
     to?: string;
   }>;
 }) {
-  const { tenant, session } = await requireTenant();
+  const { tenant, session, scope } = await requireScope();
   // Managers only - workers never see payroll.
   if (!isManager(session.role)) {
     redirect("/dashboard");
   }
+  // A branch-restricted manager sees pay only for their Finances branches.
+  const allowed = payrollBranchIds(scope);
+  if (allowed && allowed.length === 0) redirect("/dashboard");
+  const inAllowed = allowed ? { branchId: { in: allowed } } : {};
 
   const { branch, tab, q, from, to } = await searchParams;
   const [branches, allRuns, unbranched, clocked] = await Promise.all([
     prisma.branch.findMany({
-      where: { tenantId: tenant.id },
+      where: { tenantId: tenant.id, ...(allowed ? { id: { in: allowed } } : {}) },
       orderBy: { createdAt: "asc" },
       select: { id: true, name: true, state: true },
     }),
     prisma.payrollPeriod.findMany({
-      where: { tenantId: tenant.id },
+      where: { tenantId: tenant.id, ...inAllowed },
       orderBy: { startDate: "desc" },
       include: { branch: { select: { name: true, state: true } } },
     }),
     // Completed shifts with no branch. No branch run pays them, so they are
     // shown against their pay period rather than left unpaid in silence.
+    // Head office only: a branch manager can't place branchless shifts.
     prisma.shift.findMany({
       where: {
         tenantId: tenant.id,
         branchId: null,
+        // Nothing for a branch manager: placing these is head office's job.
+        ...(allowed ? { id: { in: [] as string[] } } : {}),
         status: "COMPLETED",
         approval: { not: "REJECTED" },
       },
@@ -62,7 +70,7 @@ export default async function PayrollPage({
       orderBy: { start: "asc" },
     }),
     prisma.shift.findMany({
-      where: { tenantId: tenant.id, clockInAt: { not: null }, clockOutAt: { not: null } },
+      where: { tenantId: tenant.id, clockInAt: { not: null }, clockOutAt: { not: null }, ...inAllowed },
       select: {
         id: true,
         start: true,
@@ -78,7 +86,7 @@ export default async function PayrollPage({
   // Clock times the old Timesheets form saved a day early - paid at zero.
   const dayShifted = clocked.filter(isDayShifted);
   // Trips saved shorter than their GPS trail - mileage that would go unpaid.
-  const shortTrips = await findShortTrips(tenant.id);
+  const shortTrips = await findShortTrips(tenant.id, { branchIds: allowed });
 
   // Runs with no branch are leftovers from a deleted branch. They cover every
   // worker, so they get their own clearly-marked view rather than sitting

@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireTenant } from "@/lib/tenant";
+import { requireScope } from "@/lib/tenant";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { isSuperAdmin, isManager } from "@/lib/roles";
@@ -14,7 +14,7 @@ import {
 } from "@/lib/broadcast";
 
 export async function sendBroadcast(formData: FormData) {
-  const { tenant } = await requireTenant();
+  const { tenant, scope } = await requireScope();
   const session = await getSession();
   if (!session || !isManager(session.role)) {
     return { error: "You don't have permission to send announcements." };
@@ -42,7 +42,16 @@ export async function sendBroadcast(formData: FormData) {
   const fromLabel = `${tenant.name} ${fromSuffix}`;
 
   const branchRaw = String(formData.get("branchId") ?? "");
-  const branchId = audience === "ADMINS" || !branchRaw ? null : branchRaw;
+  let branchId = audience === "ADMINS" || !branchRaw ? null : branchRaw;
+
+  // A branch manager announces only to branches they have Messaging for -
+  // never "every branch". With just one, it's chosen for them.
+  if (!scope.all) {
+    if (!branchId && scope.message.length === 1) branchId = scope.message[0];
+    if (!branchId || !scope.message.includes(branchId)) {
+      return { error: "You can only send announcements to your own branch." };
+    }
+  }
 
   const userIds = await recipientsFor(tenant.id, audience, branchId);
   if (userIds.length === 0) {

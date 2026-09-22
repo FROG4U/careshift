@@ -1,4 +1,5 @@
-import { requireTenant } from "@/lib/tenant";
+import { requireScope } from "@/lib/tenant";
+import { opsWhere, visibleBranchWhere } from "@/lib/scope";
 import { prisma } from "@/lib/prisma";
 import {
   ParticipantsClient,
@@ -14,15 +15,15 @@ function isoDate(d: Date | null) {
 }
 
 export default async function ClientsPage() {
-  const { tenant } = await requireTenant();
+  const { tenant, scope } = await requireScope();
   const [clients, branchRecords] = await Promise.all([
     prisma.client.findMany({
-      where: { tenantId: tenant.id },
+      where: { tenantId: tenant.id, ...opsWhere(scope) },
       include: { branch: true },
       orderBy: { createdAt: "desc" },
     }),
     prisma.branch.findMany({
-      where: { tenantId: tenant.id },
+      where: { tenantId: tenant.id, ...visibleBranchWhere(scope) },
       orderBy: { name: "asc" },
     }),
   ]);
@@ -60,5 +61,11 @@ export default async function ClientsPage() {
     name: b.name,
   }));
 
-  return <ParticipantsClient rows={rows} branches={branches} />;
+  return (
+    <ParticipantsClient
+      rows={rows}
+      branches={branches}
+      financeBranchIds={scope.all ? null : scope.finance}
+    />
+  );
 }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireTenant } from "@/lib/tenant";
+import { requireScope } from "@/lib/tenant";
+import { payrollBranchIds } from "@/lib/scope";
 import { prisma } from "@/lib/prisma";
 import { dateKey } from "@/lib/payroll";
 import { buildPayReport } from "@/lib/payReport";
@@ -26,14 +27,15 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const { tenant, session } = await requireTenant();
+  const { tenant, session, scope } = await requireScope();
+  const allowed = payrollBranchIds(scope);
   if (!isManager(session.role)) {
     return new NextResponse("Not authorised", { status: 403 });
   }
 
   const { id } = await params;
   const period = await prisma.payrollPeriod.findFirst({
-    where: { id, tenantId: tenant.id },
+    where: { id, tenantId: tenant.id, ...(allowed ? { branchId: { in: allowed } } : {}) },
     include: { branch: true },
   });
   if (!period) return new NextResponse("Not found", { status: 404 });

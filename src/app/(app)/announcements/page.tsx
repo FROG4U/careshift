@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { requireTenant } from "@/lib/tenant";
+import { requireScope } from "@/lib/tenant";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { isManager, isSuperAdmin } from "@/lib/roles";
@@ -8,19 +8,24 @@ import { AUDIENCE_LABELS, FROM_LABELS, type Audience } from "@/lib/broadcast";
 import { SendForm } from "./SendForm";
 
 export default async function AnnouncementsPage() {
-  const { tenant } = await requireTenant();
+  const { tenant, scope } = await requireScope();
   const session = await getSession();
   if (!session || !isManager(session.role)) redirect("/dashboard");
   const superAdmin = isSuperAdmin(session.role);
 
   const [branches, sent] = await Promise.all([
+    // A branch manager: only branches they may message, and only their
+    // branches' announcements in the history.
     prisma.branch.findMany({
-      where: { tenantId: tenant.id },
+      where: { tenantId: tenant.id, ...(scope.all ? {} : { id: { in: scope.message } }) },
       orderBy: { createdAt: "asc" },
       select: { id: true, name: true },
     }),
     prisma.broadcast.findMany({
-      where: { tenantId: tenant.id },
+      where: {
+        tenantId: tenant.id,
+        ...(scope.all ? {} : { branchId: { in: scope.message } }),
+      },
       orderBy: { createdAt: "desc" },
       take: 50,
       include: {
@@ -51,6 +56,7 @@ export default async function AnnouncementsPage() {
 
       <SendForm
         branches={branches}
+        allowAllBranches={scope.all}
         canMessageAdmins={superAdmin}
         tenantName={tenant.name}
         fromLabels={[...FROM_LABELS]}

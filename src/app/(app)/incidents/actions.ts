@@ -1,7 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireTenant } from "@/lib/tenant";
+import { requireScope } from "@/lib/tenant";
+import { opsWhere } from "@/lib/scope";
 import { prisma } from "@/lib/prisma";
 import { isManager } from "@/lib/roles";
 import { INCIDENT_STATUSES } from "@/lib/constants";
@@ -9,7 +10,7 @@ import { notifyUser } from "@/lib/notify";
 
 /** Move an incident through the register and record the office's findings. */
 export async function updateIncident(formData: FormData) {
-  const { tenant, session } = await requireTenant();
+  const { tenant, session, scope } = await requireScope();
   if (!isManager(session.role)) return;
 
   const id = String(formData.get("id") ?? "");
@@ -22,7 +23,7 @@ export async function updateIncident(formData: FormData) {
     : undefined;
 
   const existing = await prisma.incident.findFirst({
-    where: { id, tenantId: tenant.id },
+    where: { id, tenantId: tenant.id, ...opsWhere(scope) },
     select: { id: true, status: true, reportedById: true },
   });
   if (!existing) return;

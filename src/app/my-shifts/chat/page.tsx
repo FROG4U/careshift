@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { messageableWhere } from "@/lib/messaging";
 import { conversationTitle } from "@/lib/chat";
 import { isOnline } from "@/lib/presence";
 import { initials } from "@/lib/format";
@@ -31,12 +32,14 @@ export default async function WorkerChatPage() {
   });
   if (!account || account.status !== "APPROVED") redirect("/pending");
 
-  // Everyone else in the tenant they could message.
+  // Their own branch's colleagues, head office, and managers for their branch
+  // (see lib/messaging).
   const contactRows = await prisma.user.findMany({
     where: {
       tenantId: session.tenantId,
       id: { not: session.id },
       status: "APPROVED",
+      ...(await messageableWhere(session)),
     },
     select: { id: true, name: true, role: true },
     orderBy: { name: "asc" },

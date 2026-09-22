@@ -8,6 +8,11 @@ type NotifyInput = {
   title: string;
   body?: string | null;
   shiftId?: string | null;
+  /**
+   * The branch this is about. Manager alerts go only to managers who can see
+   * it (plus head office). Worked out from shiftId when that's given.
+   */
+  branchId?: string | null;
   /** Where tapping the phone notification should land. Defaults by type. */
   url?: string;
 };
@@ -72,8 +77,31 @@ export async function notifyWorker(staffId: string, n: NotifyInput) {
 }
 
 async function notifyRoles(roles: string[], n: NotifyInput) {
+  // Which branch it concerns: given, or read from the shift it's about.
+  let branchId = n.branchId ?? null;
+  if (branchId == null && n.shiftId) {
+    const shift = await prisma.shift.findUnique({
+      where: { id: n.shiftId },
+      select: { branchId: true },
+    });
+    branchId = shift?.branchId ?? null;
+  }
+
+  // Every manager used to get every alert - a Perth worker running late
+  // buzzed head office and every other branch. Now: head office (all
+  // branches) always, plus managers restricted to that branch. Something with
+  // no branch goes to head office only. Removed or pending accounts get none.
   const users = await prisma.user.findMany({
-    where: { tenantId: n.tenantId, role: { in: roles } },
+    where: {
+      tenantId: n.tenantId,
+      role: { in: roles },
+      status: "APPROVED",
+      OR: [
+        { allBranches: true },
+        { role: "SUPER_ADMIN" },
+        ...(branchId ? [{ branchAccess: { some: { branchId, ops: true } } }] : []),
+      ],
+    },
     select: { id: true },
   });
   if (users.length === 0) return;

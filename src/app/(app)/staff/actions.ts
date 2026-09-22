@@ -1,7 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireTenant } from "@/lib/tenant";
+import { requireScope } from "@/lib/tenant";
+import { opsWhere, resolveBranch } from "@/lib/scope";
 import { isManager } from "@/lib/roles";
 import { prisma } from "@/lib/prisma";
 import { effectiveRates } from "@/lib/rates";
@@ -16,11 +17,11 @@ const num = (v: FormDataEntryValue | null) => {
 /** Archive (deactivate) or restore a staff member. Archived staff are excluded
  *  from the schedule (which only lists active staff). */
 export async function setStaffArchived(formData: FormData) {
-  const { tenant } = await requireTenant();
+  const { tenant, scope } = await requireScope();
   const id = String(formData.get("id") ?? "");
   const archive = String(formData.get("archive") ?? "") === "true";
   await prisma.staff.updateMany({
-    where: { id, tenantId: tenant.id },
+    where: { id, tenantId: tenant.id, ...opsWhere(scope) },
     data: { active: !archive },
   });
   revalidatePath("/staff");
@@ -63,10 +64,13 @@ function staffData(formData: FormData) {
 }
 
 export async function createStaff(formData: FormData) {
-  const { tenant } = await requireTenant();
+  const { tenant, scope } = await requireScope();
   const firstName = String(formData.get("firstName") ?? "").trim();
   const lastName = String(formData.get("lastName") ?? "").trim();
   if (!firstName || !lastName) return;
+  // A branch manager files workers under their own branch only.
+  const branch = resolveBranch(scope, str(formData.get("branchId")));
+  if (!branch.ok) return;
 
   const payLevelId = await resolvePayLevelId(tenant.id, formData.get("payLevelId"));
 
@@ -77,6 +81,7 @@ export async function createStaff(formData: FormData) {
       lastName,
       payLevelId,
       ...staffData(formData),
+      branchId: branch.branchId,
     },
   });
 
@@ -141,22 +146,26 @@ async function saveRateOverrides(
 }
 
 export async function updateStaff(formData: FormData) {
-  const { tenant } = await requireTenant();
+  const { tenant, scope } = await requireScope();
   const id = String(formData.get("id") ?? "");
   const firstName = String(formData.get("firstName") ?? "").trim();
   const lastName = String(formData.get("lastName") ?? "").trim();
   if (!id || !firstName || !lastName) return;
+  // A branch manager files workers under their own branch only.
+  const branch = resolveBranch(scope, str(formData.get("branchId")));
+  if (!branch.ok) return;
 
   const payLevelId = await resolvePayLevelId(tenant.id, formData.get("payLevelId"));
 
   // Tenant-scoped so one customer can't edit another's staff.
   await prisma.staff.updateMany({
-    where: { id, tenantId: tenant.id },
+    where: { id, tenantId: tenant.id, ...opsWhere(scope) },
     data: {
       firstName,
       lastName,
       payLevelId,
       ...staffData(formData),
+      branchId: branch.branchId,
     },
   });
 
@@ -182,12 +191,12 @@ export async function updateStaff(formData: FormData) {
  * incident reports they filed.
  */
 export async function deleteStaff(formData: FormData) {
-  const { tenant, session } = await requireTenant();
+  const { tenant, session, scope } = await requireScope();
   if (!isManager(session.role)) return { error: "Managers only." };
 
   const id = String(formData.get("id") ?? "");
   const staff = await prisma.staff.findFirst({
-    where: { id, tenantId: tenant.id },
+    where: { id, tenantId: tenant.id, ...opsWhere(scope) },
     select: {
       id: true,
       firstName: true,

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { requireTenant } from "@/lib/tenant";
+import { requireScope } from "@/lib/tenant";
+import { opsWhere } from "@/lib/scope";
 import { prisma } from "@/lib/prisma";
 import { isManager } from "@/lib/roles";
 import { fmtDateTime } from "@/lib/format";
@@ -18,7 +19,7 @@ export default async function IncidentsPage({
 }: {
   searchParams: Promise<{ status?: string; only?: string }>;
 }) {
-  const { tenant, session } = await requireTenant();
+  const { tenant, session, scope } = await requireScope();
   if (!isManager(session.role)) redirect("/dashboard");
 
   const { status, only } = await searchParams;
@@ -26,6 +27,7 @@ export default async function IncidentsPage({
   const incidents = await prisma.incident.findMany({
     where: {
       tenantId: tenant.id,
+      ...opsWhere(scope),
       ...(status && status !== "ALL" ? { status } : {}),
       ...(only === "reportable" ? { reportable: true } : {}),
     },
@@ -40,12 +42,12 @@ export default async function IncidentsPage({
   });
 
   const counts = {
-    all: await prisma.incident.count({ where: { tenantId: tenant.id } }),
+    all: await prisma.incident.count({ where: { tenantId: tenant.id, ...opsWhere(scope) } }),
     open: await prisma.incident.count({
-      where: { tenantId: tenant.id, status: { in: ["SUBMITTED", "UNDER_REVIEW"] } },
+      where: { tenantId: tenant.id, ...opsWhere(scope), status: { in: ["SUBMITTED", "UNDER_REVIEW"] } },
     }),
     reportable: await prisma.incident.count({
-      where: { tenantId: tenant.id, reportable: true },
+      where: { tenantId: tenant.id, ...opsWhere(scope), reportable: true },
     }),
   };
 

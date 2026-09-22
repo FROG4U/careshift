@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
-import { requireTenant } from "@/lib/tenant";
+import { requireScope } from "@/lib/tenant";
+import { visibleBranchWhere } from "@/lib/scope";
 import { prisma } from "@/lib/prisma";
 import { approveWorker, rejectWorker } from "./actions";
 
@@ -14,7 +15,7 @@ function fmtDate(d: Date) {
 }
 
 export default async function ApprovalsPage() {
-  const { tenant, session } = await requireTenant();
+  const { tenant, session, scope } = await requireScope();
   const isManager =
     session.role === "ADMIN" ||
     session.role === "SUPER_ADMIN" ||
@@ -28,7 +29,7 @@ export default async function ApprovalsPage() {
       orderBy: { createdAt: "asc" },
     }),
     prisma.branch.findMany({
-      where: { tenantId: tenant.id },
+      where: { tenantId: tenant.id, ...visibleBranchWhere(scope) },
       orderBy: { name: "asc" },
       select: { id: true, name: true },
     }),

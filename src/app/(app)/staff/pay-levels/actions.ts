@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireTenant } from "@/lib/tenant";
+import { requireScope } from "@/lib/tenant";
 import { prisma } from "@/lib/prisma";
 import { AWARD_SEED_LEVELS, seedBase } from "@/lib/awardRates";
 import {
@@ -34,7 +34,9 @@ function gridFromForm(formData: FormData) {
 
 /** Seed Pay Levels from the starter award table (idempotent by level name). */
 export async function importAwardLevels() {
-  const { tenant } = await requireTenant();
+  const { tenant, scope } = await requireScope();
+  // Company-wide settings affect every branch: head office only.
+  if (!scope.all) return;
 
   const existing = await prisma.payLevel.findMany({
     where: { tenantId: tenant.id },
@@ -76,7 +78,9 @@ function round2(n: number) {
 }
 
 export async function createPayLevel(formData: FormData) {
-  const { tenant } = await requireTenant();
+  const { tenant, scope } = await requireScope();
+  // Company-wide settings affect every branch: head office only.
+  if (!scope.all) return;
   const name = str(formData.get("name"));
   if (!name) return;
   await prisma.payLevel.create({
@@ -100,7 +104,9 @@ export async function createPayLevel(formData: FormData) {
 }
 
 export async function updatePayLevel(formData: FormData) {
-  const { tenant } = await requireTenant();
+  const { tenant, scope } = await requireScope();
+  // Company-wide settings affect every branch: head office only.
+  if (!scope.all) return;
   const id = str(formData.get("id"));
   if (!id) return;
 
@@ -144,7 +150,9 @@ export async function updatePayLevel(formData: FormData) {
 }
 
 export async function deletePayLevel(formData: FormData) {
-  const { tenant } = await requireTenant();
+  const { tenant, scope } = await requireScope();
+  // Company-wide settings affect every branch: head office only.
+  if (!scope.all) return;
   const id = str(formData.get("id"));
   await prisma.payLevel.deleteMany({ where: { id, tenantId: tenant.id } });
   revalidatePath("/staff/pay-levels");

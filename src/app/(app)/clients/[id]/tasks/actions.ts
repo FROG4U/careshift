@@ -1,7 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireTenant } from "@/lib/tenant";
+import { requireScope } from "@/lib/tenant";
+import { opsWhere, opsWhereVia } from "@/lib/scope";
 import { prisma } from "@/lib/prisma";
 import { isManager } from "@/lib/roles";
 import {
@@ -27,7 +28,7 @@ function parseTime(raw: string): string | null {
 }
 
 export async function createTaskTemplate(formData: FormData) {
-  const { tenant, session } = await requireTenant();
+  const { tenant, session, scope } = await requireScope();
   if (!isManager(session.role)) return;
 
   const clientId = str(formData.get("clientId"));
@@ -35,7 +36,7 @@ export async function createTaskTemplate(formData: FormData) {
   if (!clientId || !title) return;
 
   const client = await prisma.client.findFirst({
-    where: { id: clientId, tenantId: tenant.id },
+    where: { id: clientId, tenantId: tenant.id, ...opsWhere(scope) },
     select: { id: true },
   });
   if (!client) return;
@@ -73,12 +74,12 @@ export async function createTaskTemplate(formData: FormData) {
 }
 
 export async function updateTaskTemplate(formData: FormData) {
-  const { tenant, session } = await requireTenant();
+  const { tenant, session, scope } = await requireScope();
   if (!isManager(session.role)) return;
 
   const id = str(formData.get("id"));
   const existing = await prisma.taskTemplate.findFirst({
-    where: { id, tenantId: tenant.id },
+    where: { id, tenantId: tenant.id, ...opsWhereVia(scope, "client") },
     select: { id: true, clientId: true },
   });
   if (!existing) return;
@@ -116,12 +117,12 @@ export async function updateTaskTemplate(formData: FormData) {
 }
 
 export async function deleteTaskTemplate(formData: FormData) {
-  const { tenant, session } = await requireTenant();
+  const { tenant, session, scope } = await requireScope();
   if (!isManager(session.role)) return;
 
   const id = str(formData.get("id"));
   const existing = await prisma.taskTemplate.findFirst({
-    where: { id, tenantId: tenant.id },
+    where: { id, tenantId: tenant.id, ...opsWhereVia(scope, "client") },
     select: { id: true, clientId: true },
   });
   if (!existing) return;

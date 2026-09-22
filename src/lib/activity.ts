@@ -12,32 +12,41 @@ const name = (s: { firstName: string; lastName: string }) =>
   `${s.firstName} ${s.lastName}`;
 
 /** A short "who did what today" feed for the dashboard, derived from real events. */
-export async function todayActivity(tenantId: string): Promise<ActivityItem[]> {
+/**
+ * `branchIds` limits the feed to those branches (a branch manager); null means
+ * every branch.
+ */
+export async function todayActivity(
+  tenantId: string,
+  branchIds: string[] | null = null,
+): Promise<ActivityItem[]> {
   const start = new Date();
   start.setHours(0, 0, 0, 0);
   const end = new Date(start);
   end.setDate(end.getDate() + 1);
   const range = { gte: start, lt: end };
+  const shiftBranch = branchIds ? { branchId: { in: branchIds } } : {};
+  const staffBranch = branchIds ? { staff: { branchId: { in: branchIds } } } : {};
 
   const [ins, outs, accepts, swaps, leaves] = await Promise.all([
     prisma.shift.findMany({
-      where: { tenantId, clockInAt: range },
+      where: { tenantId, clockInAt: range, ...shiftBranch },
       include: { staff: true, client: true },
     }),
     prisma.shift.findMany({
-      where: { tenantId, clockOutAt: range },
+      where: { tenantId, clockOutAt: range, ...shiftBranch },
       include: { staff: true, client: true },
     }),
     prisma.shift.findMany({
-      where: { tenantId, publishState: "ACCEPTED", respondedAt: range },
+      where: { tenantId, publishState: "ACCEPTED", respondedAt: range, ...shiftBranch },
       include: { staff: true, client: true },
     }),
     prisma.shiftSwap.findMany({
-      where: { tenantId, createdAt: range },
+      where: { tenantId, createdAt: range, ...(branchIds ? { shift: { branchId: { in: branchIds } } } : {}) },
       include: { fromStaff: true, toStaff: true },
     }),
     prisma.availability.findMany({
-      where: { tenantId, createdAt: range },
+      where: { tenantId, createdAt: range, ...staffBranch },
       include: { staff: true },
     }),
   ]);

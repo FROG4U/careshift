@@ -52,6 +52,8 @@ const TRAIL = 30 * MIN; // keep tracking 30 min after it ends
 export async function runLiveChecks(
   tenantId: string,
   graceMin: number,
+  /** Limit to these branches (a branch manager's view); null = all. */
+  branchIds: string[] | null = null,
 ): Promise<LiveShift[]> {
   const now = Date.now();
 
@@ -59,6 +61,7 @@ export async function runLiveChecks(
     where: {
       tenantId,
       publishState: "ACCEPTED",
+      ...(branchIds ? { branchId: { in: branchIds } } : {}),
       status: { not: "COMPLETED" },
       staffId: { not: null },
       start: { lte: new Date(now + LEAD) },

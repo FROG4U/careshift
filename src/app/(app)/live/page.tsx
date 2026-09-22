@@ -1,4 +1,4 @@
-import { requireTenant } from "@/lib/tenant";
+import { requireScope } from "@/lib/tenant";
 import { runLiveChecks } from "@/lib/liveShifts";
 import { LiveShiftsView } from "./LiveShiftsView";
 
@@ -6,7 +6,11 @@ import { LiveShiftsView } from "./LiveShiftsView";
 export const dynamic = "force-dynamic";
 
 export default async function LivePage() {
-  const { tenant } = await requireTenant();
-  const shifts = await runLiveChecks(tenant.id, tenant.lateGraceMin ?? 5);
+  const { tenant, scope } = await requireScope();
+  const shifts = await runLiveChecks(
+    tenant.id,
+    tenant.lateGraceMin ?? 5,
+    scope.all ? null : scope.ops,
+  );
   return <LiveShiftsView shifts={shifts} />;
 }
