@@ -158,7 +158,7 @@ export async function updateStaff(formData: FormData) {
   const payLevelId = await resolvePayLevelId(tenant.id, formData.get("payLevelId"));
 
   // Tenant-scoped so one customer can't edit another's staff.
-  await prisma.staff.updateMany({
+  const res = await prisma.staff.updateMany({
     where: { id, tenantId: tenant.id, ...opsWhere(scope) },
     data: {
       firstName,
@@ -171,7 +171,9 @@ export async function updateStaff(formData: FormData) {
 
   // After the level/employment change has landed, so the comparison is
   // against the level they're actually on now.
-  await saveRateOverrides(tenant.id, id, formData);
+  // Only when the worker is one of theirs: rates must never be written for a
+  // worker in a branch this account can't see.
+  if (res.count > 0) await saveRateOverrides(tenant.id, id, formData);
 
   revalidatePath("/staff");
   revalidatePath("/payroll");

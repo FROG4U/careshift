@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireScope } from "@/lib/tenant";
-import { opsWhere, resolveBranch, canFinance } from "@/lib/scope";
+import { opsWhere, resolveBranch, canSeeCharges } from "@/lib/scope";
 import { prisma } from "@/lib/prisma";
 import { resolveClientCoords } from "@/lib/geocode";
 import { DEFAULT_GEOFENCE_FT } from "@/lib/constants";
@@ -45,7 +45,7 @@ export async function setClientArchived(formData: FormData) {
 }
 
 export async function createClient(formData: FormData) {
-  const { tenant, scope } = await requireScope();
+  const { tenant, session, scope } = await requireScope();
   const firstName = String(formData.get("firstName") ?? "").trim();
   const lastName = String(formData.get("lastName") ?? "").trim();
   if (!firstName || !lastName) return;
@@ -54,7 +54,8 @@ export async function createClient(formData: FormData) {
   if (!branch.ok) return;
   // Head office keeps the charge fields it always had; a branch manager only
   // writes them with the Finances tick for that branch.
-  const chargesAllowed = scope.all || canFinance(scope, branch.branchId);
+  // Charges are Finances: super admins, or the Finances tick for this branch.
+  const chargesAllowed = canSeeCharges(scope, session.role, branch.branchId);
 
   // The participant's ADDRESS decides where the clock-in geofence sits, not
   // whoever happened to be at the keyboard.
@@ -91,14 +92,15 @@ export async function createClient(formData: FormData) {
 }
 
 export async function updateClient(formData: FormData) {
-  const { tenant, scope } = await requireScope();
+  const { tenant, session, scope } = await requireScope();
   const id = String(formData.get("id") ?? "");
   const firstName = String(formData.get("firstName") ?? "").trim();
   const lastName = String(formData.get("lastName") ?? "").trim();
   if (!id || !firstName || !lastName) return;
   const branch = resolveBranch(scope, str(formData.get("branchId")));
   if (!branch.ok) return;
-  const chargesAllowed = scope.all || canFinance(scope, branch.branchId);
+  // Charges are Finances: super admins, or the Finances tick for this branch.
+  const chargesAllowed = canSeeCharges(scope, session.role, branch.branchId);
 
   // Same rule on edit: the address decides the geofence.
   const address = str(formData.get("address"));

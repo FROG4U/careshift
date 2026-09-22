@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireScope } from "@/lib/tenant";
-import { canFinance, payrollBranchIds, type BranchScope } from "@/lib/scope";
+import { canOps, payrollBranchIds, type BranchScope } from "@/lib/scope";
 import { prisma } from "@/lib/prisma";
 import { isManager } from "@/lib/roles";
 import { fmtDate } from "@/lib/format";
@@ -16,23 +16,23 @@ const str = (v: FormDataEntryValue | null) => String(v ?? "").trim();
 
 /**
  * Payroll is manager-only - workers must never reach these actions - and a
- * branch-restricted manager only handles the branches they have the Finances
- * tick for (see lib/scope).
+ * branch-restricted manager only handles the branches they look after
+ * ("Shifts & people", see lib/scope).
  */
 async function requireManager() {
   const ctx = await requireScope();
   if (!isManager(ctx.session.role)) {
     throw new Error("Not authorised");
   }
-  if (!ctx.scope.all && ctx.scope.finance.length === 0) {
+  if (!ctx.scope.all && ctx.scope.ops.length === 0) {
     throw new Error("Not authorised");
   }
   return ctx;
 }
 
-/** A run this account may act on: its branch is one they handle pay for. */
+/** A run this account may act on: its branch is one they look after. */
 function mayHandle(scope: BranchScope, branchId: string | null) {
-  return canFinance(scope, branchId);
+  return canOps(scope, branchId);
 }
 
 export type CreateRunResult = { error?: string; created?: number; skipped?: string[] };

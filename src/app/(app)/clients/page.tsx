@@ -15,7 +15,7 @@ function isoDate(d: Date | null) {
 }
 
 export default async function ClientsPage() {
-  const { tenant, scope } = await requireScope();
+  const { tenant, session, scope } = await requireScope();
   const [clients, branchRecords] = await Promise.all([
     prisma.client.findMany({
       where: { tenantId: tenant.id, ...opsWhere(scope) },
@@ -65,7 +65,9 @@ export default async function ClientsPage() {
     <ParticipantsClient
       rows={rows}
       branches={branches}
-      financeBranchIds={scope.all ? null : scope.finance}
+      financeBranchIds={
+        scope.all ? (session.role === "SUPER_ADMIN" ? null : []) : scope.finance
+      }
     />
   );
 }

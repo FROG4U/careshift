@@ -37,7 +37,7 @@ export default async function AppLayout({
   // Which screens their branch access opens (see lib/scope).
   const scope = await loadScope(session);
   const access = {
-    payroll: scope.all || scope.finance.length > 0,
+    payroll: scope.all || scope.ops.length > 0,
     charges: canSeeAnyCharges(scope, session.role),
     headOffice: scope.headOffice,
   };

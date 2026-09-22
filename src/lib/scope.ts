@@ -163,11 +163,12 @@ export function canSeeAnyCharges(scope: BranchScope, role: string): boolean {
 }
 
 /**
- * Payroll: managers as before; a branch-restricted account only sees pay for
- * branches with the Finances tick.
+ * Payroll goes with "Shifts & people": an admin sees and runs pay for the
+ * branches they look after. The Finances tick is for income and outgoings
+ * (Sales & Profit) and participant charges - Danu, 22 Sep.
  */
 export function payrollBranchIds(scope: BranchScope): string[] | null {
-  return scope.all ? null : scope.finance;
+  return scope.all ? null : scope.ops;
 }
 
 /**

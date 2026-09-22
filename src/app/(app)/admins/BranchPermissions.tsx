@@ -18,8 +18,8 @@ export type GroupTicks = { key: string; ops: boolean; finance: boolean; message:
 type Kind = "ops" | "finance" | "message";
 
 const KINDS: { key: Kind; label: string; hint: string }[] = [
-  { key: "ops", label: "Shifts & people", hint: "Schedule, participants, staff, timesheets, live shifts, incidents, leave" },
-  { key: "finance", label: "Finances", hint: "Wages, pay runs, participant charges, sales and profit" },
+  { key: "ops", label: "Shifts & people", hint: "Schedule, participants, staff, timesheets, live shifts, incidents, leave, payroll" },
+  { key: "finance", label: "Finances", hint: "Income and outgoings (Sales & Profit: money in, costs, super, profit) and participant charges" },
   { key: "message", label: "Messaging", hint: "Chat with, and announcements to, that group's staff" },
 ];
 

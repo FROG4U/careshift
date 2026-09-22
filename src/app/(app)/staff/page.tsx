@@ -87,5 +87,11 @@ export default async function StaffPage() {
     };
   });
 
-  return <StaffClient rows={rows} levels={levelOptions} branches={branches} />;
+  return (
+    <StaffClient
+      rows={rows}
+      levels={levelOptions}
+      branches={branches}
+    />
+  );
 }

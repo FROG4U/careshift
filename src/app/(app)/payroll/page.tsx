@@ -32,7 +32,7 @@ export default async function PayrollPage({
   if (!isManager(session.role)) {
     redirect("/dashboard");
   }
-  // A branch-restricted manager sees pay only for their Finances branches.
+  // A branch-restricted manager sees pay only for the branches they look after.
   const allowed = payrollBranchIds(scope);
   if (allowed && allowed.length === 0) redirect("/dashboard");
   const inAllowed = allowed ? { branchId: { in: allowed } } : {};

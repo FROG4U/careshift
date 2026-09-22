@@ -125,11 +125,17 @@ export default async function AdminsPage() {
       isGroup: false,
     })),
   ];
-  // What each admin's ticks currently are. Not set up yet = sees everything,
-  // so every box shows ticked.
+  // What each admin's ticks currently are. Not set up yet: every branch for
+  // shifts, people, payroll and messaging - and Finances (income, outgoings,
+  // charges) only for super admins, which is what they could see before.
   const ticksFor = (u: (typeof admins)[number]): GroupTicks[] =>
     u.allBranches
-      ? groups.map((g) => ({ key: g.key, ops: true, finance: true, message: true }))
+      ? groups.map((g) => ({
+          key: g.key,
+          ops: true,
+          finance: u.role === "SUPER_ADMIN",
+          message: true,
+        }))
       : u.branchAccess.map((a) => ({
           key: a.hqGroup ? "HQ" : (a.branchId ?? ""),
           ops: a.ops,
