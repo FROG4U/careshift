@@ -5,7 +5,15 @@ import { useRouter } from "next/navigation";
 import { setBranchAccess } from "./actions";
 
 /** One line of ticks: the whole of HQ, or one branch run separately. */
-export type AccessGroup = { key: string; label: string; detail: string };
+export type AccessGroup = {
+  key: string;
+  label: string;
+  detail: string;
+  /** An HQ branch: "Whole of HQ" already covers it. */
+  hq: boolean;
+  /** The "Whole of HQ" row itself. */
+  isGroup: boolean;
+};
 export type GroupTicks = { key: string; ops: boolean; finance: boolean; message: boolean };
 type Kind = "ops" | "finance" | "message";
 
@@ -61,6 +69,8 @@ export function BranchPermissions({
   };
 
   const nothing = Object.values(ticks).every((t) => !t.ops && !t.finance && !t.message);
+  // An HQ branch's box is already covered when "Whole of HQ" has that tick.
+  const coveredByHq = (g: AccessGroup, kind: Kind) => g.hq && Boolean(ticks.HQ?.[kind]);
   const losesHq = isMe && groups.some((g) => g.key === "HQ") && !ticks.HQ?.ops;
 
   function save() {
@@ -103,22 +113,29 @@ export function BranchPermissions({
         </thead>
         <tbody className="divide-y divide-slate-200/70">
           {groups.map((g) => (
-            <tr key={g.key}>
-              <td className="px-3 py-2">
-                <div className="font-medium text-slate-800">{g.label}</div>
+            <tr key={g.key} className={g.isGroup ? "bg-white" : ""}>
+              <td className={`px-3 py-2 ${g.hq ? "pl-7" : ""}`}>
+                <div className={`text-slate-800 ${g.isGroup ? "font-semibold" : "font-medium"}`}>
+                  {g.label}
+                </div>
                 <div className="text-[11px] text-slate-400">{g.detail}</div>
               </td>
-              {KINDS.map((k) => (
-                <td key={k.key} className="px-3 py-2 text-center">
-                  <input
-                    type="checkbox"
-                    aria-label={`${g.label}: ${k.label}`}
-                    checked={ticks[g.key]?.[k.key] ?? false}
-                    onChange={() => toggle(g.key, k.key)}
-                    className="h-4 w-4 rounded border-slate-300"
-                  />
-                </td>
-              ))}
+              {KINDS.map((k) => {
+                const covered = coveredByHq(g, k.key);
+                return (
+                  <td key={k.key} className="px-3 py-2 text-center">
+                    <input
+                      type="checkbox"
+                      aria-label={`${g.label}: ${k.label}`}
+                      title={covered ? "Included in Whole of HQ" : undefined}
+                      checked={covered || (ticks[g.key]?.[k.key] ?? false)}
+                      disabled={covered}
+                      onChange={() => toggle(g.key, k.key)}
+                      className="h-4 w-4 rounded border-slate-300 disabled:opacity-40"
+                    />
+                  </td>
+                );
+              })}
             </tr>
           ))}
         </tbody>
@@ -127,13 +144,16 @@ export function BranchPermissions({
       <div className="flex flex-wrap items-center gap-3 border-t border-slate-200/70 px-3 py-2.5">
         <button
           onClick={save}
-          disabled={pending || !dirty}
-          className="rounded-lg px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40"
+          disabled={pending}
+          className="rounded-lg px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
           style={{ background: "var(--brand)" }}
         >
           {pending ? "Saving…" : "Save access"}
         </button>
         {saved && <span className="text-xs font-medium text-emerald-600">Saved</span>}
+        {dirty && !saved && !nothing && (
+          <span className="text-xs text-slate-500">Unsaved changes</span>
+        )}
         {dirty && nothing && (
           <span className="text-xs text-amber-700">
             Nothing ticked: {name} will see no shifts, people or money.

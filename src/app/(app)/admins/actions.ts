@@ -307,18 +307,18 @@ export async function setBranchAccess(formData: FormData) {
   });
   if (!target) return { error: "That admin no longer exists." };
 
-  // Separate branches that really exist in this company.
-  const separate = new Set(
+  // Branches that really exist in this company.
+  const real = new Set(
     (
       await prisma.branch.findMany({
-        where: { tenantId: tenant.id, hq: false },
+        where: { tenantId: tenant.id },
         select: { id: true },
       })
     ).map((b) => b.id),
   );
   const rows = groups
     .filter((g) => g.ops || g.finance || g.message)
-    .filter((g) => g.key === "HQ" || separate.has(g.key))
+    .filter((g) => g.key === "HQ" || real.has(g.key))
     .map((g) => ({
       tenantId: tenant.id,
       userId: target.id,

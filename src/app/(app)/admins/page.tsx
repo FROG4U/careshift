@@ -102,19 +102,28 @@ export default async function AdminsPage() {
     }),
   ]);
 
-  // The tick rows: the whole of HQ, then each branch run separately.
+  // The tick rows: the whole of HQ, then every branch on its own - so an
+  // admin can have all of HQ, just one HQ branch, or only Perth.
   const hqBranches = branches.filter((b) => b.hq);
   const groups: AccessGroup[] = [
     ...(hqBranches.length
-      ? [{ key: "HQ", label: "Whole of HQ", detail: hqBranches.map((b) => b.name).join(", ") }]
+      ? [
+          {
+            key: "HQ",
+            label: "Whole of HQ",
+            detail: `${hqBranches.map((b) => b.name).join(", ")} and any HQ branch added later`,
+            hq: false,
+            isGroup: true,
+          },
+        ]
       : []),
-    ...branches
-      .filter((b) => !b.hq)
-      .map((b) => ({
-        key: b.id,
-        label: `Whole of ${b.name}`,
-        detail: b.state ? `Separate branch · ${b.state}` : "Separate branch",
-      })),
+    ...branches.map((b) => ({
+      key: b.id,
+      label: b.name,
+      detail: `${b.hq ? "HQ branch" : "Separate branch"}${b.state ? ` · ${b.state}` : ""}`,
+      hq: b.hq,
+      isGroup: false,
+    })),
   ];
   // What each admin's ticks currently are. Not set up yet = sees everything,
   // so every box shows ticked.
