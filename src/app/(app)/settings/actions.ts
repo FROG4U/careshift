@@ -24,7 +24,7 @@ function makeJoinCode(name: string) {
 export async function generateJoinCode() {
   const { tenant, session, scope } = await requireScope();
   // Company-wide settings affect every branch: head office only.
-  if (!scope.all) return;
+  if (!scope.headOffice) return;
   if (!isAdmin(session.role)) return;
 
   // Retry on the (extremely unlikely) unique-collision.
@@ -47,7 +47,7 @@ export async function generateJoinCode() {
 export async function clearJoinCode() {
   const { tenant, session, scope } = await requireScope();
   // Company-wide settings affect every branch: head office only.
-  if (!scope.all) return;
+  if (!scope.headOffice) return;
   if (!isAdmin(session.role)) return;
   await prisma.tenant.update({
     where: { id: tenant.id },
@@ -59,7 +59,7 @@ export async function clearJoinCode() {
 export async function updateBranding(formData: FormData) {
   const { tenant, scope } = await requireScope();
   // Company-wide settings affect every branch: head office only.
-  if (!scope.all) return;
+  if (!scope.headOffice) return;
   const name = String(formData.get("name") ?? "").trim();
   const brandColor = String(formData.get("brandColor") ?? "").trim();
 
@@ -91,7 +91,7 @@ function branchState(formData: FormData): string | null {
 export async function createBranch(formData: FormData) {
   const { tenant, session, scope } = await requireScope();
   // Company-wide settings affect every branch: head office only.
-  if (!scope.all) return;
+  if (!scope.headOffice) return;
   if (!isAdmin(session.role)) return;
   const name = String(formData.get("name") ?? "").trim();
   if (!name) return;
@@ -112,7 +112,7 @@ export async function createBranch(formData: FormData) {
 export async function renameBranch(formData: FormData) {
   const { tenant, session, scope } = await requireScope();
   // Company-wide settings affect every branch: head office only.
-  if (!scope.all) return;
+  if (!scope.headOffice) return;
   if (!isAdmin(session.role)) return;
   const id = String(formData.get("id") ?? "");
   const name = String(formData.get("name") ?? "").trim();
@@ -129,7 +129,7 @@ export async function renameBranch(formData: FormData) {
 export async function deleteBranch(formData: FormData) {
   const { tenant, session, scope } = await requireScope();
   // Company-wide settings affect every branch: head office only.
-  if (!scope.all) return;
+  if (!scope.headOffice) return;
   if (!isAdmin(session.role)) return;
   const id = String(formData.get("id") ?? "");
   // Staff/participants/shifts keep their records; branchId is set null (SetNull).
@@ -142,7 +142,7 @@ export async function deleteBranch(formData: FormData) {
 export async function updateAttendanceSettings(formData: FormData) {
   const { tenant, session, scope } = await requireScope();
   // Company-wide settings affect every branch: head office only.
-  if (!scope.all) return;
+  if (!scope.headOffice) return;
   if (!isManager(session.role)) return;
 
   const num = (k: string, min: number, max: number, fallback: number) => {
@@ -176,7 +176,7 @@ export async function updateAttendanceSettings(formData: FormData) {
 export async function updateChargeDefaults(formData: FormData) {
   const { tenant, session, scope } = await requireScope();
   // Company-wide settings affect every branch: head office only.
-  if (!scope.all) return;
+  if (!scope.headOffice) return;
   if (!isAdmin(session.role)) return;
 
   const agreementType = String(formData.get("agreementType") ?? "").trim();
@@ -214,7 +214,7 @@ export async function updateChargeDefaults(formData: FormData) {
 export async function updateSuperRate(formData: FormData) {
   const { tenant, session, scope } = await requireScope();
   // Company-wide settings affect every branch: head office only.
-  if (!scope.all) return;
+  if (!scope.headOffice) return;
   if (!isAdmin(session.role)) return;
   const pct = Number(String(formData.get("superPct") ?? "").trim());
   if (!Number.isFinite(pct) || pct < 0 || pct > 50) return;
@@ -230,7 +230,7 @@ export async function updateSuperRate(formData: FormData) {
 export async function updateLeaveSettings(formData: FormData) {
   const { tenant, session, scope } = await requireScope();
   // Company-wide settings affect every branch: head office only.
-  if (!scope.all) return;
+  if (!scope.headOffice) return;
   if (!isManager(session.role)) return;
 
   const num = (k: string, fallback: number) => {

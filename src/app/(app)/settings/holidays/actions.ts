@@ -12,7 +12,7 @@ const str = (v: FormDataEntryValue | null) => String(v ?? "").trim();
 async function requireManager() {
   const ctx = await requireScope();
   // Holidays apply company-wide: head office only.
-  if (!isManager(ctx.session.role) || !ctx.scope.all) {
+  if (!isManager(ctx.session.role) || !ctx.scope.headOffice) {
     throw new Error("Not authorised");
   }
   return ctx;

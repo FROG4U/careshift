@@ -449,7 +449,7 @@ export async function addScheduleBranch(
   name: string,
 ): Promise<{ id: string } | { error: string }> {
   const { tenant, session, scope } = await requireScope();
-  if (!scope.all) return { error: "Only head office can add, rename or delete branches." };
+  if (!scope.headOffice) return { error: "Only head office can add, rename or delete branches." };
   if (!isAdmin(session.role))
     return { error: "Only admins can add a schedule." };
   const clean = name.trim();
@@ -465,7 +465,7 @@ export async function addScheduleBranch(
 /** Rename a branch schedule (admin-only). */
 export async function renameScheduleBranch(formData: FormData) {
   const { tenant, session, scope } = await requireScope();
-  if (!scope.all) return;
+  if (!scope.headOffice) return;
   if (!isAdmin(session.role)) return;
   const id = String(formData.get("branchId") ?? "");
   const name = String(formData.get("name") ?? "").trim();
@@ -481,7 +481,7 @@ export async function renameScheduleBranch(formData: FormData) {
 /** Delete a branch schedule and its shifts (admin-only). */
 export async function deleteScheduleBranch(formData: FormData) {
   const { tenant, session, scope } = await requireScope();
-  if (!scope.all) return;
+  if (!scope.headOffice) return;
   if (!isAdmin(session.role)) return;
   const id = String(formData.get("branchId") ?? "");
   if (!id) return;

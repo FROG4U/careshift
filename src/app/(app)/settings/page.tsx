@@ -23,7 +23,7 @@ const field =
 export default async function SettingsPage() {
   const { tenant, session , scope } = await requireScope();
   // Company-wide settings: head office only.
-  if (!scope.all) redirect("/dashboard");
+  if (!scope.headOffice) redirect("/dashboard");
   const isAdmin =
     session.role === "ADMIN" || session.role === "SUPER_ADMIN";
 

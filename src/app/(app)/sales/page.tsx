@@ -41,8 +41,8 @@ export default async function SalesPage({
   const { tenant, session, scope } = await requireScope();
   // Super admins, or a branch-restricted account with a Finances tick.
   if (!canSeeAnyCharges(scope, session.role)) redirect("/dashboard");
-  // Which branches' money they may see: all for super admins.
-  const allowed = isSuperAdmin(session.role) ? null : scope.finance;
+  // Which branches' money they may see (their Finances ticks).
+  const allowed = scope.all ? null : scope.finance;
 
   const sp = await searchParams;
   const period: PeriodKind = parsePeriod(sp.period);

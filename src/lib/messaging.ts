@@ -24,11 +24,23 @@ export async function messageableWhere(session: SessionUser) {
   if (session.role !== "WORKER") {
     const scope = await loadScope(session);
     if (scope.all) return {};
+    // Their ticked groups only: the staff there, and the other managers who
+    // look after the same group. A Perth-only manager doesn't reach HQ.
+    const coversHq =
+      scope.message.length > 0 &&
+      (await prisma.branch.count({
+        where: { id: { in: scope.message }, hq: true },
+      })) > 0;
     return {
       OR: [
         { staff: { branchId: { in: scope.message } } },
-        // Other managers who share one of those branches.
-        { branchAccess: { some: { branchId: { in: scope.message }, message: true } } },
+        ...(scope.message.length > 0
+          ? [
+              { allBranches: true, role: { in: MANAGER_ROLES } },
+              { branchAccess: { some: { branchId: { in: scope.message }, message: true } } },
+            ]
+          : []),
+        ...(coversHq ? [{ branchAccess: { some: { hqGroup: true, message: true } } }] : []),
       ],
     };
   }
@@ -36,20 +48,20 @@ export async function messageableWhere(session: SessionUser) {
   const me = session.staffId
     ? await prisma.staff.findUnique({
         where: { id: session.staffId },
-        select: { branchId: true },
+        select: { branchId: true, branch: { select: { hq: true } } },
       })
     : null;
-  const headOffice = {
-    role: { in: MANAGER_ROLES },
-    allBranches: true,
-  };
-  if (!me?.branchId) return { OR: [headOffice, { role: "SUPER_ADMIN" }] };
+  // Managers who look after this worker's group: head office staff with
+  // Messaging for HQ (or anyone not yet set up), or a separate branch's own
+  // manager.
+  const everything = { role: { in: MANAGER_ROLES }, allBranches: true };
+  if (!me?.branchId) {
+    return { OR: [everything, { branchAccess: { some: { hqGroup: true, message: true } } }] };
+  }
+  const groupManagers = me.branch?.hq
+    ? { branchAccess: { some: { hqGroup: true, message: true } } }
+    : { branchAccess: { some: { branchId: me.branchId, message: true } } };
   return {
-    OR: [
-      { staff: { branchId: me.branchId } },
-      headOffice,
-      { role: "SUPER_ADMIN" },
-      { branchAccess: { some: { branchId: me.branchId, message: true } } },
-    ],
+    OR: [{ staff: { branchId: me.branchId } }, everything, groupManagers],
   };
 }

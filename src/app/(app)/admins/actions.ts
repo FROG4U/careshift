@@ -39,9 +39,7 @@ export async function createAdminInvite(formData: FormData) {
       };
     }
     if (existing.role === "WORKER") {
-      return {
-        error: `${existing.name} already has a support worker login. Use "Give a support worker admin access" below instead, so they keep their shifts and pay.`,
-      };
+      return { error: "That email is already a support worker's login." };
     }
     return { error: "They already have an account here." };
   }
@@ -186,23 +184,10 @@ export async function removeAdmin(formData: FormData) {
       role: { in: ["ADMIN", "SUPER_ADMIN"] },
       status: "APPROVED",
     },
-    select: { id: true, role: true, name: true, staffId: true },
+    select: { id: true, role: true, name: true },
   });
   if (!target) return { error: "That admin no longer exists." };
 
-  // Someone who also works shifts goes back to being a support worker: their
-  // login, roster and pay stay. Locking them out would stop them working.
-  if (target.staffId) {
-    await prisma.$transaction([
-      prisma.branchAccess.deleteMany({ where: { userId: target.id } }),
-      prisma.user.update({
-        where: { id: target.id },
-        data: { role: "WORKER", allBranches: true },
-      }),
-    ]);
-    revalidatePath("/admins");
-    return { ok: true, name: target.name };
-  }
 
   // Never leave the tenant without a super admin who can let people back in.
   if (target.role === "SUPER_ADMIN") {
@@ -292,106 +277,64 @@ export async function reinstateAdmin(formData: FormData) {
 }
 
 /**
- * Set which branches one admin may see, and in what way (see lib/scope).
+ * Save one admin's ticks: per group - the whole of HQ, or one branch run
+ * separately (Perth) - for Shifts & people, Finances and Messaging.
  *
- * Rows with nothing ticked are deleted rather than stored as three falses, so
- * "no access to that branch" has exactly one representation.
+ * Saving always writes exactly what was ticked, so someone who used to see
+ * everything by default now sees what their profile says. Rows with nothing
+ * ticked aren't stored.
  */
 export async function setBranchAccess(formData: FormData) {
   const { tenant, session } = await requireTenant();
   if (!isSuperAdmin(session.role)) return { error: "Super admins only." };
 
   const userId = String(formData.get("userId") ?? "");
-  const allBranches = Boolean(String(formData.get("allBranches") ?? ""));
-  let rows: { branchId: string; ops?: boolean; finance?: boolean; message?: boolean }[] = [];
+  let groups: { key: string; ops?: boolean; finance?: boolean; message?: boolean }[] = [];
   try {
-    const parsed = JSON.parse(String(formData.get("access") ?? "[]"));
-    if (Array.isArray(parsed)) rows = parsed;
+    const parsed = JSON.parse(String(formData.get("groups") ?? "[]"));
+    if (Array.isArray(parsed)) groups = parsed;
   } catch {
-    return { error: "Couldn't read those permissions." };
+    return { error: "Couldn't read those ticks." };
   }
 
   const target = await prisma.user.findFirst({
-    where: { id: userId, tenantId: tenant.id },
-    select: { id: true, role: true },
-  });
-  if (!target) return { error: "That admin no longer exists." };
-  // A super admin always sees everything, so ticks would be a lie.
-  if (isSuperAdmin(target.role)) {
-    return { error: "Super admins always see every branch." };
-  }
-
-  const branches = await prisma.branch.findMany({
-    where: { tenantId: tenant.id },
+    where: {
+      id: userId,
+      tenantId: tenant.id,
+      role: { in: ["ADMIN", "SUPER_ADMIN", "COORDINATOR"] },
+    },
     select: { id: true },
   });
-  const valid = new Set(branches.map((b) => b.id));
+  if (!target) return { error: "That admin no longer exists." };
+
+  // Separate branches that really exist in this company.
+  const separate = new Set(
+    (
+      await prisma.branch.findMany({
+        where: { tenantId: tenant.id, hq: false },
+        select: { id: true },
+      })
+    ).map((b) => b.id),
+  );
+  const rows = groups
+    .filter((g) => g.ops || g.finance || g.message)
+    .filter((g) => g.key === "HQ" || separate.has(g.key))
+    .map((g) => ({
+      tenantId: tenant.id,
+      userId: target.id,
+      hqGroup: g.key === "HQ",
+      branchId: g.key === "HQ" ? null : g.key,
+      ops: Boolean(g.ops),
+      finance: Boolean(g.finance),
+      message: Boolean(g.message),
+    }));
 
   await prisma.$transaction(async (tx) => {
-    await tx.user.update({ where: { id: target.id }, data: { allBranches } });
+    await tx.user.update({ where: { id: target.id }, data: { allBranches: false } });
     await tx.branchAccess.deleteMany({ where: { userId: target.id } });
-    if (allBranches) return;
-    const keep = rows.filter(
-      (r) => valid.has(r.branchId) && (r.ops || r.finance || r.message),
-    );
-    if (keep.length === 0) return;
-    await tx.branchAccess.createMany({
-      data: keep.map((r) => ({
-        tenantId: tenant.id,
-        userId: target.id,
-        branchId: r.branchId,
-        ops: Boolean(r.ops),
-        finance: Boolean(r.finance),
-        message: Boolean(r.message),
-      })),
-    });
+    if (rows.length > 0) await tx.branchAccess.createMany({ data: rows });
   });
 
   revalidatePath("/admins");
   return { ok: true };
-}
-
-/**
- * Give an existing support worker admin access - a branch manager who also
- * works shifts. They keep the same login, roster and pay; they gain the admin
- * area, limited to their own branch until a super admin ticks otherwise.
- *
- * Their login only picks up the new role at the next sign-in.
- */
-export async function promoteWorkerToAdmin(formData: FormData) {
-  const { tenant, session } = await requireTenant();
-  if (!isSuperAdmin(session.role)) return { error: "Super admins only." };
-
-  const userId = String(formData.get("userId") ?? "");
-  const worker = await prisma.user.findFirst({
-    where: { id: userId, tenantId: tenant.id, role: "WORKER", status: "APPROVED" },
-    select: { id: true, name: true, staff: { select: { branchId: true } } },
-  });
-  if (!worker) return { error: "Choose an approved support worker." };
-
-  const branchId = worker.staff?.branchId ?? null;
-  await prisma.$transaction(async (tx) => {
-    await tx.user.update({
-      where: { id: worker.id },
-      // Restricted from the start: a branch manager should never briefly see
-      // every branch while someone gets round to setting their ticks.
-      data: { role: "ADMIN", allBranches: false },
-    });
-    await tx.branchAccess.deleteMany({ where: { userId: worker.id } });
-    if (branchId) {
-      await tx.branchAccess.create({
-        data: {
-          tenantId: tenant.id,
-          userId: worker.id,
-          branchId,
-          ops: true,
-          finance: true,
-          message: true,
-        },
-      });
-    }
-  });
-
-  revalidatePath("/admins");
-  return { ok: true, name: worker.name, hadBranch: Boolean(branchId) };
 }

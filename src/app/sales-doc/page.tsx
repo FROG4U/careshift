@@ -39,7 +39,7 @@ export default async function SalesDoc({
   if (!ctx) redirect("/login");
   const { tenant, session, scope } = ctx;
   if (!canSeeAnyCharges(scope, session.role)) redirect("/dashboard");
-  const allowed = isSuperAdmin(session.role) ? null : scope.finance;
+  const allowed = scope.all ? null : scope.finance;
 
   const sp = await searchParams;
   const period: PeriodKind = parsePeriod(sp.period);

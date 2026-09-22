@@ -12,7 +12,7 @@ export default async function HolidaysPage({
 }) {
   const { tenant, session , scope } = await requireScope();
   // Company-wide settings: head office only.
-  if (!scope.all) redirect("/dashboard");
+  if (!scope.headOffice) redirect("/dashboard");
   if (!isManager(session.role)) {
     redirect("/dashboard");
   }

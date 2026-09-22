@@ -6,7 +6,7 @@ import { PayLevelsClient, type PayLevelRow } from "./PayLevelsClient";
 export default async function PayLevelsPage() {
   const { tenant , scope } = await requireScope();
   // Company-wide settings: head office only.
-  if (!scope.all) redirect("/dashboard");
+  if (!scope.headOffice) redirect("/dashboard");
   const levels = await prisma.payLevel.findMany({
     where: { tenantId: tenant.id },
     include: { rates: true },

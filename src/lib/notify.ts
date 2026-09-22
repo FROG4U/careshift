@@ -88,9 +88,15 @@ async function notifyRoles(roles: string[], n: NotifyInput) {
   }
 
   // Every manager used to get every alert - a Perth worker running late
-  // buzzed head office and every other branch. Now: head office (all
-  // branches) always, plus managers restricted to that branch. Something with
-  // no branch goes to head office only. Removed or pending accounts get none.
+  // buzzed head office and every other branch. Now it goes to whoever has
+  // "Shifts & people" for that group: Whole of HQ for an HQ branch, Whole of
+  // Perth for Perth. Anything with no branch goes to head office. Removed or
+  // pending accounts get none.
+  // Is it an HQ branch (covered by "Whole of HQ") or one run separately?
+  const inHq = branchId
+    ? ((await prisma.branch.findUnique({ where: { id: branchId }, select: { hq: true } }))
+        ?.hq ?? true)
+    : true;
   const users = await prisma.user.findMany({
     where: {
       tenantId: n.tenantId,
@@ -98,8 +104,8 @@ async function notifyRoles(roles: string[], n: NotifyInput) {
       status: "APPROVED",
       OR: [
         { allBranches: true },
-        { role: "SUPER_ADMIN" },
-        ...(branchId ? [{ branchAccess: { some: { branchId, ops: true } } }] : []),
+        ...(inHq ? [{ branchAccess: { some: { hqGroup: true, ops: true } } }] : []),
+        ...(branchId && !inHq ? [{ branchAccess: { some: { branchId, ops: true } } }] : []),
       ],
     },
     select: { id: true },

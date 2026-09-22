@@ -8,8 +8,7 @@ import { CopyLink } from "./CopyLink";
 import { AdminRowActions } from "./AdminRowActions";
 import { InviteForm } from "./InviteForm";
 import { RemovedAdmins } from "./RemovedAdmins";
-import { BranchPermissions } from "./BranchPermissions";
-import { PromoteWorker } from "./PromoteWorker";
+import { BranchPermissions, type AccessGroup, type GroupTicks } from "./BranchPermissions";
 import {
   revokeInvite,
   approveAdmin,
@@ -55,7 +54,7 @@ export default async function AdminsPage() {
     );
   }
 
-  const [admins, pendingAdmins, invites, removedAdmins, branches, workers] = await Promise.all([
+  const [admins, pendingAdmins, invites, removedAdmins, branches] = await Promise.all([
     prisma.user.findMany({
       where: {
         tenantId: tenant.id,
@@ -69,9 +68,8 @@ export default async function AdminsPage() {
         email: true,
         role: true,
         allBranches: true,
-        staffId: true,
         branchAccess: {
-          select: { branchId: true, ops: true, finance: true, message: true },
+          select: { hqGroup: true, branchId: true, ops: true, finance: true, message: true },
         },
       },
     }),
@@ -102,12 +100,33 @@ export default async function AdminsPage() {
       orderBy: [{ hq: "desc" }, { createdAt: "asc" }],
       select: { id: true, name: true, state: true, hq: true },
     }),
-    prisma.user.findMany({
-      where: { tenantId: tenant.id, role: "WORKER", status: "APPROVED", staffId: { not: null } },
-      orderBy: { name: "asc" },
-      select: { id: true, name: true, staff: { select: { branch: { select: { name: true } } } } },
-    }),
   ]);
+
+  // The tick rows: the whole of HQ, then each branch run separately.
+  const hqBranches = branches.filter((b) => b.hq);
+  const groups: AccessGroup[] = [
+    ...(hqBranches.length
+      ? [{ key: "HQ", label: "Whole of HQ", detail: hqBranches.map((b) => b.name).join(", ") }]
+      : []),
+    ...branches
+      .filter((b) => !b.hq)
+      .map((b) => ({
+        key: b.id,
+        label: `Whole of ${b.name}`,
+        detail: b.state ? `Separate branch · ${b.state}` : "Separate branch",
+      })),
+  ];
+  // What each admin's ticks currently are. Not set up yet = sees everything,
+  // so every box shows ticked.
+  const ticksFor = (u: (typeof admins)[number]): GroupTicks[] =>
+    u.allBranches
+      ? groups.map((g) => ({ key: g.key, ops: true, finance: true, message: true }))
+      : u.branchAccess.map((a) => ({
+          key: a.hqGroup ? "HQ" : (a.branchId ?? ""),
+          ops: a.ops,
+          finance: a.finance,
+          message: a.message,
+        }));
 
   const h = await headers();
   const host = h.get("host") ?? "";
@@ -199,14 +218,6 @@ export default async function AdminsPage() {
         </section>
       )}
 
-      <PromoteWorker
-        workers={workers.map((w) => ({
-          id: w.id,
-          name: w.name,
-          branch: w.staff?.branch?.name ?? null,
-        }))}
-      />
-
       {/* Current admins */}
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <h2 className="text-sm font-bold text-slate-900">Current admins</h2>
@@ -228,14 +239,7 @@ export default async function AdminsPage() {
                       </span>
                     )}
                   </p>
-                  <p className="text-xs text-slate-500">
-                    {u.email}
-                    {u.staffId && (
-                      <span className="ml-2 rounded bg-emerald-50 px-1.5 py-0.5 text-[11px] font-semibold text-emerald-700">
-                        Also works shifts
-                      </span>
-                    )}
-                  </p>
+                  <p className="text-xs text-slate-500">{u.email}</p>
                 </div>
                 <div className="flex items-center gap-3">
                   <span
@@ -261,19 +265,17 @@ export default async function AdminsPage() {
                     </form>
                   )}
                   {!isMe && (
-                    <AdminRowActions userId={u.id} name={u.name} worksShifts={Boolean(u.staffId)} />
+                    <AdminRowActions userId={u.id} name={u.name} />
                   )}
                 </div>
-                {/* Which branches this admin may see. Super admins see all. */}
-                {!isSuper && (
-                  <BranchPermissions
-                    userId={u.id}
-                    name={u.name.split(" ")[0]}
-                    allBranches={u.allBranches}
-                    branches={branches}
-                    access={u.branchAccess}
-                  />
-                )}
+                {/* What this admin may see: Whole of HQ, Whole of Perth... */}
+                <BranchPermissions
+                  userId={u.id}
+                  name={u.name.split(" ")[0]}
+                  groups={groups}
+                  initial={ticksFor(u)}
+                  isMe={isMe}
+                />
               </div>
             );
           })}

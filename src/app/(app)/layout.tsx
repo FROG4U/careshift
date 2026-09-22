@@ -39,8 +39,7 @@ export default async function AppLayout({
   const access = {
     payroll: scope.all || scope.finance.length > 0,
     charges: canSeeAnyCharges(scope, session.role),
-    headOffice: scope.all,
-    workerApp: Boolean(session.staffId),
+    headOffice: scope.headOffice,
   };
 
   // Fetch everything the layout needs in ONE parallel batch. These used to run

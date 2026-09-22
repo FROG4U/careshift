@@ -49,7 +49,6 @@ export function WorkerShell({
   notifications,
   chatUnread,
   pendingCount,
-  adminLink = false,
   children,
 }: {
   brand: string;
@@ -61,8 +60,6 @@ export function WorkerShell({
   notifications: NotifItem[];
   chatUnread: number;
   pendingCount: number;
-  /** An admin who also works shifts gets a way back to the admin area. */
-  adminLink?: boolean;
   children: React.ReactNode;
 }) {
   const path = usePathname();
@@ -171,9 +168,6 @@ export function WorkerShell({
               </p>
               <DrawerLink href="/my-shifts/guide" icon="menu_book" label="How this app works" onClick={() => setMenuOpen(false)} />
               <DrawerLink href="/install" icon="install_mobile" label="Get the app" onClick={() => setMenuOpen(false)} />
-              {adminLink && (
-                <DrawerLink href="/dashboard" icon="dashboard" label="Admin area" onClick={() => setMenuOpen(false)} />
-              )}
             </nav>
 
             <form action={logoutAction} className="border-t border-slate-100 p-3">

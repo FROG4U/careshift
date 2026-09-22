@@ -36,7 +36,7 @@ function gridFromForm(formData: FormData) {
 export async function importAwardLevels() {
   const { tenant, scope } = await requireScope();
   // Company-wide settings affect every branch: head office only.
-  if (!scope.all) return;
+  if (!scope.headOffice) return;
 
   const existing = await prisma.payLevel.findMany({
     where: { tenantId: tenant.id },
@@ -80,7 +80,7 @@ function round2(n: number) {
 export async function createPayLevel(formData: FormData) {
   const { tenant, scope } = await requireScope();
   // Company-wide settings affect every branch: head office only.
-  if (!scope.all) return;
+  if (!scope.headOffice) return;
   const name = str(formData.get("name"));
   if (!name) return;
   await prisma.payLevel.create({
@@ -106,7 +106,7 @@ export async function createPayLevel(formData: FormData) {
 export async function updatePayLevel(formData: FormData) {
   const { tenant, scope } = await requireScope();
   // Company-wide settings affect every branch: head office only.
-  if (!scope.all) return;
+  if (!scope.headOffice) return;
   const id = str(formData.get("id"));
   if (!id) return;
 
@@ -152,7 +152,7 @@ export async function updatePayLevel(formData: FormData) {
 export async function deletePayLevel(formData: FormData) {
   const { tenant, scope } = await requireScope();
   // Company-wide settings affect every branch: head office only.
-  if (!scope.all) return;
+  if (!scope.headOffice) return;
   const id = str(formData.get("id"));
   await prisma.payLevel.deleteMany({ where: { id, tenantId: tenant.id } });
   revalidatePath("/staff/pay-levels");

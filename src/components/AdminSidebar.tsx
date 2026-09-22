@@ -29,8 +29,7 @@ type Item = {
   needsCharges?: boolean;
   /** Company-wide screens a branch manager doesn't get. */
   headOfficeOnly?: boolean;
-  /** Only for an admin who also works shifts. */
-  needsWorkerApp?: boolean;
+
 };
 
 type Group = { title: string; items: Item[] };
@@ -75,7 +74,6 @@ const GROUPS: Group[] = [
     title: "Account",
     items: [
       { href: "/admins", label: "Admin", icon: "shield_person", badgeKey: "pendingAdmins", adminOnly: true },
-      { href: "/my-shifts", label: "My Shifts", icon: "punch_clock", needsWorkerApp: true },
       { href: "/guide", label: "Worker Guide", icon: "menu_book" },
       { href: "/settings", label: "Settings", icon: "settings", headOfficeOnly: true },
     ],
@@ -90,7 +88,7 @@ export function AdminSidebar({
   isManager,
   isAdmin,
   isSuperAdmin,
-  access = { payroll: true, charges: false, headOffice: true, workerApp: false },
+  access = { payroll: true, charges: false, headOffice: true },
   counts,
   logout,
 }: {
@@ -101,7 +99,7 @@ export function AdminSidebar({
   isManager: boolean;
   isAdmin: boolean;
   isSuperAdmin: boolean;
-  access?: { payroll: boolean; charges: boolean; headOffice: boolean; workerApp: boolean };
+  access?: { payroll: boolean; charges: boolean; headOffice: boolean };
   counts: SidebarCounts;
   logout: (formData: FormData) => void;
 }) {
@@ -168,8 +166,7 @@ export function AdminSidebar({
               (!i.superAdminOnly || isSuperAdmin) &&
               (!i.needsPayroll || access.payroll) &&
               (!i.needsCharges || access.charges) &&
-              (!i.headOfficeOnly || access.headOffice) &&
-              (!i.needsWorkerApp || access.workerApp),
+              (!i.headOfficeOnly || access.headOffice),
           );
           if (items.length === 0) return null;
           const isCollapsed = collapsed.has(group.title);

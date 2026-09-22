@@ -97,7 +97,6 @@ export default async function WorkerLayout({
         notifications={notifications}
         chatUnread={chatUnread}
         pendingCount={pendingCount}
-        adminLink={session.role !== "WORKER"}
       >
         {children}
       </WorkerShell>

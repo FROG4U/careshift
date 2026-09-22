@@ -174,7 +174,7 @@ export default async function SchedulePage({
         tenantId: tenant.id,
         active: true,
         // Participants not yet given a branch are head office's to place.
-        ...(scope.all
+        ...(scope.headOffice
           ? { OR: [{ branchId: selected }, { branchId: null }] }
           : { branchId: selected }),
       },
@@ -274,7 +274,7 @@ export default async function SchedulePage({
         branches={branches}
         selected={selected}
         week={week}
-        isAdmin={isAdmin && scope.all}
+        isAdmin={isAdmin && scope.headOffice}
       />
 
       {/* Filters: date range, worker, participant */}

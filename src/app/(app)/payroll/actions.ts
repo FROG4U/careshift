@@ -328,7 +328,7 @@ export async function deletePayrollPeriod(formData: FormData) {
 export async function deleteOrphanDrafts(): Promise<{ deleted: number }> {
   const { tenant, scope: access } = await requireManager();
   // Runs with no branch cover every branch: head office's to clear up.
-  if (!access.all) return { deleted: 0 };
+  if (!access.headOffice) return { deleted: 0 };
   const res = await prisma.payrollPeriod.deleteMany({
     where: { tenantId: tenant.id, branchId: null, status: "DRAFT" },
   });
@@ -350,7 +350,7 @@ export async function assignShiftsToBranch(
 ): Promise<{ error?: string; updated?: number }> {
   const { tenant, scope: access } = await requireManager();
   // Shifts with no branch belong to nobody yet: head office places them.
-  if (!access.all) return { error: "Only head office can assign shifts to a branch." };
+  if (!access.headOffice) return { error: "Only head office can assign shifts to a branch." };
   const branch = await prisma.branch.findFirst({
     where: { id: branchId, tenantId: tenant.id },
     select: { id: true, name: true },

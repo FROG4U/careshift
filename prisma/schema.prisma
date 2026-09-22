@@ -259,30 +259,32 @@ model Branch {
   @@index([tenantId])
 }
 
-/// What one admin account may see of one branch.
+/// What one admin account may see of one group of branches.
 ///
-/// Three separate ticks, because the questions are genuinely different: who
-/// runs the roster, who sees the money, and who may message those people. A
-/// branch manager gets rows only for their own branch; head office staff are
-/// usually left on User.allBranches instead.
+/// A row is either the whole of head office (hqGroup - every branch marked
+/// Part of HQ, including ones added later) or one branch run separately, like
+/// Perth. Three separate ticks, because the questions are genuinely different:
+/// who runs the roster, who sees the money, and who may message those people.
 model BranchAccess {
-  id       String @id @default(cuid())
+  id       String  @id @default(cuid())
   tenantId String
   userId   String
-  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  branchId String
-  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  user     User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// True = the whole of HQ. False = the single branch in branchId.
+  hqGroup  Boolean @default(false)
+  branchId String?
+  branch   Branch? @relation(fields: [branchId], references: [id], onDelete: Cascade)
 
   /// Shifts, participants, workers, timesheets, incidents, leave, swaps.
-  ops     Boolean @default(true)
+  ops     Boolean @default(false)
   /// Wages, pay runs, participant charges and the money figures on reports.
   finance Boolean @default(false)
-  /// Chat with, and announcements to, this branch's people.
+  /// Chat with, and announcements to, this group's people.
   message Boolean @default(false)
 
   createdAt DateTime @default(now())
 
-  @@unique([userId, branchId])
+  @@index([userId])
   @@index([tenantId])
   @@index([branchId])
 }
