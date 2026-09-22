@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { hashPassword } from "@/lib/auth";
 import { notifySuperAdmins } from "@/lib/notify";
+import { accessRows, parseGroups } from "@/lib/branchAccess";
 
 export type AcceptState = { error?: string; ok?: boolean };
 
@@ -49,8 +50,13 @@ export async function acceptAdminInvite(
       name,
       role: invite.role,
       status: "PENDING",
+      // A new admin sees nothing beyond what the invite granted - never
+      // "everything" while someone gets round to ticking their access.
+      allBranches: false,
     },
   });
+  const rows = await accessRows(invite.tenantId, user.id, parseGroups(invite.access) ?? []);
+  if (rows.length > 0) await prisma.branchAccess.createMany({ data: rows });
 
   await prisma.adminInvite.update({
     where: { id: invite.id },

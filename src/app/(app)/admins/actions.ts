@@ -4,6 +4,7 @@ import { randomBytes } from "crypto";
 import { revalidatePath } from "next/cache";
 import { requireTenant } from "@/lib/tenant";
 import { prisma } from "@/lib/prisma";
+import { accessRows, parseGroups } from "@/lib/branchAccess";
 import { isSuperAdmin } from "@/lib/roles";
 import { notifyUser } from "@/lib/notify";
 import { hashPassword } from "@/lib/auth";
@@ -25,6 +26,9 @@ export async function createAdminInvite(formData: FormData) {
     ? "SUPER_ADMIN"
     : "ADMIN";
   if (!email) return { error: "Enter an email address." };
+  // What they may see from the moment they join (see lib/branchAccess).
+  const access = parseGroups(formData.get("access"));
+  if (access === null) return { error: "Couldn't read the branch ticks." };
 
   const existing = await prisma.user.findFirst({
     where: { tenantId: tenant.id, email },
@@ -62,6 +66,7 @@ export async function createAdminInvite(formData: FormData) {
       role,
       token,
       invitedById: session.id,
+      access: JSON.stringify(access),
     },
   });
 
@@ -289,13 +294,8 @@ export async function setBranchAccess(formData: FormData) {
   if (!isSuperAdmin(session.role)) return { error: "Super admins only." };
 
   const userId = String(formData.get("userId") ?? "");
-  let groups: { key: string; ops?: boolean; finance?: boolean; message?: boolean }[] = [];
-  try {
-    const parsed = JSON.parse(String(formData.get("groups") ?? "[]"));
-    if (Array.isArray(parsed)) groups = parsed;
-  } catch {
-    return { error: "Couldn't read those ticks." };
-  }
+  const groups = parseGroups(formData.get("groups"));
+  if (groups === null) return { error: "Couldn't read those ticks." };
 
   const target = await prisma.user.findFirst({
     where: {
@@ -307,27 +307,7 @@ export async function setBranchAccess(formData: FormData) {
   });
   if (!target) return { error: "That admin no longer exists." };
 
-  // Branches that really exist in this company.
-  const real = new Set(
-    (
-      await prisma.branch.findMany({
-        where: { tenantId: tenant.id },
-        select: { id: true },
-      })
-    ).map((b) => b.id),
-  );
-  const rows = groups
-    .filter((g) => g.ops || g.finance || g.message)
-    .filter((g) => g.key === "HQ" || real.has(g.key))
-    .map((g) => ({
-      tenantId: tenant.id,
-      userId: target.id,
-      hqGroup: g.key === "HQ",
-      branchId: g.key === "HQ" ? null : g.key,
-      ops: Boolean(g.ops),
-      finance: Boolean(g.finance),
-      message: Boolean(g.message),
-    }));
+  const rows = await accessRows(tenant.id, target.id, groups);
 
   await prisma.$transaction(async (tx) => {
     await tx.user.update({ where: { id: target.id }, data: { allBranches: false } });

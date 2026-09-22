@@ -1237,6 +1237,10 @@ model AdminInvite {
   status         String   @default("PENDING") // PENDING | ACCEPTED | REVOKED
   invitedById    String?
   acceptedUserId String?
+  /// Branch access chosen when the invite was made (JSON list of group
+  /// ticks). Applied the moment they join, so a new admin never sees more
+  /// than intended - a WA manager lands on Perth only.
+  access         String?
   createdAt      DateTime @default(now())
 
   @@index([tenantId])

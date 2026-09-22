@@ -80,7 +80,16 @@ export default async function AdminsPage() {
         status: "PENDING",
       },
       orderBy: { createdAt: "asc" },
-      select: { id: true, name: true, email: true, role: true },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        allBranches: true,
+        branchAccess: {
+          select: { hqGroup: true, branchId: true, ops: true, finance: true, message: true },
+        },
+      },
     }),
     prisma.adminInvite.findMany({
       where: { tenantId: tenant.id, status: "PENDING" },
@@ -128,7 +137,11 @@ export default async function AdminsPage() {
   // What each admin's ticks currently are. Not set up yet: every branch for
   // shifts, people, payroll and messaging - and Finances (income, outgoings,
   // charges) only for super admins, which is what they could see before.
-  const ticksFor = (u: (typeof admins)[number]): GroupTicks[] =>
+  const ticksFor = (u: {
+    role: string;
+    allBranches: boolean;
+    branchAccess: (typeof admins)[number]["branchAccess"];
+  }): GroupTicks[] =>
     u.allBranches
       ? groups.map((g) => ({
           key: g.key,
@@ -166,7 +179,7 @@ export default async function AdminsPage() {
           Creates a private link. They open it, set a password, then you approve
           them below.
         </p>
-        <InviteForm />
+        <InviteForm groups={groups} />
 
         {invites.length > 0 && (
           <div className="mt-4 space-y-3 border-t border-slate-100 pt-4">
@@ -227,6 +240,14 @@ export default async function AdminsPage() {
                     </button>
                   </form>
                 </div>
+                {/* Check what they'll see before letting them in. */}
+                <BranchPermissions
+                  userId={u.id}
+                  name={u.name.split(" ")[0]}
+                  groups={groups}
+                  initial={ticksFor(u)}
+                  isMe={false}
+                />
               </div>
             ))}
           </div>
