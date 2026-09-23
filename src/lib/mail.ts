@@ -74,7 +74,7 @@ export async function sendMail(opts: {
 export function resetEmail(name: string, link: string, minutes: number) {
   const text = `Hi ${name},
 
-Someone asked to reset the password for your CareShift account.
+Someone asked to reset the password for your PCG Shift Care account.
 
 Open this link to choose a new password:
 ${link}
@@ -85,7 +85,7 @@ If you didn't ask for this you can ignore this email — your password hasn't ch
 
   const html = `<div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;font-size:15px;line-height:1.55;color:#1e293b">
   <p>Hi ${name},</p>
-  <p>Someone asked to reset the password for your CareShift account.</p>
+  <p>Someone asked to reset the password for your PCG Shift Care account.</p>
   <p style="margin:24px 0">
     <a href="${link}" style="background:#003146;color:#fff;padding:12px 22px;border-radius:10px;text-decoration:none;font-weight:600;display:inline-block">Choose a new password</a>
   </p>

@@ -198,7 +198,7 @@ export function GuideContent({ s }: { s: GuideSettings }) {
           when you arrive.
         </p>
         <Key>
-          Keep CareShift open on your screen for the whole trip. Your phone only
+          Keep PCG Shift Care open on your screen for the whole trip. Your phone only
           sends its location while the app is open, so the screen stays on
           while a trip is running.
         </Key>

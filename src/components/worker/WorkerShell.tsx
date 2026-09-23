@@ -167,6 +167,7 @@ export function WorkerShell({
                 App
               </p>
               <DrawerLink href="/my-shifts/guide" icon="menu_book" label="How this app works" onClick={() => setMenuOpen(false)} />
+              <DrawerLink href="/my-shifts/terms" icon="contract" label="Terms & conditions" onClick={() => setMenuOpen(false)} />
               <DrawerLink href="/install" icon="install_mobile" label="Get the app" onClick={() => setMenuOpen(false)} />
             </nav>
 

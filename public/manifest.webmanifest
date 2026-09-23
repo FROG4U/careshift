@@ -1,7 +1,7 @@
 {
-  "name": "Pristine Care Group",
-  "short_name": "PCG Care",
-  "description": "Shift & schedule platform for Pristine Care Group.",
+  "name": "PCG Shift Care",
+  "short_name": "Shift Care",
+  "description": "Shift, roster and timesheet app for Pristine Care Group support workers.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

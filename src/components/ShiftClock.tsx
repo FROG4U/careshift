@@ -42,7 +42,7 @@ type Coords = { lat: number; lng: number; speed: number | null } | null;
 /** Why the phone gave no location, in words the office can act on. */
 function geoErrorText(err: GeolocationPositionError | null) {
   if (!err) return "This phone or browser doesn't support location.";
-  if (err.code === err.PERMISSION_DENIED) return "Location permission is turned off for CareShift.";
+  if (err.code === err.PERMISSION_DENIED) return "Location permission is turned off for PCG Shift Care.";
   if (err.code === err.POSITION_UNAVAILABLE) return "The phone couldn't work out where it is.";
   if (err.code === err.TIMEOUT) return "The phone took too long to find its location.";
   return err.message || "Unknown location error.";
@@ -477,7 +477,7 @@ export function ShiftClock(props: ShiftClockProps) {
               {km.toFixed(1)} km
             </div>
             <div className="text-xs text-violet-600">
-              Keep CareShift open on your screen until you arrive. Your screen
+              Keep PCG Shift Care open on your screen until you arrive. Your screen
               will stay on while the trip is running.
             </div>
           </div>
@@ -488,7 +488,7 @@ export function ShiftClock(props: ShiftClockProps) {
         </div>
         {trackingGap && (
           <p className="rounded-lg bg-white px-3 py-2 text-xs text-violet-800">
-            CareShift was closed for part of this trip. That&apos;s OK - when you
+            PCG Shift Care was closed for part of this trip. That&apos;s OK - when you
             end the trip, the missing part is worked out along the roads.
           </p>
         )}

@@ -1,4 +1,4 @@
-/* CareShift service worker — push notifications only.
+/* PCG Shift Care service worker — push notifications only.
  *
  * Deliberately does NO caching: the app is server-rendered and a stale cache
  * would show old rosters, which is worse than a slightly slower load.
@@ -17,10 +17,10 @@ self.addEventListener("push", (event) => {
   try {
     data = event.data ? event.data.json() : {};
   } catch {
-    data = { title: "CareShift", body: event.data ? event.data.text() : "" };
+    data = { title: "PCG Shift Care", body: event.data ? event.data.text() : "" };
   }
 
-  const title = data.title || "CareShift";
+  const title = data.title || "PCG Shift Care";
   const options = {
     body: data.body || "",
     icon: "/icon-192.png",

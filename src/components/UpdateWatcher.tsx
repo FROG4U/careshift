@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 export const CHECK_UPDATE_EVENT = "careshift:check-update";
 
 /**
- * Refreshes the page when CareShift has been updated underneath it.
+ * Refreshes the page when PCG Shift Care has been updated underneath it.
  *
  * A page left open across a deploy keeps pointing at server actions that no
  * longer exist, so its buttons fail until it is reloaded. Checks every two
@@ -61,7 +61,7 @@ export function UpdateWatcher({ buildId }: { buildId: string }) {
       onClick={() => window.location.reload()}
       className="fixed inset-x-0 top-0 z-[100] bg-amber-400 px-4 py-2.5 text-center text-sm font-semibold text-slate-900 shadow"
     >
-      CareShift has been updated. Tap here to refresh.
+      PCG Shift Care has been updated. Tap here to refresh.
     </button>
   );
 }

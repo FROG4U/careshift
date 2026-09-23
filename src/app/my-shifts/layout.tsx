@@ -5,10 +5,12 @@ import { totalUnread } from "@/lib/chat";
 import { notesDueFor } from "@/lib/notesDue";
 import { pendingHandoverForStaff } from "@/lib/handover";
 import { pendingBroadcastFor } from "@/lib/broadcast";
+import { pendingTermsFor } from "@/lib/terms";
 import { WorkerShell } from "@/components/worker/WorkerShell";
 import { NotesGuard } from "@/components/worker/NotesGuard";
 import { HandoverGuard } from "@/components/worker/HandoverGuard";
 import { BroadcastGuard } from "@/components/BroadcastGuard";
+import { TermsGuard } from "@/components/worker/TermsGuard";
 import { LocationPinger } from "@/components/worker/LocationPinger";
 import { InstallPrompt } from "@/components/InstallPrompt";
 import { PushRegistrar } from "@/components/PushRegistrar";
@@ -33,6 +35,7 @@ export default async function WorkerLayout({
     notesDue,
     handover,
     broadcast,
+    terms,
   ] = await Promise.all([
       prisma.tenant.findUnique({ where: { id: session.tenantId } }),
       session.staffId
@@ -63,6 +66,7 @@ export default async function WorkerLayout({
         ? pendingHandoverForStaff(session.tenantId, session.staffId)
         : Promise.resolve(null),
       pendingBroadcastFor(session.id),
+      pendingTermsFor(session),
     ]);
 
   // Ping location only while there's a shift happening around now
@@ -90,7 +94,7 @@ export default async function WorkerLayout({
       <WorkerShell
         brand={tenant?.brandColor || "#003146"}
         accent={tenant?.accentColor || "#886949"}
-        tenantName={tenant?.name ?? "CareShift"}
+        tenantName={tenant?.name ?? "PCG Shift Care"}
         logoUrl={tenant?.logoUrl}
         firstName={session.name.split(" ")[0]}
         photoUrl={staff?.photoUrl ?? null}
@@ -100,10 +104,13 @@ export default async function WorkerLayout({
       >
         {children}
       </WorkerShell>
-      {/* One popup at a time, most urgent first: an announcement is the office
-          asking for attention now, a handover is about the shift they're
-          standing in, and the notes reminder is about a finished one. */}
-      {broadcast ? (
+      {/* One popup at a time, most urgent first: unsigned terms block the app
+          outright, an announcement is the office asking for attention now, a
+          handover is about the shift they're standing in, and the notes
+          reminder is about a finished one. */}
+      {terms ? (
+        <TermsGuard terms={terms} suggestedName={session.name} />
+      ) : broadcast ? (
         <BroadcastGuard item={broadcast} />
       ) : handover ? (
         <HandoverGuard handover={handover} />

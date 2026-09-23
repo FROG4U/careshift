@@ -18,23 +18,23 @@ datasource db {
 
 /// A white-label customer of the platform (your company is tenant #1).
 model Tenant {
-  id         String   @id @default(cuid())
-  name       String
-  slug       String   @unique
-  brandColor String   @default("#0F766E") // teal-700
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  brandColor  String   @default("#0F766E") // teal-700
   /// Secondary / accent brand colour (buttons, highlights). Optional.
   accentColor String? // e.g. #886949
-  logoUrl    String?
+  logoUrl     String?
   /// Company sign-up code. Workers enter this on the public /register page to
   /// join this tenant (and it identifies which tenant they're joining). Null =
   /// self sign-up disabled until an admin generates one in Settings.
-  joinCode   String?  @unique
-  createdAt  DateTime @default(now())
+  joinCode    String?  @unique
+  createdAt   DateTime @default(now())
 
   // ── Attendance / reliability thresholds (admin-configurable) ──
   /// Minutes after the rostered start a worker may clock in and still be
   /// counted on time (the "green zone").
-  lateGraceMin       Int @default(5)
+  lateGraceMin        Int @default(5)
   /// Minutes before the rostered end a worker may clock out without it
   /// counting as finishing early.
   earlyFinishGraceMin Int @default(5)
@@ -42,10 +42,10 @@ model Tenant {
   lateFinishGraceMin  Int @default(15)
   /// Score thresholds: at or above `ratingGreenAt` is green, at or above
   /// `ratingAmberAt` is amber, below that is red.
-  ratingGreenAt      Int @default(85)
-  ratingAmberAt      Int @default(65)
+  ratingGreenAt       Int @default(85)
+  ratingAmberAt       Int @default(65)
   /// Points deducted from the score for each "running late" notice.
-  lateNoticePenalty  Int @default(2)
+  lateNoticePenalty   Int @default(2)
 
   // ── Leave & time-off allowances (per year) ──
   annualLeaveDays  Int     @default(20)
@@ -61,30 +61,32 @@ model Tenant {
 
   chargeDefaults ChargeDefault[]
 
-  users      User[]
-  clients    Client[]
-  staff      Staff[]
-  shifts     Shift[]
-  branches   Branch[]
-  priceLists PriceList[]
-  priceItems PriceItem[]
-  planSlots  PlanSlot[]
-  payLevels  PayLevel[]
-  payRates   PayRate[]
-  carePlans  CarePlan[]
-  careGoals  CareGoal[]
-  notifications Notification[]
-  clientWorkers ClientWorker[]
-  shiftSwaps    ShiftSwap[]
-  payrollPeriods PayrollPeriod[]
-  publicHolidays PublicHoliday[]
-  lateNotices    LateNotice[]
-  conversations  Conversation[]
-  availabilities Availability[]
-  adminInvites   AdminInvite[]
-  incidents      Incident[]
-  broadcasts     Broadcast[]
-  payrollLines   PayrollLine[]
+  users            User[]
+  clients          Client[]
+  staff            Staff[]
+  shifts           Shift[]
+  branches         Branch[]
+  priceLists       PriceList[]
+  priceItems       PriceItem[]
+  planSlots        PlanSlot[]
+  payLevels        PayLevel[]
+  payRates         PayRate[]
+  carePlans        CarePlan[]
+  careGoals        CareGoal[]
+  notifications    Notification[]
+  clientWorkers    ClientWorker[]
+  shiftSwaps       ShiftSwap[]
+  payrollPeriods   PayrollPeriod[]
+  publicHolidays   PublicHoliday[]
+  lateNotices      LateNotice[]
+  conversations    Conversation[]
+  availabilities   Availability[]
+  adminInvites     AdminInvite[]
+  incidents        Incident[]
+  broadcasts       Broadcast[]
+  payrollLines     PayrollLine[]
+  termsVersions    TermsVersion[]
+  termsAcceptances TermsAcceptance[]
 }
 
 /// A message broadcast from the office to a group of people (a branch's
@@ -92,23 +94,23 @@ model Tenant {
 /// recipient gets a full-screen popup they must read and close, and the office
 /// can see exactly who opened it and when.
 model Broadcast {
-  id       String @id @default(cuid())
-  tenantId String
-  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id            String   @id @default(cuid())
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   /// Null = every branch.
-  branchId String?
-  branch   Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  branchId      String?
+  branch        Branch?  @relation(fields: [branchId], references: [id], onDelete: SetNull)
   /// Who it was aimed at: WORKERS | ADMINS. Only a super admin may target ADMINS.
-  audience String @default("WORKERS")
+  audience      String   @default("WORKERS")
   /// Shown to the recipient as the sender, e.g. "PCG Admin Team".
-  fromLabel String
-  title     String
-  body      String
-  createdById String?
-  createdBy   User?  @relation("BroadcastAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+  fromLabel     String
+  title         String
+  body          String
+  createdById   String?
+  createdBy     User?    @relation("BroadcastAuthor", fields: [createdById], references: [id], onDelete: SetNull)
   /// The name of whoever sent it, kept even if their account is later removed.
   createdByName String
-  createdAt DateTime @default(now())
+  createdAt     DateTime @default(now())
 
   recipients BroadcastRecipient[]
 
@@ -193,20 +195,20 @@ model ClientWorker {
 /// allocated to that client. Requires admin approval before the shift moves.
 /// status ∈ PENDING | APPROVED | REJECTED | CANCELLED
 model ShiftSwap {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   tenantId    String
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   shiftId     String
-  shift       Shift    @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  shift       Shift     @relation(fields: [shiftId], references: [id], onDelete: Cascade)
   fromStaffId String
-  fromStaff   Staff    @relation("SwapFrom", fields: [fromStaffId], references: [id], onDelete: Cascade)
+  fromStaff   Staff     @relation("SwapFrom", fields: [fromStaffId], references: [id], onDelete: Cascade)
   toStaffId   String
-  toStaff     Staff    @relation("SwapTo", fields: [toStaffId], references: [id], onDelete: Cascade)
-  status      String   @default("PENDING")
+  toStaff     Staff     @relation("SwapTo", fields: [toStaffId], references: [id], onDelete: Cascade)
+  status      String    @default("PENDING")
   reason      String?
-  decidedBy   String?  // admin/coordinator name, for the audit trail
+  decidedBy   String? // admin/coordinator name, for the audit trail
   decidedAt   DateTime?
-  createdAt   DateTime @default(now())
+  createdAt   DateTime  @default(now())
 
   @@index([tenantId])
   @@index([shiftId])
@@ -248,13 +250,13 @@ model Branch {
   hq        Boolean  @default(true)
   createdAt DateTime @default(now())
 
-  staff   Staff[]
-  clients Client[]
-  shifts  Shift[]
+  staff          Staff[]
+  clients        Client[]
+  shifts         Shift[]
   payrollPeriods PayrollPeriod[]
-  incidents Incident[]
-  broadcasts Broadcast[]
-  access  BranchAccess[]
+  incidents      Incident[]
+  broadcasts     Broadcast[]
+  access         BranchAccess[]
 
   @@index([tenantId])
 }
@@ -306,7 +308,7 @@ model PayrollPeriod {
   approvedAt DateTime?
   createdAt  DateTime  @default(now())
 
-  lines      PayrollLine[]
+  lines PayrollLine[]
 
   @@index([tenantId])
   @@index([branchId])
@@ -349,41 +351,42 @@ model PayrollLine {
 
 /// A login account. role ∈ ADMIN | COORDINATOR | WORKER.
 model User {
-  id           String   @id @default(cuid())
+  id           String    @id @default(cuid())
   tenantId     String
-  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   email        String
   passwordHash String
   name         String
-  role         String   @default("WORKER")
+  role         String    @default("WORKER")
   /// Account approval state ∈ PENDING | APPROVED | REJECTED. Self-registered
   /// workers start PENDING and can only see the "awaiting approval" screen
   /// until an admin approves them. Seeded/admin-created users are APPROVED.
-  status       String   @default("APPROVED")
+  status       String    @default("APPROVED")
   /// Optional contact phone captured at self-registration (before a Staff
   /// record's own phone is set).
   phone        String?
-  staffId      String?  @unique // set when this account is a support worker
-  staff        Staff?   @relation(fields: [staffId], references: [id], onDelete: SetNull)
+  staffId      String?   @unique // set when this account is a support worker
+  staff        Staff?    @relation(fields: [staffId], references: [id], onDelete: SetNull)
   /// True (the default) means this account sees every branch. Set false to
   /// restrict it to the branches listed in branchAccess - a branch manager who
   /// must only ever see their own branch's people, shifts and money.
-  allBranches  Boolean  @default(true)
-  createdAt    DateTime @default(now())
+  allBranches  Boolean   @default(true)
+  createdAt    DateTime  @default(now())
   /// Last time this user was active in the app (heartbeat while open) — drives
   /// the "Online" presence dot in chat. Online = seen within ~2 minutes.
   lastSeenAt   DateTime?
 
-  notifications Notification[]
-  chatMemberships ConversationMember[]
-  messages      Message[]
-  reactions     MessageReaction[]
+  notifications     Notification[]
+  chatMemberships   ConversationMember[]
+  messages          Message[]
+  reactions         MessageReaction[]
   pushSubscriptions PushSubscription[]
-  incidentsReported Incident[] @relation("IncidentReporter")
+  incidentsReported Incident[]           @relation("IncidentReporter")
   passwordResets    PasswordReset[]
   broadcastsSent    Broadcast[]          @relation("BroadcastAuthor")
   broadcastsGot     BroadcastRecipient[]
   branchAccess      BranchAccess[]
+  termsAccepted     TermsAcceptance[]
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -429,9 +432,9 @@ model Incident {
 
   /// Who filed it, and (if they're a support worker) their staff record.
   reportedById String
-  reportedBy   User   @relation("IncidentReporter", fields: [reportedById], references: [id], onDelete: Cascade)
+  reportedBy   User    @relation("IncidentReporter", fields: [reportedById], references: [id], onDelete: Cascade)
   staffId      String?
-  staff        Staff? @relation(fields: [staffId], references: [id], onDelete: SetNull)
+  staff        Staff?  @relation(fields: [staffId], references: [id], onDelete: SetNull)
 
   /// Participant involved, and the shift it happened on (both optional — an
   /// incident can involve staff only, or happen outside a rostered shift).
@@ -452,9 +455,9 @@ model Incident {
   /// True when the category is an NDIS reportable incident.
   reportable Boolean @default(false)
 
-  description     String
-  immediateAction String?
-  injuries        String?
+  description      String
+  immediateAction  String?
+  injuries         String?
   medicalTreatment Boolean @default(false)
   medicalDetail    String?
   witnesses        String?
@@ -513,7 +516,6 @@ model StaffRate {
   @@index([staffId])
 }
 
-
 /// A task an admin wants done on a participant's shifts — "check the fridge",
 /// "give 10am medication". Templates generate a ShiftTask on each matching
 /// shift; the worker ticks the ShiftTask, not this.
@@ -545,7 +547,7 @@ model TaskTemplate {
   sortOrder Int     @default(0)
   active    Boolean @default(true)
 
-  createdAt DateTime @default(now())
+  createdAt DateTime    @default(now())
   tasks     ShiftTask[]
 
   @@index([tenantId])
@@ -609,17 +611,17 @@ model PasswordReset {
 /// when the push service reports the subscription as gone (expired, app
 /// uninstalled, notifications turned off).
 model PushSubscription {
-  id         String   @id @default(cuid())
+  id         String    @id @default(cuid())
   tenantId   String
   userId     String
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   /// The push service URL — unique per device/browser.
-  endpoint   String   @unique
+  endpoint   String    @unique
   /// Encryption keys handed to us by the browser.
   p256dh     String
   auth       String
   userAgent  String?
-  createdAt  DateTime @default(now())
+  createdAt  DateTime  @default(now())
   lastUsedAt DateTime?
 
   @@index([userId])
@@ -634,7 +636,7 @@ model Conversation {
   tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   /// DIRECT | GROUP
   type        String   @default("DIRECT")
-  name        String?  // group name (DMs derive their title from the members)
+  name        String? // group name (DMs derive their title from the members)
   createdById String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @default(now()) // bumped on each new message, for sorting
@@ -680,7 +682,7 @@ model Message {
   replies        Message[]    @relation("MessageReply")
   /// Optional image/file attachment.
   attachmentUrl  String?
-  attachmentType String?      // e.g. "image"
+  attachmentType String? // e.g. "image"
   /// Soft delete: the row stays so replies quoting it still make sense, but
   /// the content is replaced with "This message was deleted".
   deletedAt      DateTime?
@@ -707,34 +709,34 @@ model MessageReaction {
 
 /// A participant / client receiving support.
 model Client {
-  id         String    @id @default(cuid())
-  tenantId   String
-  tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  firstName  String
-  lastName   String
+  id            String    @id @default(cuid())
+  tenantId      String
+  tenant        Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  firstName     String
+  lastName      String
   /// Funding agreement type ∈ NDIS | AGED_CARE | DVA. Drives which price
   /// list applies and how participants are grouped/filtered.
-  agreementType String @default("NDIS")
-  ndisNumber String?
-  planStart  DateTime?
-  planEnd    DateTime?
-  budget     Float?
+  agreementType String    @default("NDIS")
+  ndisNumber    String?
+  planStart     DateTime?
+  planEnd       DateTime?
+  budget        Float?
   /// Agreed support hours per week from the participant's service
   /// agreement. The roster cannot exceed this without manager authorisation.
-  weeklyHours Float?
-  address    String?
-  phone      String?
-  email      String?
-  notes      String?
+  weeklyHours   Float?
+  address       String?
+  phone         String?
+  email         String?
+  notes         String?
 
   // Clock-in location + geofence. Workers may only clock in/out within
   // `geofenceFt` feet of (lat,lng). Admin sets these on the participant card.
   lat        Float?
   lng        Float?
-  geofenceFt Int      @default(150)
+  geofenceFt Int    @default(150)
 
-  active     Boolean   @default(true)
-  createdAt  DateTime  @default(now())
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
 
   // ── Charge rates ($/hr) ──
   // What THIS participant is billed, overriding the agreement-type defaults
@@ -751,12 +753,12 @@ model Client {
   branchId String?
   branch   Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
 
-  shifts    Shift[]
-  planSlots PlanSlot[]
-  carePlan  CarePlan?
-  careGoals CareGoal[]
-  workers   ClientWorker[]
-  incidents Incident[]
+  shifts        Shift[]
+  planSlots     PlanSlot[]
+  carePlan      CarePlan?
+  careGoals     CareGoal[]
+  workers       ClientWorker[]
+  incidents     Incident[]
   taskTemplates TaskTemplate[]
 
   @@index([tenantId])
@@ -765,11 +767,11 @@ model Client {
 
 /// A participant's care plan — the narrative support document (one per client).
 model CarePlan {
-  id                String   @id @default(cuid())
-  tenantId          String
-  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  clientId          String   @unique
-  client            Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  clientId String @unique
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
   summary           String? // About the participant / overview
   supportNeeds      String? // Daily support needs & how to assist
@@ -825,19 +827,19 @@ model PriceList {
 
 /// A single priced line item within a price list (e.g. an NDIS support item).
 model PriceItem {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   tenantId    String
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   priceListId String
   priceList   PriceList @relation(fields: [priceListId], references: [id], onDelete: Cascade)
   /// Support item number (NDIS) or custom code; optional for custom lists.
   code        String?
   name        String
   /// Billing unit, e.g. "hour", "each", "km", "day".
-  unit        String   @default("hour")
+  unit        String    @default("hour")
   price       Float
   category    String?
-  createdAt   DateTime @default(now())
+  createdAt   DateTime  @default(now())
 
   planSlots PlanSlot[]
   shifts    Shift[]
@@ -850,21 +852,21 @@ model PriceItem {
 /// share a dayOfWeek (e.g. a morning and an afternoon visit). These form the
 /// template used to generate the roster each week.
 model PlanSlot {
-  id          String   @id @default(cuid())
+  id          String     @id @default(cuid())
   tenantId    String
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant      Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   clientId    String
-  client      Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  client      Client     @relation(fields: [clientId], references: [id], onDelete: Cascade)
   /// 0 = Monday … 6 = Sunday.
   dayOfWeek   Int
-  startTime   String   // "HH:MM"
-  endTime     String   // "HH:MM"
+  startTime   String // "HH:MM"
+  endTime     String // "HH:MM"
   /// The rate applied to this visit, from the participant's price list.
   priceItemId String?
   priceItem   PriceItem? @relation(fields: [priceItemId], references: [id], onDelete: SetNull)
   mileageKm   Float?
   notes       String?
-  createdAt   DateTime @default(now())
+  createdAt   DateTime   @default(now())
 
   @@index([tenantId])
   @@index([clientId])
@@ -879,10 +881,10 @@ model Staff {
   lastName        String
   email           String?
   phone           String?
-  title           String?   // e.g. "Support Worker", "Registered Nurse"
+  title           String? // e.g. "Support Worker", "Registered Nurse"
   /// Small, worker-uploaded profile photo, stored as a compressed JPEG data URL.
   photoUrl        String?
-  clearanceType   String?   // e.g. "NDIS Worker Screening", "WWCC", "Police Check"
+  clearanceType   String? // e.g. "NDIS Worker Screening", "WWCC", "Police Check"
   clearanceExpiry DateTime? // drives compliance/expiry alerts
   active          Boolean   @default(true)
   createdAt       DateTime  @default(now())
@@ -908,21 +910,21 @@ model Staff {
 
   // Optional manual overrides ($/hr). When set, they win over the pay level;
   // otherwise rates are pulled automatically from the selected level.
-  rateNdis      Float?
-  rateAgedCare  Float?
-  rateDva       Float?
-  rateCleaning  Float?
+  rateNdis     Float?
+  rateAgedCare Float?
+  rateDva      Float?
+  rateCleaning Float?
 
-  user        User?
-  shifts      Shift[]
-  allocations ClientWorker[]
-  swapsFrom   ShiftSwap[] @relation("SwapFrom")
-  swapsTo     ShiftSwap[] @relation("SwapTo")
-  lateNotices LateNotice[]
+  user           User?
+  shifts         Shift[]
+  allocations    ClientWorker[]
+  swapsFrom      ShiftSwap[]    @relation("SwapFrom")
+  swapsTo        ShiftSwap[]    @relation("SwapTo")
+  lateNotices    LateNotice[]
   availabilities Availability[]
-  incidents   Incident[]
-  rateOverrides StaffRate[]
-  payrollLines  PayrollLine[]
+  incidents      Incident[]
+  rateOverrides  StaffRate[]
+  payrollLines   PayrollLine[]
 
   @@index([tenantId])
   @@index([branchId])
@@ -939,8 +941,8 @@ model Availability {
   startDate DateTime // first day off (local midnight)
   endDate   DateTime // last day off (inclusive) — same as startDate for one day
   allDay    Boolean  @default(true)
-  startTime String?  // "HH:MM" when !allDay (single-day time range)
-  endTime   String?  // "HH:MM"
+  startTime String? // "HH:MM" when !allDay (single-day time range)
+  endTime   String? // "HH:MM"
   /// Which allowance this counts against ∈ ANNUAL | SICK | OTHER.
   leaveType String   @default("ANNUAL")
   reason    String?
@@ -957,14 +959,14 @@ model Availability {
 /// mileage allowance. Staff only pick their level.
 /// Seeded with representative SCHADS-style rates — verify before payroll.
 model PayLevel {
-  id          String  @id @default(cuid())
+  id          String   @id @default(cuid())
   tenantId    String
-  tenant      Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   name        String
   award       String? // e.g. "SCHADS", "Aged Care Award"
-  mileageRate Float   @default(0) // $ per km
-  sortOrder   Int     @default(0)
-  seeded      Boolean @default(false)
+  mileageRate Float    @default(0) // $ per km
+  sortOrder   Int      @default(0)
+  seeded      Boolean  @default(false)
   createdAt   DateTime @default(now())
 
   rates PayRate[]
@@ -994,13 +996,13 @@ model PayRate {
 /// A scheduled visit. status ∈ SCHEDULED | IN_PROGRESS | COMPLETED | CANCELLED.
 /// approval ∈ PENDING | APPROVED | REJECTED (for the timesheet workflow).
 model Shift {
-  id       String   @id @default(cuid())
+  id       String  @id @default(cuid())
   tenantId String
-  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant   Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   clientId String
-  client   Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  client   Client  @relation(fields: [clientId], references: [id], onDelete: Cascade)
   staffId  String?
-  staff    Staff?   @relation(fields: [staffId], references: [id], onDelete: SetNull)
+  staff    Staff?  @relation(fields: [staffId], references: [id], onDelete: SetNull)
 
   // Which branch calendar this shift belongs to (defaults from participant/worker).
   branchId String?
@@ -1030,9 +1032,9 @@ model Shift {
   clockOutLng Float?
 
   // Break tracking — one row per pause; net worked time excludes these.
-  pauses     ShiftPause[]
+  pauses        ShiftPause[]
   // Transport trips (e.g. taking the participant to the doctor/shops).
-  transports Transport[]
+  transports    Transport[]
   clockAttempts ClockAttempt[]
 
   // Publish / acceptance lifecycle.
@@ -1051,8 +1053,8 @@ model Shift {
   overrunAlertedAt DateTime? // still clocked in after the shift ended
 
   // Timesheet approval
-  approval     String  @default("PENDING")
-  progressNote String?
+  approval             String    @default("PENDING")
+  progressNote         String?
   // Set when a worker changes notes they had already submitted, so the office
   // can see the text isn't what was first written.
   progressNoteEditedAt DateTime?
@@ -1062,8 +1064,8 @@ model Shift {
   // acknowledges the outgoing worker's note, so `handoverAckAt` being null is
   // what makes a note still pending. Once acknowledged it stays on the record
   // as part of the shift's notes.
-  handoverNote        String?
-  handoverAckAt       DateTime?
+  handoverNote         String?
+  handoverAckAt        DateTime?
   handoverAckByStaffId String?
 
   // Clocking out away from the participant's home is legitimate — dropping
@@ -1097,7 +1099,7 @@ model Shift {
   // The office clocked this worker in on their behalf - they were on site but
   // couldn't. Separate from manualEntry, which is a whole shift entered after
   // the fact; here only the clock-in was stated rather than measured.
-  clockInByOffice String?
+  clockInByOffice  String?
   // Set when the office ended the shift because the worker's own clock-out
   // didn't go through. Their name, for the audit trail.
   clockOutByOffice String?
@@ -1110,10 +1112,10 @@ model Shift {
 
   createdAt DateTime @default(now())
 
-  swaps       ShiftSwap[]
-  lateNotices LateNotice[]
-  incidents   Incident[]
-  tasks       ShiftTask[]
+  swaps           ShiftSwap[]
+  lateNotices     LateNotice[]
+  incidents       Incident[]
+  tasks           ShiftTask[]
   /// Set once the "you have tasks this shift" nudge has gone out.
   tasksRemindedAt DateTime?
 
@@ -1142,13 +1144,13 @@ model ShiftPause {
 /// between consecutive points. `lastLat/lastLng` hold the previous ping so the
 /// next delta can be computed. Open while `endAt` is null.
 model Transport {
-  id       String    @id @default(cuid())
-  shiftId  String
-  shift    Shift     @relation(fields: [shiftId], references: [id], onDelete: Cascade)
-  purpose  String? // e.g. "Doctor", "Shops"
-  startAt  DateTime  @default(now())
-  endAt    DateTime?
-  km       Float     @default(0)
+  id         String    @id @default(cuid())
+  shiftId    String
+  shift      Shift     @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  purpose    String? // e.g. "Doctor", "Shops"
+  startAt    DateTime  @default(now())
+  endAt      DateTime?
+  km         Float     @default(0)
   /// Set when an admin changes the distance by hand. A deliberate correction
   /// is never overwritten by the automatic mileage repair.
   kmEditedAt DateTime?
@@ -1161,7 +1163,7 @@ model Transport {
   endLng   Float?
 
   // The GPS trail of the trip, so the route can be drawn on a map.
-  points TransportPoint[]
+  points      TransportPoint[]
   speedEvents SpeedEvent[]
 
   @@index([shiftId])
@@ -1250,4 +1252,65 @@ model AdminInvite {
   createdAt      DateTime @default(now())
 
   @@index([tenantId])
+}
+
+/// ── Worker terms and conditions ──────────────────────────────────────────
+///
+/// One row per published version of the support worker T&Cs. A version is
+/// never edited once published: changing the wording creates the NEXT version,
+/// which every worker has to accept again. That's what makes an acceptance
+/// mean something - it points at the exact words the person agreed to.
+model TermsVersion {
+  id              String    @id @default(cuid())
+  tenantId        String
+  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  /// 1, 2, 3 ... shown to everyone as "Version 3".
+  version         Int
+  title           String    @default("Support Worker Terms and Conditions")
+  /// The terms themselves, in the simple markup rendered by lib/terms.ts.
+  content         String
+  /// What changed since the previous version. Shown to workers on the pop-up
+  /// so they know why they're being asked again.
+  changeNote      String?
+  /// DRAFT (only the office sees it) | PUBLISHED (workers must accept it) |
+  /// SUPERSEDED (a later version was published).
+  status          String    @default("DRAFT")
+  publishedAt     DateTime?
+  publishedById   String?
+  publishedByName String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  acceptances TermsAcceptance[]
+
+  @@unique([tenantId, version])
+  @@index([tenantId, status])
+}
+
+/// One worker's agreement to one version. Kept forever, including after the
+/// version is superseded - it's the evidence that they agreed, and when.
+model TermsAcceptance {
+  id            String       @id @default(cuid())
+  tenantId      String
+  tenant        Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  termsId       String
+  terms         TermsVersion @relation(fields: [termsId], references: [id], onDelete: Cascade)
+  userId        String
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Copied at the time, so the record still reads correctly if the account
+  /// is renamed or the staff record is later removed.
+  staffId       String?
+  fullName      String
+  /// TYPED (they typed their name) | DRAWN (they signed with a finger).
+  signatureType String       @default("TYPED")
+  /// The typed name, or a PNG data URL of the drawn signature.
+  signature     String
+  acceptedAt    DateTime     @default(now())
+  /// Kept for the audit trail, the way an e-signature service would.
+  ip            String?
+  userAgent     String?
+
+  @@unique([termsId, userId])
+  @@index([tenantId])
+  @@index([userId])
 }

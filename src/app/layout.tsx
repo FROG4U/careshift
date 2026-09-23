@@ -15,13 +15,13 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "CareShift — NDIS Care Management",
+  title: "PCG Shift Care — NDIS Care Management",
   description: "NDIS-ready care management, rostering and clock-in for Pristine Care Group.",
   manifest: "/manifest.webmanifest",
-  applicationName: "PCG Care",
+  applicationName: "PCG Shift Care",
   appleWebApp: {
     capable: true,
-    title: "PCG Care",
+    title: "Shift Care",
     statusBarStyle: "default",
   },
   icons: {

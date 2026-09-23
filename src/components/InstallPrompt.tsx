@@ -74,7 +74,7 @@ export function InstallPrompt() {
           </div>
           <div className="min-w-0">
             <p className="text-sm font-semibold text-[var(--text-primary)]">
-              Add CareShift to your home screen
+              Add PCG Shift Care to your home screen
             </p>
             <p className="mt-0.5 text-xs text-[var(--text-secondary)]">
               Open it in one tap, like a normal app — no app store needed.

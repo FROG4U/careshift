@@ -69,7 +69,7 @@ export async function requestReset(
     );
     await sendMail({
       to: user.email,
-      subject: "Reset your CareShift password",
+      subject: "Reset your PCG Shift Care password",
       text,
       html,
     });

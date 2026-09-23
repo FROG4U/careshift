@@ -5,7 +5,7 @@ import { roadDistanceKm } from "./roadDistance";
 /**
  * How far a trip actually went, from its GPS trail.
  *
- * CareShift runs in the phone's browser, and a browser stops sending location
+ * PCG Shift Care runs in the phone's browser, and a browser stops sending location
  * when the screen locks or another app is in front. A trip then arrives as a
  * few points with long silences between them: at home, at the beach for two
  * minutes, back at home.

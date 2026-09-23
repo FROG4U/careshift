@@ -104,3 +104,75 @@ body {
     margin: 14mm;
   }
 }
+
+/* ── Rendered terms and conditions (lib/terms.ts markup) ──────────────────
+   Shared by the office preview, the worker's pop-up and the read-only copy in
+   the worker menu, so the wording looks the same everywhere it is agreed to. */
+.tc-body { color: var(--text-primary); line-height: 1.6; }
+.tc-body p { margin: 0 0 0.75rem; }
+.tc-body .tc-clause {
+  display: flex;
+  gap: 0.6rem;
+  align-items: baseline;
+  margin: 1.75rem 0 0.75rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid var(--border);
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+.tc-body .tc-clause:first-child { margin-top: 0; }
+.tc-body .tc-n {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--accent, #886949);
+}
+.tc-body .tc-sub {
+  margin: 1.1rem 0 0.4rem;
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+.tc-body .tc-list,
+.tc-body .tc-steps { margin: 0 0 0.75rem; padding-left: 1.25rem; }
+.tc-body .tc-list { list-style: disc; }
+.tc-body .tc-steps { list-style: decimal; }
+.tc-body li { margin-bottom: 0.35rem; }
+.tc-body .tc-call {
+  margin: 0.85rem 0;
+  border-left: 4px solid var(--brand);
+  border-radius: 0 0.75rem 0.75rem 0;
+  background: color-mix(in srgb, var(--brand) 7%, white);
+  padding: 0.75rem 0.9rem;
+}
+.tc-body .tc-call p:last-child,
+.tc-body .tc-call ul { margin-bottom: 0; }
+.tc-body .tc-call ul { padding-left: 1.1rem; list-style: disc; }
+.tc-body .tc-stop {
+  border-left-color: #b91c1c;
+  background: #fef2f2;
+}
+.tc-body .tc-good {
+  border-left-color: #15803d;
+  background: #f0fdf4;
+}
+.tc-body .tc-scroll { overflow-x: auto; margin: 0.85rem 0; }
+.tc-body .tc-table {
+  width: 100%;
+  min-width: 26rem;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+.tc-body .tc-table th,
+.tc-body .tc-table td {
+  border: 1px solid var(--border);
+  padding: 0.5rem 0.6rem;
+  text-align: left;
+  vertical-align: top;
+}
+.tc-body .tc-table th {
+  background: var(--surface-2, #f8fafc);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}

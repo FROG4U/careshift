@@ -42,7 +42,7 @@ export default async function InvitePage({
             </div>
           )}
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-            {tenant?.name ?? "CareShift"}
+            {tenant?.name ?? "PCG Shift Care"}
           </h1>
           {invite && (
             <p className="mt-1 text-sm text-slate-500">

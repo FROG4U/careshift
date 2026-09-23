@@ -104,7 +104,7 @@ function geofenceError(
   const overFt = Math.round((outsideM - client.geofenceFt / FT_PER_M) * FT_PER_M);
   // Only seen by an old copy of the app that can't show the "where are you
   // starting from?" question. Current versions ask instead of showing this.
-  return `You're about ${overFt} ft from ${client.firstName}'s place. If the shift starts somewhere else today, close CareShift completely, open it again and tap Start - it will ask where you are and clock you in.`;
+  return `You're about ${overFt} ft from ${client.firstName}'s place. If the shift starts somewhere else today, close PCG Shift Care completely, open it again and tap Start - it will ask where you are and clock you in.`;
 }
 
 type AttemptShift = { id: string; tenantId: string; staffId: string | null };

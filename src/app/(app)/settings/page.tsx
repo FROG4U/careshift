@@ -347,7 +347,7 @@ export default async function SettingsPage() {
         <h2 className="mb-2 font-semibold text-slate-900">Plan</h2>
         <p className="text-sm text-slate-500">
           You&apos;re on the{" "}
-          <span className="font-medium text-slate-700">CareShift Basic</span>{" "}
+          <span className="font-medium text-slate-700">PCG Shift Care</span>{" "}
           foundation — rostering, clock-in, timesheets and participant
           management. NDIS invoicing &amp; claiming arrives in the next phase.
         </p>
