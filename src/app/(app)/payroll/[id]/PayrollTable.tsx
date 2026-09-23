@@ -118,7 +118,7 @@ export function PayrollTable({
                             bandStyle[band] ?? "bg-slate-100 text-slate-600"
                           }`}
                         >
-                          {DAY_TYPE_LABELS[band as DayType] ?? band} {h.toFixed(1)}h
+                          {DAY_TYPE_LABELS[band as DayType] ?? band} {h.toFixed(2)}h
                         </span>
                       ))}
                     </div>
@@ -221,6 +221,75 @@ export function PayrollTable({
                             )}
                           </tbody>
                         </table>
+
+                        {/* What to type into Xero.
+                            The band chips above are rounded for reading, and
+                            typing 5.3 where the worker did 5.2692 hours moves
+                            the total by a dollar or two. These are the exact
+                            figures, one line per earnings rate. */}
+                        <div className="mt-4 rounded-xl border border-[var(--border)] bg-white p-3">
+                          <div className="mb-2 flex items-center gap-2">
+                            <span className="material-symbols-rounded text-[16px] text-[var(--text-secondary)]">
+                              content_copy
+                            </span>
+                            <span className="text-xs font-bold uppercase tracking-wide text-[var(--text-secondary)]">
+                              For Xero - exact figures
+                            </span>
+                          </div>
+                          <table className="w-full text-xs">
+                            <thead className="text-left text-[var(--text-secondary)]">
+                              <tr>
+                                <th className="py-1 font-medium">Earnings rate</th>
+                                <th className="py-1 text-right font-medium">Hours / KM</th>
+                                <th className="py-1 text-right font-medium">Rate</th>
+                                <th className="py-1 text-right font-medium">Total</th>
+                              </tr>
+                            </thead>
+                            <tbody className="tabular-nums">
+                              {Object.entries(r.bands).map(([band, h]) => {
+                                const rate =
+                                  r.lines.find((l) => l.dayType === band)?.rate ?? 0;
+                                return (
+                                  <tr key={band} className="border-t border-[var(--border)]">
+                                    <td className="py-1.5">
+                                      {DAY_TYPE_LABELS[band as DayType] ?? band}
+                                    </td>
+                                    <td className="py-1.5 text-right font-semibold">
+                                      {h.toFixed(4)}
+                                    </td>
+                                    <td className="py-1.5 text-right">{rate.toFixed(2)}</td>
+                                    <td className="py-1.5 text-right">
+                                      {money(h * rate)}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                              {r.km > 0 && (
+                                <tr className="border-t border-[var(--border)]">
+                                  <td className="py-1.5">Transport</td>
+                                  <td className="py-1.5 text-right font-semibold">
+                                    {r.km.toFixed(4)}
+                                  </td>
+                                  <td className="py-1.5 text-right">
+                                    {(r.kmPay / r.km).toFixed(2)}
+                                  </td>
+                                  <td className="py-1.5 text-right">{money(r.kmPay)}</td>
+                                </tr>
+                              )}
+                              <tr className="border-t-2 border-[var(--border)] font-bold">
+                                <td className="py-1.5" colSpan={3}>
+                                  Total
+                                </td>
+                                <td className="py-1.5 text-right">{money(r.total)}</td>
+                              </tr>
+                            </tbody>
+                          </table>
+                          <p className="mt-2 text-[11px] text-[var(--text-secondary)]">
+                            Type the hours to 4 decimal places. Rounding them to
+                            one, as the coloured chips show them, changes the
+                            total.
+                          </p>
+                        </div>
                       </div>
                     </td>
                   </tr>

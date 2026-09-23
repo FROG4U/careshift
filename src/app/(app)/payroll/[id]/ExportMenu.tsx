@@ -28,10 +28,11 @@ export function ExportMenu({
     return () => document.removeEventListener("mousedown", onDoc);
   }, [open]);
 
-  const csvUrl = (detail: boolean) => {
+  const csvUrl = (kind: "summary" | "detail" | "xero") => {
     const p = new URLSearchParams();
     if (who) p.set("staff", who);
-    if (detail) p.set("detail", "1");
+    if (kind === "detail") p.set("detail", "1");
+    if (kind === "xero") p.set("xero", "1");
     const q = p.toString();
     return `/payroll/${periodId}/export${q ? `?${q}` : ""}`;
   };
@@ -78,7 +79,7 @@ export function ExportMenu({
             Spreadsheet (CSV)
           </p>
           <a
-            href={csvUrl(false)}
+            href={csvUrl("summary")}
             className="flex items-center gap-2 rounded-lg px-2 py-2 text-sm whitespace-nowrap text-[var(--text-primary)] hover:bg-[var(--background)]"
             onClick={() => setOpen(false)}
           >
@@ -88,7 +89,7 @@ export function ExportMenu({
             Summary (one row per worker)
           </a>
           <a
-            href={csvUrl(true)}
+            href={csvUrl("detail")}
             className="flex items-center gap-2 rounded-lg px-2 py-2 text-sm whitespace-nowrap text-[var(--text-primary)] hover:bg-[var(--background)]"
             onClick={() => setOpen(false)}
           >
@@ -96,6 +97,17 @@ export function ExportMenu({
               format_list_bulleted
             </span>
             Detailed (one row per shift)
+          </a>
+
+          <a
+            href={csvUrl("xero")}
+            className="flex items-center gap-2 rounded-lg px-2 py-2 text-sm whitespace-nowrap text-[var(--text-primary)] hover:bg-[var(--background)]"
+            onClick={() => setOpen(false)}
+          >
+            <span className="material-symbols-rounded text-[18px] text-emerald-600">
+              calculate
+            </span>
+            For Xero (one row per earnings rate)
           </a>
 
           <div className="my-2 border-t border-[var(--border)]" />

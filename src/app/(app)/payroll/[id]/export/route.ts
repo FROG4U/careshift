@@ -42,6 +42,7 @@ export async function GET(
 
   const staffFilter = req.nextUrl.searchParams.get("staff") || null;
   const detail = req.nextUrl.searchParams.get("detail") === "1";
+  const xero = req.nextUrl.searchParams.get("xero") === "1";
 
   const report = await buildPayReport(
     tenant.id,
@@ -68,7 +69,44 @@ export async function GET(
   );
   lines.push("");
 
-  if (detail) {
+  if (xero) {
+    // One row per worker per earnings rate, the shape a payroll system wants.
+    // Hours carry 4 decimals on purpose: the screen rounds them for reading,
+    // and a rounded figure typed into Xero moves the total by a dollar or two.
+    lines.push(
+      row(["Worker", "Pay level", "Employment", "Earnings rate", "Hours / KM", "Rate", "Total $"]),
+    );
+    for (const r of report.rows) {
+      for (const [band, hours] of Object.entries(r.bands)) {
+        const rate = r.lines.find((l) => l.dayType === band)?.rate ?? 0;
+        lines.push(
+          row([
+            r.name,
+            r.level,
+            r.employment,
+            DAY_TYPE_LABELS[band as DayType] ?? band,
+            hours.toFixed(4),
+            money(rate),
+            money(hours * rate),
+          ]),
+        );
+      }
+      if (r.km > 0) {
+        lines.push(
+          row([
+            r.name,
+            r.level,
+            r.employment,
+            "Transport",
+            r.km.toFixed(4),
+            money(r.kmPay / r.km),
+            money(r.kmPay),
+          ]),
+        );
+      }
+      lines.push(row([r.name, "", "", "TOTAL", "", "", money(r.total)]));
+    }
+  } else if (detail) {
     lines.push(
       row([
         "Worker",
