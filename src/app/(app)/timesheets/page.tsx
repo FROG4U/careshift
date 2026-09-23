@@ -146,6 +146,10 @@ export default async function TimesheetsPage({
         end: true,
         clockInAt: true,
         clockOutAt: true,
+        approvedEnd: true,
+        approvedEndNote: true,
+        approvedEndAt: true,
+        approvedEndBy: true,
         staff: { select: { firstName: true, lastName: true } },
         client: { select: { firstName: true, lastName: true } },
       },
@@ -319,6 +323,20 @@ export default async function TimesheetsPage({
               );
               const net = netHoursOf(s);
               const clockedNet = Math.max(0, gross - breakHrs);
+              // Minutes clocked past the rostered finish. Unpaid unless the
+              // office authorises them (see setApprovedEnd).
+              const overrunMin =
+                s.clockOutAt && s.clockOutAt > s.end
+                  ? Math.round((s.clockOutAt.getTime() - s.end.getTime()) / 60000)
+                  : 0;
+              const paidExtraMin =
+                s.approvedEnd && s.clockOutAt && s.approvedEnd > s.end
+                  ? Math.round(
+                      (Math.min(s.clockOutAt.getTime(), s.approvedEnd.getTime()) -
+                        s.end.getTime()) /
+                        60000,
+                    )
+                  : 0;
               const trimmed = clockedNet - net > 0.01;
               // Tracked trips, or the figure typed in for a manual entry -
               // the same rule pay uses.
@@ -461,6 +479,20 @@ export default async function TimesheetsPage({
                   purpose: t.purpose,
                   km: t.km,
                 })),
+                overrunMin,
+                extraTime: s.approvedEnd
+                  ? {
+                      untilLabel: fmtTime(s.approvedEnd),
+                      untilTime: hmInTz(
+                        s.approvedEnd,
+                        tzForState(s.branch?.state ?? null),
+                      ),
+                      by: s.approvedEndBy ?? "the office",
+                      at: s.approvedEndAt ? fmtDate(s.approvedEndAt) : "",
+                      note: s.approvedEndNote,
+                      paidMin: paidExtraMin,
+                    }
+                  : null,
               };
               return (
                 <tr key={s.id} className="align-top hover:bg-slate-50">
@@ -515,11 +547,21 @@ export default async function TimesheetsPage({
                     {trimmed && (
                       <div
                         className="text-xs font-normal text-slate-400"
-                        title="Pay follows the rostered times. Edit the shift times to pay the extra."
+                        title="Pay follows the rostered times unless the extra time is authorised."
                       >
                         clocked {clockedNet.toFixed(2)}h
                       </div>
                     )}
+                    {overrunMin > 0 &&
+                      (paidExtraMin > 0 ? (
+                        <div className="text-xs font-normal text-emerald-700">
+                          +{paidExtraMin}m authorised
+                        </div>
+                      ) : (
+                        <div className="text-xs font-normal text-amber-600">
+                          ran {overrunMin}m over, not paid
+                        </div>
+                      ))}
                   </td>
                   <td className="px-5 py-3">
                     {km > 0 ? (

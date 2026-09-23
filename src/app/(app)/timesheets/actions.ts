@@ -31,6 +31,83 @@ export async function setApproval(formData: FormData) {
   revalidatePath("/dashboard");
 }
 
+/**
+ * Accept the time a worker stayed past the rostered finish, so it is paid.
+ *
+ * Approving a TIMESHEET only says the shift happened; pay still stops at the
+ * rostered end, because the participant's plan funds those hours. This is the
+ * separate decision the terms describe: the office checks why the shift ran
+ * over and, where it was asked for or needed, authorises it. Only then does
+ * the pay run include it.
+ *
+ * Authorising to the clock-out is the normal case. A custom end covers "stay
+ * until the family arrived at 8, but they then forgot to clock out until 10".
+ */
+export async function setApprovedEnd(formData: FormData) {
+  const { tenant, scope, session } = await requireScope();
+  if (!isManager(session.role)) {
+    return { error: "You don't have permission to authorise extra time." };
+  }
+
+  const shiftId = String(formData.get("shiftId") ?? "");
+  const mode = String(formData.get("mode") ?? "clockout");
+  const note = String(formData.get("note") ?? "").trim();
+
+  const shift = await prisma.shift.findFirst({
+    where: { id: shiftId, tenantId: tenant.id, ...opsWhere(scope) },
+    include: { branch: { select: { state: true } } },
+  });
+  if (!shift) return { error: "That shift no longer exists." };
+
+  if (mode === "clear") {
+    await prisma.shift.update({
+      where: { id: shift.id },
+      data: {
+        approvedEnd: null,
+        approvedEndBy: null,
+        approvedEndAt: null,
+        approvedEndNote: null,
+      },
+    });
+    revalidatePath("/timesheets");
+    revalidatePath("/payroll");
+    return { ok: true, cleared: true };
+  }
+
+  let end: Date | null = null;
+  if (mode === "custom") {
+    // A wall-clock time where the participant lives, on the shift's own day -
+    // the same conversion the clock-time editor uses, for the same reason.
+    const tz = tzForState(shift.branch?.state ?? null);
+    const t = String(formData.get("until") ?? "").trim();
+    if (!/^\d{2}:\d{2}$/.test(t)) return { error: "Give a time like 20:30." };
+    end = zonedTimeToUtc(dateKeyInTz(shift.start, tz), t, tz);
+    // A shift that runs past midnight authorises into the next day.
+    if (end && end < shift.end) end = new Date(end.getTime() + DAY_MS);
+  } else {
+    end = shift.clockOutAt;
+  }
+
+  if (!end) return { error: "There is no clock-out to authorise." };
+  if (end <= shift.end) {
+    return { error: "That time is not past the rostered finish, so there is nothing to authorise." };
+  }
+
+  await prisma.shift.update({
+    where: { id: shift.id },
+    data: {
+      approvedEnd: end,
+      approvedEndBy: session.name,
+      approvedEndAt: new Date(),
+      approvedEndNote: note || null,
+    },
+  });
+
+  revalidatePath("/timesheets");
+  revalidatePath("/payroll");
+  return { ok: true };
+}
+
 /** Admin edits a shift's clocked times, notes and per-trip mileage. */
 export async function updateShiftDetail(formData: FormData) {
   const { tenant, scope } = await requireScope();

@@ -77,6 +77,7 @@ export default async function PayrollPage({
         end: true,
         clockInAt: true,
         clockOutAt: true,
+        approvedEnd: true,
         staff: { select: { firstName: true, lastName: true } },
         client: { select: { firstName: true, lastName: true } },
       },

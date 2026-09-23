@@ -3,7 +3,7 @@
 import { useState, useEffect, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ShiftMap, type LatLng, type Trip } from "@/components/ShiftMap";
-import { updateShiftDetail, setApproval } from "./actions";
+import { updateShiftDetail, setApproval, setApprovedEnd } from "./actions";
 
 const ATTEMPT_LABELS: Record<string, string> = {
   REFUSED: "Refused",
@@ -58,6 +58,17 @@ export type ShiftDetailData = {
   /** Set when the office ended the shift for the worker. */
   clockedOutByOffice: string | null;
   approval: string;
+  /** Minutes clocked past the rostered finish. 0 when the shift didn't run over. */
+  overrunMin: number;
+  /** Set once the office has authorised extra time past the rostered finish. */
+  extraTime: {
+    untilLabel: string;
+    untilTime: string;
+    by: string;
+    at: string;
+    note: string | null;
+    paidMin: number;
+  } | null;
   needsNotes: boolean;
   hasMap: boolean;
   center: LatLng | null;
@@ -655,6 +666,11 @@ export function ShiftDetail({ data }: { data: ShiftDetailData }) {
                 </p>
               )}
 
+              {/* Time past the rostered finish - a separate decision from
+                  approving the timesheet, because the participant's plan only
+                  funds the rostered hours. */}
+              {data.overrunMin > 0 && <ExtraTime data={data} />}
+
               {/* Approve / reject */}
               {!data.needsNotes && (
                 <div className="flex gap-2.5">
@@ -680,5 +696,123 @@ export function ShiftDetail({ data }: { data: ShiftDetailData }) {
         </div>
       )}
     </>
+  );
+}
+
+/**
+ * Authorising the time a worker stayed past the rostered finish.
+ *
+ * Kept separate from "Approve shift" on purpose: approving says the shift
+ * happened, this says the company is paying for time the plan didn't fund.
+ * Until someone presses it, the overrun is recorded but unpaid.
+ */
+function ExtraTime({ data }: { data: ShiftDetailData }) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const [note, setNote] = useState("");
+  const [until, setUntil] = useState(data.clockOutTime);
+  const [custom, setCustom] = useState(false);
+
+  function send(mode: "clockout" | "custom" | "clear") {
+    setError(null);
+    const fd = new FormData();
+    fd.set("shiftId", data.id);
+    fd.set("mode", mode);
+    fd.set("until", until);
+    fd.set("note", note);
+    start(async () => {
+      const res = await setApprovedEnd(fd);
+      if (res?.error) {
+        setError(res.error);
+        return;
+      }
+      router.refresh();
+    });
+  }
+
+  if (data.extraTime) {
+    return (
+      <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-3">
+        <p className="text-sm font-semibold text-emerald-900">
+          Extra time authorised to {data.extraTime.untilLabel}
+        </p>
+        <p className="mt-0.5 text-xs text-emerald-800">
+          {data.extraTime.paidMin} minutes are paid on top of the rostered
+          hours. Authorised by {data.extraTime.by}
+          {data.extraTime.at ? ` on ${data.extraTime.at}` : ""}.
+        </p>
+        {data.extraTime.note && (
+          <p className="mt-1 text-xs italic text-emerald-800">
+            &ldquo;{data.extraTime.note}&rdquo;
+          </p>
+        )}
+        {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
+        <button
+          onClick={() => send("clear")}
+          disabled={pending}
+          className="mt-2 text-xs font-semibold text-emerald-900 underline disabled:opacity-60"
+        >
+          {pending ? "Removing…" : "Remove the extra time"}
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3">
+      <p className="text-sm font-semibold text-amber-900">
+        Stayed {data.overrunMin} min past the rostered finish
+      </p>
+      <p className="mt-0.5 text-xs text-amber-800">
+        Not paid. Pay it only where the participant asked for the extra support,
+        or the worker could not safely leave. Check the shift notes first.
+      </p>
+
+      <label className="mt-2 block text-xs font-medium text-amber-900">
+        Why (kept on the shift)
+        <input
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder="e.g. participant unwell, family arrived at 8"
+          className="mt-1 w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none"
+        />
+      </label>
+
+      {custom && (
+        <label className="mt-2 block text-xs font-medium text-amber-900">
+          Pay up to
+          <input
+            type="time"
+            value={until}
+            onChange={(e) => setUntil(e.target.value)}
+            className="mt-1 w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none"
+          />
+        </label>
+      )}
+
+      {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
+
+      <div className="mt-2.5 flex flex-wrap gap-2">
+        <button
+          onClick={() => send(custom ? "custom" : "clockout")}
+          disabled={pending}
+          className="rounded-lg bg-amber-700 px-3 py-2 text-xs font-bold text-white transition hover:bg-amber-800 disabled:opacity-60"
+        >
+          {pending
+            ? "Saving…"
+            : custom
+              ? `Pay up to ${until}`
+              : `Pay the extra ${data.overrunMin} min`}
+        </button>
+        <button
+          onClick={() => setCustom((v) => !v)}
+          disabled={pending}
+          className="rounded-lg border border-amber-300 px-3 py-2 text-xs font-semibold text-amber-900 disabled:opacity-60"
+        >
+          {custom ? "Use the clock-out" : "Pay to a different time"}
+        </button>
+      </div>
+    </div>
   );
 }

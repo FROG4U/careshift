@@ -1104,6 +1104,15 @@ model Shift {
   // didn't go through. Their name, for the audit trail.
   clockOutByOffice String?
 
+  /// End time the office has AUTHORISED for this shift, set when a worker was
+  /// asked to stay - or had to - past the rostered finish. Pay runs to the
+  /// EARLIER of the clock-out and this time, so accepting extra time pays it
+  /// without paying a forgotten clock-out. Null means the rostered end stands.
+  approvedEnd     DateTime?
+  approvedEndBy   String?
+  approvedEndAt   DateTime?
+  approvedEndNote String?
+
   // Set true when this shift was rostered beyond the participant's agreed
   // weekly hours and a manager authorised the overrun. `authorisedBy` records
   // the manager's name for the audit trail.

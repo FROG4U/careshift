@@ -108,13 +108,23 @@ export type ShiftHours = {
   end: Date;
   clockInAt: Date | null;
   clockOutAt: Date | null;
+  /**
+   * Extra time the office authorised past the rostered finish. Optional so
+   * callers that don't select it keep the rostered end, which is the rule.
+   */
+  approvedEnd?: Date | null;
   pauses: { startAt: Date; endAt: Date | null }[];
 };
 
 export function paidWindowOf(s: ShiftHours): { from: Date; to: Date } {
   if (!s.clockInAt || !s.clockOutAt) return { from: s.start, to: s.end };
   const from = s.clockInAt > s.start ? s.clockInAt : s.start;
-  const to = s.clockOutAt < s.end ? s.clockOutAt : s.end;
+  // Pay stops at the rostered finish, unless the office authorised a later
+  // one - then it stops at whichever comes first, the clock-out or what was
+  // authorised. A forgotten clock-out three hours later is still not paid.
+  const limit =
+    s.approvedEnd && s.approvedEnd > s.end ? s.approvedEnd : s.end;
+  const to = s.clockOutAt < limit ? s.clockOutAt : limit;
   return { from, to };
 }
 

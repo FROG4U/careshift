@@ -13,6 +13,7 @@ type Detail = {
   holiday: string | null;
   hours: number;
   topUpHours?: number;
+  extraHours?: number;
   rate: number;
   km: number;
   kmPay: number;
@@ -201,6 +202,12 @@ export default async function MyPayrollPage() {
                                 {d.km.toFixed(1)} km · {money(d.kmPay)}
                               </span>
                             )}
+                            {d.extraHours ? (
+                              <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[10px] font-semibold text-sky-700">
+                                includes {Math.round(d.extraHours * 60)} min extra time
+                                the office approved
+                              </span>
+                            ) : null}
                             {d.topUpHours ? (
                               <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
                                 includes {Math.round(d.topUpHours * 60)} min to the 2 hour

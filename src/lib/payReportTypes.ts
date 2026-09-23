@@ -22,6 +22,8 @@ export type DayLine = {
   hours: number;
   /** Hours added to reach the 2 hour minimum engagement, if any. */
   topUpHours?: number;
+  /** Hours paid past the rostered finish because the office authorised them. */
+  extraHours?: number;
   rate: number;
   km: number;
   kmPay: number;

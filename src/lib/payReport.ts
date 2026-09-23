@@ -79,6 +79,7 @@ export async function buildPayReport(
         end: true,
         clockInAt: true,
         clockOutAt: true,
+        approvedEnd: true,
         mileageKm: true,
         branchId: true,
         client: { select: { agreementType: true, firstName: true, lastName: true } },
@@ -179,6 +180,18 @@ export async function buildPayReport(
     const end = new Date(s.end);
     const time = (d: Date) => fmtInTz(d, tz, { hour: "numeric", minute: "2-digit" });
 
+    // Time past the rostered finish that the office authorised, and the pay
+    // run therefore includes (see paidWindowOf).
+    const extraHours =
+      s.approvedEnd && s.clockOutAt && s.approvedEnd > s.end
+        ? Math.max(
+            0,
+            (Math.min(s.clockOutAt.getTime(), s.approvedEnd.getTime()) -
+              s.end.getTime()) /
+              3600000,
+          )
+        : 0;
+
     const dayLine: DayLine = {
       id: s.id,
       dateLabel: fmtInTz(start, tz, { weekday: "short", day: "numeric", month: "short" }),
@@ -190,6 +203,7 @@ export async function buildPayReport(
       dayType: line.dayType,
       holidayName: holidays.names.get(dateKey(start, tz)) ?? null,
       hours: line.hours,
+      extraHours: extraHours > 0 ? extraHours : undefined,
       rate: line.rate,
       km: line.km,
       kmPay: line.km * mileageRate,
