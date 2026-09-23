@@ -179,6 +179,52 @@ export default async function SettingsPage() {
         </div>
       )}
 
+      {/* How paid time is rounded — changes what workers are paid, so it
+          lives on its own rather than buried in the attendance card. */}
+      <div className="mt-6 max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h2 className="mb-1 font-semibold text-slate-900">Paid time rounding</h2>
+        <p className="mb-4 text-sm text-slate-500">
+          Paying to the exact minute gives figures like 11.6170 hours, which
+          have to be typed into Xero to four decimals. Rounding up to a block
+          puts every figure on one decimal. It only ever rounds up, so nobody
+          is paid less than the time they worked.
+        </p>
+        <form action={updateAttendanceSettings} className="space-y-4">
+          {/* The attendance fields post with this form too, so they keep their
+              current values rather than falling back to the defaults. */}
+          <input type="hidden" name="lateGraceMin" value={tenant.lateGraceMin} />
+          <input type="hidden" name="earlyFinishGraceMin" value={tenant.earlyFinishGraceMin} />
+          <input type="hidden" name="lateFinishGraceMin" value={tenant.lateFinishGraceMin} />
+          <input type="hidden" name="ratingGreenAt" value={tenant.ratingGreenAt} />
+          <input type="hidden" name="ratingAmberAt" value={tenant.ratingAmberAt} />
+          <input type="hidden" name="lateNoticePenalty" value={tenant.lateNoticePenalty} />
+
+          <label className="block text-xs font-medium text-slate-600">
+            Round each shift up to
+            <select
+              name="payRoundingMin"
+              defaultValue={String(tenant.payRoundingMin)}
+              className={field}
+            >
+              <option value="0">Exact minutes (11.6170 h)</option>
+              <option value="6">6 minutes — 0.1 h blocks (11.7 h)</option>
+              <option value="15">15 minutes — 0.25 h blocks (11.75 h)</option>
+              <option value="30">30 minutes — 0.5 h blocks (12.0 h)</option>
+            </select>
+          </label>
+          <p className="text-xs text-slate-500">
+            On this fortnight, 6 minute blocks add about 1.6 hours across both
+            branches. The 2 hour minimum engagement still applies on top.
+          </p>
+          <button
+            type="submit"
+            className="rounded-xl bg-[var(--brand)] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-90"
+          >
+            Save rounding
+          </button>
+        </form>
+      </div>
+
       {/* Attendance thresholds — drive the worker reliability score */}
       <div className="mt-6 max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <h2 className="mb-1 font-semibold text-slate-900">

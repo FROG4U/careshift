@@ -47,6 +47,12 @@ model Tenant {
   /// Points deducted from the score for each "running late" notice.
   lateNoticePenalty   Int @default(2)
 
+  /// Block size, in minutes, that a shift's PAID time is rounded UP to.
+  /// 0 = pay to the exact minute (the default). 6 makes every figure land on
+  /// one decimal (0.1 h), which is what a payroll system wants typed into it.
+  /// Always rounds up, never down, so it can never pay less than time worked.
+  payRoundingMin Int @default(0)
+
   // ── Leave & time-off allowances (per year) ──
   annualLeaveDays  Int     @default(20)
   sickLeaveDays    Int     @default(10)

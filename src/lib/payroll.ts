@@ -196,6 +196,24 @@ export function costShift(
 export const MIN_ENGAGEMENT_HOURS = 2;
 
 /**
+ * Round a shift's paid hours UP to the next block of `minutes`.
+ *
+ * Paying to the exact minute produces figures like 11.6170 hours, which have
+ * to be typed into a payroll system to four decimals or the totals disagree.
+ * A 6 minute block puts every figure on one decimal instead.
+ *
+ * Up, never to the nearest: rounding down would take time off a worker on
+ * that shift, and a rounding rule that can deduct is the kind that gets
+ * challenged. 0 means no rounding.
+ */
+export function roundPaidHours(hours: number, minutes: number): number {
+  if (!minutes || minutes <= 0 || hours <= 0) return hours;
+  const block = minutes / 60;
+  // The epsilon keeps an exact 3.00 from becoming 3.10.
+  return Math.ceil(hours / block - 1e-9) * block;
+}
+
+/**
  * Shifts closer together than this are one engagement, not two - back-to-back
  * calls for two participants must not each attract their own 2 hour minimum.
  */

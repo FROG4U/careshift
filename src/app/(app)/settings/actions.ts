@@ -159,11 +159,13 @@ export async function updateAttendanceSettings(formData: FormData) {
       ratingGreenAt: num("ratingGreenAt", 1, 100, 85),
       ratingAmberAt: num("ratingAmberAt", 0, 99, 65),
       lateNoticePenalty: num("lateNoticePenalty", 0, 50, 2),
+      payRoundingMin: num("payRoundingMin", 0, 60, 0),
     },
   });
 
   revalidatePath("/settings");
   revalidatePath("/attendance");
+  revalidatePath("/payroll");
   revalidatePath("/staff");
   revalidatePath("/my-shifts");
 }

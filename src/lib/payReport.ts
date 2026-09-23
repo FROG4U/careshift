@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import {
   costShift,
   dateKey,
+  roundPaidHours,
   MIN_ENGAGEMENT_HOURS,
   ENGAGEMENT_GAP_MIN,
 } from "@/lib/payroll";
@@ -60,7 +61,7 @@ export async function buildPayReport(
   const branchWhere = scope.branchId ? { branchId: scope.branchId } : {};
   const staffWhere = opts.staffId ? opts.staffId : { not: null };
 
-  const [shifts, pendingCount, holidayRows] = await Promise.all([
+  const [shifts, pendingCount, holidayRows, tenantSettings] = await Promise.all([
     prisma.shift.findMany({
       where: {
         tenantId,
@@ -118,7 +119,12 @@ export async function buildPayReport(
       },
     }),
     prisma.publicHoliday.findMany({ where: { tenantId, date: window } }),
+    prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { payRoundingMin: true },
+    }),
   ]);
+  const roundingMin = tenantSettings?.payRoundingMin ?? 0;
 
   // Holidays that apply to a shift: national ones, its state's, and any
   // pinned to its branch. Built once per state/branch pair, not per shift.
@@ -179,6 +185,15 @@ export async function buildPayReport(
     const start = new Date(s.start);
     const end = new Date(s.end);
     const time = (d: Date) => fmtInTz(d, tz, { hour: "numeric", minute: "2-digit" });
+
+    // Paid time in whole blocks, when the office has set one (see
+    // roundPaidHours). Done per shift, before the engagement minimum, so the
+    // figure a worker sees against a shift is the figure that was paid.
+    const roundedHours = roundPaidHours(line.hours, roundingMin);
+    if (roundedHours !== line.hours) {
+      line.pay += (roundedHours - line.hours) * line.rate;
+      line.hours = roundedHours;
+    }
 
     // Time past the rostered finish that the office authorised, and the pay
     // run therefore includes (see paidWindowOf).
