@@ -109,7 +109,6 @@ Being unwell or having something serious happen at home is not an attendance pro
 - **Full time and part time:** paid personal and carer's leave under the National Employment Standards, accruing as you work, for your own illness or injury or to care for an immediate family or household member.
 - **Casual:** personal leave is unpaid, and you can take up to 2 days' unpaid carer's leave each time it is needed. You still have to tell us.
 - **Compassionate leave** when a member of your immediate family or household dies or has a life threatening illness or injury, and where you have a miscarriage or stillbirth.
-- **Family and domestic violence leave**, 10 days paid each year, available to every employee including casuals, from your first day. Ask [named contact] in confidence. It is not recorded on your payslip as family and domestic violence leave.
 - **Annual leave** for full time and part time workers, requested in the app with as much notice as you can, and at least 4 weeks for a week or more off.
 
 ### Evidence
@@ -158,18 +157,26 @@ You are paid for the time you actually work **inside your rostered shift**, less
 
 ## Running past your finish time
 
-Participants' supports are funded for set hours. Time beyond the rostered finish is not funded, so it must be authorised before it happens.
+Every participant's supports are funded for a set number of hours on their care plan, and we hold a budget for each participant. **We can only pay you for the work you do within the hours requested on that care plan.** Time outside those hours is not funded, so it cannot be claimed and cannot be paid.
 
-> **The rule**
-> Plan to finish and clock out at the rostered time. If you can see you will run over, **ring the office first** on 02 9146 6547. If we approve it, we extend the shift and you are paid for the extra time at the correct rate.
+>! **Plan the shift to fit the hours**
+>! If you can see that what you are doing will take you past your finish time, plan your activities so they fit inside the period you are rostered for. Do the things that take longest first, and leave yourself enough time at the end.
 
-Sometimes you cannot ring first, for example when a participant is unwell, at risk, or cannot safely be left alone, or the next worker has not arrived. In those cases:
+### If the participant asks for more time
+
+- Extra time only counts if the **participant, or the person who speaks for them, asks for it**. Do not agree to it yourself and do not promise them anything on the spot.
+- **Write it in the app the same day**, in your shift notes: who asked, what they asked for, and how long it took.
+- The office then clarifies it with the participant and checks their plan and budget. If it is approved, the shift is extended and you are paid for that time at the correct rate.
+
+### If you cannot leave safely
+
+Sometimes you cannot leave at the rostered finish, for example when a participant is unwell, at risk, or cannot safely be left alone, or the next worker has not arrived. In those cases:
 
 1. Stay only as long as safety requires.
 2. Clock out when you actually leave and give the reason the app asks for.
-3. Tell the office **the same day**.
+3. Ring the office **the same day** on 02 9146 6547.
 
-The office reviews every shift that ran over. Where the extra time was necessary, it is approved and paid. Where it was not, for example staying on to chat, the shift is paid to the rostered finish and we will tell you. If a shift regularly runs over, tell us, because the roster itself probably needs changing.
+The office reviews every shift that ran over. Where the extra time was asked for by the participant, or was needed to keep someone safe, it is approved and paid. Where it was not, for example staying on to chat, the shift is paid to the rostered finish and we will tell you. If a shift regularly runs over, tell us, because the roster or the care plan probably needs changing.
 
 >+ **Your protection**
 >+ Time you are directed or required to work is always paid. If you believe extra time should have been paid and it was not, raise it under the "Questions, pay queries and disputes" clause before the pay run closes.
