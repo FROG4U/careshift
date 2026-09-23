@@ -50,11 +50,7 @@ export default async function TermsPage() {
             version, and everyone has to agree again before their next shift.
           </p>
         </div>
-        {versions.length === 0 ? (
-          <StartTemplateButton />
-        ) : !draft ? (
-          <NewVersionButton />
-        ) : null}
+        {versions.length > 0 && !draft ? <NewVersionButton /> : null}
       </header>
 
       {versions.length === 0 && (
@@ -99,6 +95,7 @@ export default async function TermsPage() {
         </div>
       )}
 
+      {versions.length > 0 && (
       <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-white shadow-sm">
         <table className="w-full text-sm">
           <thead className="border-b border-[var(--border)] bg-[var(--background)] text-left text-xs uppercase tracking-wide text-[var(--text-secondary)]">
@@ -162,6 +159,7 @@ export default async function TermsPage() {
           </tbody>
         </table>
       </div>
+      )}
 
       {draft && (
         <p className="mt-3 text-sm text-amber-700">
