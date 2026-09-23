@@ -172,6 +172,25 @@ export function costShift(
   return { hours, km, rate, dayType, stream, pay };
 }
 
+/**
+ * Minimum engagement (SCHADS cl 10.4/10.5).
+ *
+ * A home care or disability support worker who attends is engaged for at
+ * least 2 hours, so a shift they turned up to is never paid as less - whether
+ * the roster was short or they clocked out a few minutes early.
+ *
+ * Applied to PAY only. The hours record and what the participant is charged
+ * still follow the time actually worked: we cannot claim time that was not
+ * delivered, and the top-up is our cost, not theirs.
+ */
+export const MIN_ENGAGEMENT_HOURS = 2;
+
+/**
+ * Shifts closer together than this are one engagement, not two - back-to-back
+ * calls for two participants must not each attract their own 2 hour minimum.
+ */
+export const ENGAGEMENT_GAP_MIN = 30;
+
 export const money = (n: number) =>
   new Intl.NumberFormat("en-AU", {
     style: "currency",

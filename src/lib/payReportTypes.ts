@@ -18,7 +18,10 @@ export type DayLine = {
   clientName: string;
   dayType: string;
   holidayName: string | null;
+  /** Hours PAID: time worked, plus any minimum engagement top-up below. */
   hours: number;
+  /** Hours added to reach the 2 hour minimum engagement, if any. */
+  topUpHours?: number;
   rate: number;
   km: number;
   kmPay: number;

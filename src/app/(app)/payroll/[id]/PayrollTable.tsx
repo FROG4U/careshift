@@ -186,6 +186,14 @@ export function PayrollTable({
                                 </td>
                                 <td className="px-3 py-2 text-right tabular-nums">
                                   {l.hours.toFixed(2)}
+                                  {l.topUpHours ? (
+                                    <span
+                                      className="ml-1 text-[10px] font-semibold text-emerald-700"
+                                      title={`Topped up by ${Math.round(l.topUpHours * 60)} min to the 2 hour minimum engagement`}
+                                    >
+                                      min
+                                    </span>
+                                  ) : null}
                                 </td>
                                 <td className="px-3 py-2 text-right tabular-nums">
                                   {l.rate > 0 ? `${money(l.rate)}/h` : "—"}

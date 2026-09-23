@@ -1,6 +1,11 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
-import { costShift, dateKey } from "@/lib/payroll";
+import {
+  costShift,
+  dateKey,
+  MIN_ENGAGEMENT_HOURS,
+  ENGAGEMENT_GAP_MIN,
+} from "@/lib/payroll";
 import { effectiveRates } from "@/lib/rates";
 import { calendarDateKey, fmtInTz, tzForState } from "@/lib/timezone";
 import type { DayLine, Totals, WorkerRow } from "@/lib/payReportTypes";
@@ -210,14 +215,54 @@ export async function buildPayReport(
 
     row.lines.push(dayLine);
     row.shifts += 1;
-    row.hours += line.hours;
-    row.km += line.km;
-    row.wagePay += line.hours * line.rate;
-    row.kmPay += dayLine.kmPay;
-    row.total += line.pay;
-    row.bands[line.dayType] = (row.bands[line.dayType] ?? 0) + line.hours;
     if (line.rate === 0) row.unrated = true;
     rows.set(key, row);
+  }
+
+  // Minimum engagement, then the totals.
+  //
+  // Done here rather than per shift because the minimum belongs to the
+  // ENGAGEMENT: two calls half an hour apart are one attendance, and topping
+  // each up to 2 hours would pay four hours for one short morning. Shifts
+  // within ENGAGEMENT_GAP_MIN of each other are treated as one run, and only
+  // a run that comes to less than the minimum is topped up - on its first
+  // line, at that line's rate.
+  for (const row of rows.values()) {
+    row.lines.sort((a, b) => a.startIso.localeCompare(b.startIso));
+
+    let i = 0;
+    while (i < row.lines.length) {
+      let j = i;
+      while (
+        j + 1 < row.lines.length &&
+        new Date(row.lines[j + 1].startIso).getTime() -
+          new Date(row.lines[j].endIso).getTime() <=
+          ENGAGEMENT_GAP_MIN * 60_000
+      ) {
+        j += 1;
+      }
+      const run = row.lines.slice(i, j + 1);
+      const worked = run.reduce((n, l) => n + l.hours, 0);
+      // Nothing worked means nobody attended, so there is no engagement to
+      // pay a minimum on.
+      if (worked > 0 && worked < MIN_ENGAGEMENT_HOURS) {
+        const top = MIN_ENGAGEMENT_HOURS - worked;
+        const first = run[0];
+        first.topUpHours = top;
+        first.hours += top;
+        first.pay = first.hours * first.rate + first.kmPay;
+      }
+      i = j + 1;
+    }
+
+    for (const l of row.lines) {
+      row.hours += l.hours;
+      row.km += l.km;
+      row.wagePay += l.hours * l.rate;
+      row.kmPay += l.kmPay;
+      row.total += l.pay;
+      row.bands[l.dayType] = (row.bands[l.dayType] ?? 0) + l.hours;
+    }
   }
 
   const report = [...rows.values()].sort((a, b) => a.name.localeCompare(b.name));

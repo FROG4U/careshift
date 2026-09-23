@@ -12,6 +12,7 @@ type Detail = {
   band: string;
   holiday: string | null;
   hours: number;
+  topUpHours?: number;
   rate: number;
   km: number;
   kmPay: number;
@@ -200,12 +201,19 @@ export default async function MyPayrollPage() {
                                 {d.km.toFixed(1)} km · {money(d.kmPay)}
                               </span>
                             )}
+                            {d.topUpHours ? (
+                              <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                                includes {Math.round(d.topUpHours * 60)} min to the 2 hour
+                                minimum
+                              </span>
+                            ) : null}
                           </div>
                         </li>
                       ))}
                     </ul>
                     <p className="mt-2 text-[11px] text-slate-400">
                       Pay counts the time inside your rostered hours, less any breaks.
+                      Every shift you attend is paid at least 2 hours.
                       Something look wrong? Tell the office before the next pay run.
                     </p>
                   </details>
