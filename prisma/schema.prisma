@@ -334,6 +334,12 @@ model PayrollLine {
   wagePay   Float
   kmPay     Float
   total     Float
+  /// Hours per penalty band at completion, e.g. {"SUNDAY":8,"WEEKDAY_DAY":29.1}.
+  /// JSON, because this is a frozen copy - it must never be recalculated.
+  bands     String?
+  /// The shifts behind the figures: date, time, participant, band, hours,
+  /// rate, km and pay. Also JSON, also frozen.
+  detail    String?
   createdAt DateTime      @default(now())
 
   @@index([tenantId])

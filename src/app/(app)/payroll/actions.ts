@@ -227,6 +227,23 @@ async function completeOne(
         wagePay: r.wagePay,
         kmPay: r.kmPay,
         total: r.total,
+        // Frozen with the totals, so the worker's breakdown still matches the
+        // money they were paid even if a shift is edited afterwards.
+        bands: JSON.stringify(r.bands),
+        detail: JSON.stringify(
+          r.lines.map((l) => ({
+            date: l.dateLabel,
+            time: l.timeLabel,
+            client: l.clientName,
+            band: l.dayType,
+            holiday: l.holidayName,
+            hours: l.hours,
+            rate: l.rate,
+            km: l.km,
+            kmPay: l.kmPay,
+            pay: l.pay,
+          })),
+        ),
       })),
     });
     return true;
