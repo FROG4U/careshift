@@ -297,7 +297,7 @@ Running an NDIS service means keeping accurate records. This is exactly what PCG
 
 ### Who sees it and how long we keep it
 
-Only PCG office staff with permission for your branch, and the super admin, can see your records. Participants cannot. Other workers cannot. Information is stored in Australia and kept as long as employment and NDIS record keeping require, generally **7 years**, then deleted. You can ask for a copy of your records at any time by emailing info@pristinecaregroup.au, and ask us to correct anything wrong.
+Only PCG office staff with permission for your branch, and PCG management, can see your records. Participants cannot. Other workers cannot. Information is stored in Australia and kept as long as employment and NDIS record keeping require, generally **7 years**, then deleted. You can ask for a copy of your records at any time by emailing info@pristinecaregroup.au, and ask us to correct anything wrong.
 
 By signing these terms you consent to the location recording described above. Tell us if you have a concern about it rather than turning location off, because the app cannot record your attendance properly without it.
 
