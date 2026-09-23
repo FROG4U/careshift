@@ -162,6 +162,70 @@ export default async function MyPayrollPage() {
                 </div>
               </div>
 
+              {/* The same exact figures the office sends to payroll, so a
+                  worker can check their payslip line by line rather than
+                  having to add up the shifts themselves. */}
+              {(() => {
+                const bands = parse<Record<string, number>>(l.bands);
+                const detail = parse<Detail[]>(l.detail);
+                if (!bands || Object.keys(bands).length === 0) return null;
+                const rateFor = (band: string) =>
+                  detail?.find((d) => d.band === band)?.rate ?? 0;
+                return (
+                  <div className="mt-3 rounded-xl border border-slate-200 p-3">
+                    <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                      Payroll - exact figures
+                    </div>
+                    <table className="w-full text-xs">
+                      <thead className="text-left text-slate-400">
+                        <tr>
+                          <th className="py-1 font-medium">Earnings rate</th>
+                          <th className="py-1 text-right font-medium">Hours / KM</th>
+                          <th className="py-1 text-right font-medium">Rate</th>
+                          <th className="py-1 text-right font-medium">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody className="tabular-nums">
+                        {Object.entries(bands).map(([band, hours]) => (
+                          <tr key={band} className="border-t border-slate-100">
+                            <td className="py-1.5 text-slate-700">{bandLabel(band)}</td>
+                            <td className="py-1.5 text-right font-semibold text-slate-900">
+                              {hours.toFixed(4)}
+                            </td>
+                            <td className="py-1.5 text-right text-slate-600">
+                              {rateFor(band) ? rateFor(band).toFixed(2) : "-"}
+                            </td>
+                            <td className="py-1.5 text-right text-slate-700">
+                              {money(hours * rateFor(band))}
+                            </td>
+                          </tr>
+                        ))}
+                        {l.km > 0 && (
+                          <tr className="border-t border-slate-100">
+                            <td className="py-1.5 text-slate-700">Transport</td>
+                            <td className="py-1.5 text-right font-semibold text-slate-900">
+                              {l.km.toFixed(4)}
+                            </td>
+                            <td className="py-1.5 text-right text-slate-600">
+                              {(l.kmPay / l.km).toFixed(2)}
+                            </td>
+                            <td className="py-1.5 text-right text-slate-700">
+                              {money(l.kmPay)}
+                            </td>
+                          </tr>
+                        )}
+                        <tr className="border-t-2 border-slate-200 font-bold text-slate-900">
+                          <td className="py-1.5" colSpan={3}>
+                            Total before tax
+                          </td>
+                          <td className="py-1.5 text-right">{money(l.total)}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })()}
+
               {/* Shift by shift, so they can check the total themselves. */}
               {(() => {
                 const detail = parse<Detail[]>(l.detail);

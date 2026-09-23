@@ -107,7 +107,7 @@ export function ExportMenu({
             <span className="material-symbols-rounded text-[18px] text-emerald-600">
               calculate
             </span>
-            For Xero (one row per earnings rate)
+            Payroll lines (one per earnings rate)
           </a>
 
           <div className="my-2 border-t border-[var(--border)]" />

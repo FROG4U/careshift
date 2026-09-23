@@ -233,7 +233,7 @@ export function PayrollTable({
                               content_copy
                             </span>
                             <span className="text-xs font-bold uppercase tracking-wide text-[var(--text-secondary)]">
-                              For Xero - exact figures
+                              Payroll - exact figures
                             </span>
                           </div>
                           <table className="w-full text-xs">
@@ -285,9 +285,9 @@ export function PayrollTable({
                             </tbody>
                           </table>
                           <p className="mt-2 text-[11px] text-[var(--text-secondary)]">
-                            Type the hours to 4 decimal places. Rounding them to
-                            one, as the coloured chips show them, changes the
-                            total.
+                            These are the figures to enter in your payroll
+                            system. Type the hours exactly as shown - rounding
+                            them, as the coloured chips do, changes the total.
                           </p>
                         </div>
                       </div>
