@@ -12,9 +12,12 @@ import { useEffect } from "react";
  */
 export function PrintButton({
   backHref,
+  downloadHref,
   auto = false,
 }: {
   backHref?: string;
+  /** Straight PDF download, for readers whose print dialog is no help. */
+  downloadHref?: string;
   /** Open the print dialog once the document has rendered. */
   auto?: boolean;
 }) {
@@ -35,6 +38,15 @@ export function PrintButton({
         <span className="material-symbols-rounded text-[18px]">print</span>
         Print / Save as PDF
       </button>
+      {downloadHref && (
+        <a
+          href={downloadHref}
+          className="flex items-center gap-2 rounded-lg border border-[var(--brand,#003146)] px-4 py-2 text-sm font-semibold text-[var(--brand,#003146)]"
+        >
+          <span className="material-symbols-rounded text-[18px]">download</span>
+          Download PDF
+        </a>
+      )}
       {backHref && (
         <a
           href={backHref}
@@ -44,7 +56,7 @@ export function PrintButton({
         </a>
       )}
       <span className="text-xs text-slate-500">
-        In the print dialog choose <strong>Save as PDF</strong> as the printer.
+        Download saves the file straight away. Print is there if you want paper.
       </span>
     </div>
   );

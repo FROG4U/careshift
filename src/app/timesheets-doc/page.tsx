@@ -36,6 +36,13 @@ export default async function TimesheetNotesDoc({
   if (!isManager(session.role)) redirect("/dashboard");
 
   const { q, from, to, month, client, staff, print } = await searchParams;
+
+  // Same filters, straight to the PDF writer.
+  const dl = new URLSearchParams();
+  for (const [k, v] of Object.entries({ q, from, to, month, client, staff })) {
+    if (v) dl.set(k, v);
+  }
+  const downloadQs = dl.toString() ? `?${dl}` : "";
   const query = (q ?? "").trim().toLowerCase();
 
   // Same window logic as the Timesheets page: a month wins over from/to.
@@ -142,7 +149,11 @@ export default async function TimesheetNotesDoc({
 
   return (
     <div className="mx-auto max-w-[900px] bg-white px-10 py-8 text-slate-900">
-      <PrintButton backHref="/timesheets" auto={print === "1"} />
+      <PrintButton
+        backHref="/timesheets"
+        downloadHref={`/timesheets-doc/pdf${downloadQs}`}
+        auto={print === "1"}
+      />
 
       <header
         className="mb-6 flex items-start justify-between border-b-2 pb-5"

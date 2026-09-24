@@ -170,10 +170,13 @@ export default async function TimesheetsPage({
   if (from) notesParams.set("from", from);
   if (to) notesParams.set("to", to);
   if (query) notesParams.set("q", query);
-  // print=1 opens the print dialog as soon as the document has rendered, so
-  // the whole thing is one click from here.
-  notesParams.set("print", "1");
-  const notesQs = `?${notesParams}`;
+  const notesQs = notesParams.toString() ? `?${notesParams}` : "";
+  // print=1 opens the print dialog with the on-screen version, for anyone who
+  // wants to read it first. The download needs no printer at all.
+  const notesPrintQs = `?${new URLSearchParams({
+    ...Object.fromEntries(notesParams),
+    print: "1",
+  })}`;
 
   return (
     <div className="p-6 lg:p-8">
@@ -290,13 +293,20 @@ export default async function TimesheetsPage({
           </a>
         )}
         <a
-          href={`/timesheets-doc${notesQs}`}
+          href={`/timesheets-doc/pdf${notesQs}`}
+          className="flex items-center gap-2 rounded-lg bg-[var(--brand)] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:opacity-90"
+        >
+          <span className="material-symbols-rounded text-[18px]">download</span>
+          Download shift notes PDF
+        </a>
+        <a
+          href={`/timesheets-doc${notesPrintQs}`}
           target="_blank"
           rel="noreferrer"
-          className="flex items-center gap-2 rounded-lg border border-[var(--brand)] px-4 py-2 text-sm font-semibold text-[var(--brand)] transition hover:bg-blue-50"
+          className="flex items-center gap-2 rounded-lg border border-[var(--border)] px-4 py-2 text-sm font-semibold text-[var(--text-secondary)] transition hover:bg-slate-50"
         >
-          <span className="material-symbols-rounded text-[18px]">picture_as_pdf</span>
-          Shift notes PDF
+          <span className="material-symbols-rounded text-[18px]">visibility</span>
+          View on screen
         </a>
       </form>
 
