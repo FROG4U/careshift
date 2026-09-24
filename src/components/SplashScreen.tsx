@@ -13,6 +13,14 @@ export function SplashScreen() {
   const [fading, setFading] = useState(false);
 
   useEffect(() => {
+    // Document pages open in their own tab, which starts with empty session
+    // storage - so the splash would cover them for two seconds and, if the
+    // reader hits print in that window, the PDF is a page of navy with
+    // nothing on it. They are never the "opening the app" moment anyway.
+    if (/-doc(\/|$)/.test(window.location.pathname)) {
+      setShow(false);
+      return;
+    }
     if (sessionStorage.getItem("pcg-splash-seen")) {
       setShow(false);
       return;
@@ -33,7 +41,7 @@ export function SplashScreen() {
   return (
     <div
       aria-hidden
-      className={`fixed inset-0 z-[9999] flex flex-col items-center justify-center transition-opacity duration-500 ${
+      className={`no-print fixed inset-0 z-[9999] flex flex-col items-center justify-center transition-opacity duration-500 print:hidden ${
         fading ? "opacity-0" : "opacity-100"
       }`}
       style={{ background: "#003146" }}

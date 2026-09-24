@@ -26,6 +26,7 @@ export default async function TimesheetNotesDoc({
     month?: string;
     client?: string;
     staff?: string;
+    print?: string;
   }>;
 }) {
   // Outside the (app) layout, so an auth failure would be a 500.
@@ -34,7 +35,7 @@ export default async function TimesheetNotesDoc({
   const { tenant, session } = ctx;
   if (!isManager(session.role)) redirect("/dashboard");
 
-  const { q, from, to, month, client, staff } = await searchParams;
+  const { q, from, to, month, client, staff, print } = await searchParams;
   const query = (q ?? "").trim().toLowerCase();
 
   // Same window logic as the Timesheets page: a month wins over from/to.
@@ -141,7 +142,7 @@ export default async function TimesheetNotesDoc({
 
   return (
     <div className="mx-auto max-w-[900px] bg-white px-10 py-8 text-slate-900">
-      <PrintButton backHref="/timesheets" />
+      <PrintButton backHref="/timesheets" auto={print === "1"} />
 
       <header
         className="mb-6 flex items-start justify-between border-b-2 pb-5"

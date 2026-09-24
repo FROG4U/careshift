@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect } from "react";
+
 /**
  * Explicit "Print / Save as PDF" control for the standalone document pages.
  *
@@ -8,7 +10,22 @@
  * left on a bare document with no obvious way back. Both controls hide when
  * actually printing.
  */
-export function PrintButton({ backHref }: { backHref?: string }) {
+export function PrintButton({
+  backHref,
+  auto = false,
+}: {
+  backHref?: string;
+  /** Open the print dialog once the document has rendered. */
+  auto?: boolean;
+}) {
+  useEffect(() => {
+    if (!auto) return;
+    // Long enough for fonts and the logo to land - printing mid-render is how
+    // a document comes out half empty.
+    const t = setTimeout(() => window.print(), 700);
+    return () => clearTimeout(t);
+  }, [auto]);
+
   return (
     <div className="no-print mb-5 flex items-center gap-2 print:hidden">
       <button

@@ -83,6 +83,17 @@ body {
 
 /* Print / Save-as-PDF for the payroll report */
 @media print {
+  /* A page that is height-capped or clipped on screen prints as one blank
+     sheet, so undo all of it before anything else. */
+  html,
+  body {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    display: block !important;
+    background: #fff !important;
+  }
   /* Hide the app chrome (sidebar, header bar) so only the report prints. */
   aside,
   main > header,

@@ -170,7 +170,10 @@ export default async function TimesheetsPage({
   if (from) notesParams.set("from", from);
   if (to) notesParams.set("to", to);
   if (query) notesParams.set("q", query);
-  const notesQs = notesParams.toString() ? `?${notesParams}` : "";
+  // print=1 opens the print dialog as soon as the document has rendered, so
+  // the whole thing is one click from here.
+  notesParams.set("print", "1");
+  const notesQs = `?${notesParams}`;
 
   return (
     <div className="p-6 lg:p-8">
