@@ -73,6 +73,26 @@ export function PayrollTable({
   );
   const allOpen = report.length > 0 && report.every((r) => open.has(r.staffId));
   const shiftTotal = report.reduce((n, r) => n + r.lines.length, 0);
+  // Workers whose run mixed agreed rates with pay-level ones. That is a gap in
+  // the rate grid rather than a deliberate choice, so it is worth stopping on.
+  const gaps = report
+    .filter((r) => r.rateGap)
+    .map((r) => ({
+      name: r.name,
+      cells: [
+        ...new Set(
+          r.lines
+            .filter((l) => l.rateFromLevel)
+            .map(
+              (l) =>
+                `${streamLabel(l.stream)} ${(
+                  DAY_TYPE_LABELS[l.dayType as DayType] ?? l.dayType
+                ).toLowerCase()} at ${money(l.rate)}/h`,
+            ),
+        ),
+      ],
+    }));
+
   const toggle = (id: string) =>
     setOpen((prev) => {
       const next = new Set(prev);
@@ -82,6 +102,28 @@ export function PayrollTable({
     });
 
   return (
+    <>
+      {gaps.length > 0 && (
+        <div className="mb-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <p className="font-semibold">
+            Check {gaps.length === 1 ? "this rate" : "these rates"} before you
+            complete the run
+          </p>
+          <p className="mt-0.5 text-xs">
+            These shifts were paid at the pay level&apos;s rate because the
+            worker has no agreed rate for that funding and day. The pay level
+            may be out of date.
+          </p>
+          <ul className="mt-2 space-y-1 text-xs">
+            {gaps.map((g) => (
+              <li key={g.name}>
+                <span className="font-semibold">{g.name}</span>: {g.cells.join(", ")}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
     <section className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-white shadow-sm">
       {report.length > 0 && (
         <div className="no-print flex items-center justify-between gap-3 border-b border-[var(--border)] px-5 py-2.5 text-sm">
@@ -225,6 +267,14 @@ export function PayrollTable({
                                   <span className="ml-1 text-[11px] text-[var(--text-secondary)]">
                                     {streamLabel(l.stream)}
                                   </span>
+                                  {l.rateFromLevel && (
+                                    <span
+                                      className="ml-1 rounded px-1 text-[10px] font-semibold text-amber-700"
+                                      title="No agreed rate for this funding and day - the pay level's rate was used"
+                                    >
+                                      level rate
+                                    </span>
+                                  )}
                                   {l.holidayName && (
                                     <span className="ml-1 text-[11px] text-rose-700">
                                       {l.holidayName}
@@ -398,5 +448,6 @@ export function PayrollTable({
         )}
       </table>
     </section>
+    </>
   );
 }

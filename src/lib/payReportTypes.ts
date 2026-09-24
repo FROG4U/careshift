@@ -19,6 +19,12 @@ export type DayLine = {
   dayType: string;
   /** Funding stream from the participant's agreement: NDIS, AGED_CARE, ... */
   stream: string;
+  /**
+   * True when this rate came from the pay level rather than a rate agreed for
+   * this worker. Harmless on its own - but on a worker who HAS agreed rates
+   * for other streams it means a gap, and the level may be years old.
+   */
+  rateFromLevel?: boolean;
   holidayName: string | null;
   /** Hours PAID: time worked, plus any minimum engagement top-up below. */
   hours: number;
@@ -45,6 +51,8 @@ export type WorkerRow = {
   total: number;
   bands: Record<string, number>;
   unrated: boolean;
+  /** Has agreed rates for some cells, but this run used the level for others. */
+  rateGap?: boolean;
   lines: DayLine[];
 };
 

@@ -163,7 +163,7 @@ export async function buildPayReport(
     const holidays = holidaysFor(state, s.branchId);
 
     // Award level, with any manual per-worker override applied.
-    const { grid, mileageRate } = effectiveRates(s.staff);
+    const { grid, mileageRate, overriddenKeys } = effectiveRates(s.staff);
     const line = costShift(
       {
         start: s.start,
@@ -217,6 +217,14 @@ export async function buildPayReport(
       clientName: `${s.client.firstName} ${s.client.lastName}`,
       dayType: line.dayType,
       stream: line.stream,
+      // Agreed rates are per stream and day type. A worker with agreed NDIS
+      // rates but none for Aged Care silently drops back to the pay level for
+      // an Aged Care shift, which is how someone gets paid last year's rate.
+      rateFromLevel:
+        overriddenKeys.size > 0 &&
+        !overriddenKeys.has(`${line.stream}_${line.dayType}`)
+          ? true
+          : undefined,
       holidayName: holidays.names.get(dateKey(start, tz)) ?? null,
       hours: line.hours,
       extraHours: extraHours > 0 ? extraHours : undefined,
@@ -240,12 +248,14 @@ export async function buildPayReport(
       total: 0,
       bands: {},
       unrated: false,
+      rateGap: false,
       lines: [],
     };
 
     row.lines.push(dayLine);
     row.shifts += 1;
     if (line.rate === 0) row.unrated = true;
+    if (dayLine.rateFromLevel) row.rateGap = true;
     rows.set(key, row);
   }
 
