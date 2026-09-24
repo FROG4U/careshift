@@ -184,12 +184,16 @@ export default async function PayrollReportPage({
       )}
 
       {/* Summary */}
-      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-5">
         {[
           ["Total hours", `${totals.hours.toFixed(2)} h`],
           ["Total mileage", `${totals.km.toFixed(1)} km`],
           ["Wages", money(totals.wagePay)],
           ["Total pay", money(totals.total)],
+          [
+            `Super ${(tenant.superRate * 100).toFixed(1)}%`,
+            money(totals.wagePay * tenant.superRate),
+          ],
         ].map(([label, value]) => (
           <div
             key={label}
@@ -212,7 +216,7 @@ export default async function PayrollReportPage({
       )}
 
       {/* Worker report - click a worker to see their day-by-day detail */}
-      <PayrollTable report={report} totals={totals} />
+      <PayrollTable report={report} totals={totals} superRate={tenant.superRate} />
 
       {approved && (
         <p className="mt-3 text-xs text-emerald-700">

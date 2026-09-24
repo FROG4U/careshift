@@ -57,6 +57,12 @@ export default async function MyPayrollPage() {
   if (!session) redirect("/login");
   if (!session.staffId) redirect("/dashboard");
 
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: session.tenantId },
+    select: { superRate: true },
+  });
+  const superRate = tenant?.superRate ?? 0;
+
   const lines = await prisma.payrollLine.findMany({
     where: {
       tenantId: session.tenantId,
@@ -220,6 +226,17 @@ export default async function MyPayrollPage() {
                           </td>
                           <td className="py-1.5 text-right">{money(l.total)}</td>
                         </tr>
+                        {superRate > 0 && (
+                          <tr className="text-slate-500">
+                            <td className="py-1.5" colSpan={3}>
+                              Super {(superRate * 100).toFixed(1)}% of wages, paid
+                              to your fund
+                            </td>
+                            <td className="py-1.5 text-right">
+                              {money(l.wagePay * superRate)}
+                            </td>
+                          </tr>
+                        )}
                       </tbody>
                     </table>
                   </div>

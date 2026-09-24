@@ -23,9 +23,17 @@ const bandStyle: Record<string, string> = {
 export function PayrollTable({
   report,
   totals,
+  superRate = 0,
 }: {
   report: WorkerRow[];
   totals: Totals;
+  /**
+   * Superannuation guarantee, e.g. 0.12. Shown beside the pay but never added
+   * into it: super is paid to the worker's fund, not in this run's total, and
+   * it is owed on wages only - a mileage allowance is not ordinary time
+   * earnings.
+   */
+  superRate?: number;
 }) {
   // Every worker starts open so each shift in the run is visible, the same way
   // Timesheets lists them. Collapsed rows read as "the shifts are missing".
@@ -134,6 +142,11 @@ export function PayrollTable({
                   </td>
                   <td className="px-5 py-3 text-right font-bold tabular-nums text-[var(--text-primary)]">
                     {money(r.total)}
+                    {superRate > 0 && (
+                      <div className="text-[11px] font-normal text-[var(--text-secondary)]">
+                        + {money(r.wagePay * superRate)} super
+                      </div>
+                    )}
                   </td>
                 </tr>
 
@@ -282,6 +295,17 @@ export function PayrollTable({
                                 </td>
                                 <td className="py-1.5 text-right">{money(r.total)}</td>
                               </tr>
+                              {superRate > 0 && (
+                                <tr className="text-[var(--text-secondary)]">
+                                  <td className="py-1.5" colSpan={3}>
+                                    Super {(superRate * 100).toFixed(1)}% of wages
+                                    (not in the total above)
+                                  </td>
+                                  <td className="py-1.5 text-right">
+                                    {money(r.wagePay * superRate)}
+                                  </td>
+                                </tr>
+                              )}
                             </tbody>
                           </table>
                           <p className="mt-2 text-[11px] text-[var(--text-secondary)]">

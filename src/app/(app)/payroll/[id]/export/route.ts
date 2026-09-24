@@ -43,6 +43,7 @@ export async function GET(
   const staffFilter = req.nextUrl.searchParams.get("staff") || null;
   const detail = req.nextUrl.searchParams.get("detail") === "1";
   const xero = req.nextUrl.searchParams.get("xero") === "1";
+  const superRate = tenant.superRate ?? 0;
 
   const report = await buildPayReport(
     tenant.id,
@@ -105,6 +106,22 @@ export async function GET(
         );
       }
       lines.push(row([r.name, "", "", "TOTAL", "", "", money(r.total)]));
+      if (superRate > 0) {
+        // Separate line, never inside the total: super goes to the fund, and
+        // it is owed on wages only - mileage is an allowance, not ordinary
+        // time earnings.
+        lines.push(
+          row([
+            r.name,
+            "",
+            "",
+            `Super ${(superRate * 100).toFixed(1)}% of wages`,
+            "",
+            "",
+            money(r.wagePay * superRate),
+          ]),
+        );
+      }
     }
   } else if (detail) {
     lines.push(

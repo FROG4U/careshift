@@ -167,12 +167,16 @@ export default async function CombinedPayRunPage({
         </div>
       )}
 
-      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-5">
         {[
           ["Total hours", `${totals.hours.toFixed(2)} h`],
           ["Total mileage", `${totals.km.toFixed(1)} km`],
           ["Wages", money(totals.wagePay)],
           ["Total pay", money(totals.total)],
+          [
+            `Super ${(tenant.superRate * 100).toFixed(1)}%`,
+            money(totals.wagePay * tenant.superRate),
+          ],
         ].map(([label, value]) => (
           <div key={label} className="rounded-2xl border border-[var(--border)] bg-white p-4 shadow-sm">
             <div className="text-xl font-bold text-[var(--text-primary)]">{value}</div>
@@ -189,7 +193,7 @@ export default async function CombinedPayRunPage({
         </div>
       )}
 
-      <PayrollTable report={rows} totals={totals} />
+      <PayrollTable report={rows} totals={totals} superRate={tenant.superRate} />
     </div>
   );
 }
