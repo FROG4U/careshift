@@ -17,6 +17,8 @@ export type DayLine = {
   tz: string;
   clientName: string;
   dayType: string;
+  /** Funding stream from the participant's agreement: NDIS, AGED_CARE, ... */
+  stream: string;
   holidayName: string | null;
   /** Hours PAID: time worked, plus any minimum engagement top-up below. */
   hours: number;

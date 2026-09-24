@@ -2,7 +2,12 @@ import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { fmtDate } from "@/lib/format";
-import { DAY_TYPE_LABELS, type DayType } from "@/lib/constants";
+import {
+  DAY_TYPE_LABELS,
+  STREAM_LABELS,
+  type DayType,
+  type StaffStream,
+} from "@/lib/constants";
 
 /** One shift as it was when the run was completed (see PayrollLine.detail). */
 type Detail = {
@@ -10,6 +15,7 @@ type Detail = {
   time: string;
   client: string;
   band: string;
+  stream?: string;
   holiday: string | null;
   hours: number;
   topUpHours?: number;
@@ -175,8 +181,32 @@ export default async function MyPayrollPage() {
                 const bands = parse<Record<string, number>>(l.bands);
                 const detail = parse<Detail[]>(l.detail);
                 if (!bands || Object.keys(bands).length === 0) return null;
-                const rateFor = (band: string) =>
-                  detail?.find((d) => d.band === band)?.rate ?? 0;
+                // One line per band AND rate: two participants on different
+                // funding pay different rates for the same kind of hour.
+                const earnings = new Map<
+                  string,
+                  { band: string; stream?: string; rate: number; hours: number }
+                >();
+                for (const d of detail ?? []) {
+                  const key = `${d.band}|${d.stream ?? ""}|${d.rate}`;
+                  const cur = earnings.get(key) ?? {
+                    band: d.band,
+                    stream: d.stream,
+                    rate: d.rate,
+                    hours: 0,
+                  };
+                  cur.hours += d.hours;
+                  earnings.set(key, cur);
+                }
+                // Older pay runs were frozen before shift detail was kept.
+                const rows = earnings.size
+                  ? [...earnings.values()]
+                  : Object.entries(bands).map(([band, hours]) => ({
+                      band,
+                      stream: undefined,
+                      rate: 0,
+                      hours,
+                    }));
                 return (
                   <div className="mt-3 rounded-xl border border-slate-200 p-3">
                     <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-500">
@@ -192,17 +222,28 @@ export default async function MyPayrollPage() {
                         </tr>
                       </thead>
                       <tbody className="tabular-nums">
-                        {Object.entries(bands).map(([band, hours]) => (
-                          <tr key={band} className="border-t border-slate-100">
-                            <td className="py-1.5 text-slate-700">{bandLabel(band)}</td>
+                        {rows.map((e) => (
+                          <tr
+                            key={`${e.band}|${e.stream ?? ""}|${e.rate}`}
+                            className="border-t border-slate-100"
+                          >
+                            <td className="py-1.5 text-slate-700">
+                              {bandLabel(e.band)}
+                              {e.stream ? (
+                                <span className="text-slate-400">
+                                  {" "}
+                                  · {STREAM_LABELS[e.stream as StaffStream] ?? e.stream}
+                                </span>
+                              ) : null}
+                            </td>
                             <td className="py-1.5 text-right font-semibold text-slate-900">
-                              {hours.toFixed(4)}
+                              {e.hours.toFixed(4)}
                             </td>
                             <td className="py-1.5 text-right text-slate-600">
-                              {rateFor(band) ? rateFor(band).toFixed(2) : "-"}
+                              {e.rate ? e.rate.toFixed(2) : "-"}
                             </td>
                             <td className="py-1.5 text-right text-slate-700">
-                              {money(hours * rateFor(band))}
+                              {e.rate ? money(e.hours * e.rate) : "-"}
                             </td>
                           </tr>
                         ))}

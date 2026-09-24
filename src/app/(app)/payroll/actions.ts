@@ -236,6 +236,7 @@ async function completeOne(
             time: l.timeLabel,
             client: l.clientName,
             band: l.dayType,
+            stream: l.stream,
             holiday: l.holidayName,
             hours: l.hours,
             rate: l.rate,

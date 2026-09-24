@@ -216,6 +216,7 @@ export async function buildPayReport(
       tz,
       clientName: `${s.client.firstName} ${s.client.lastName}`,
       dayType: line.dayType,
+      stream: line.stream,
       holidayName: holidays.names.get(dateKey(start, tz)) ?? null,
       hours: line.hours,
       extraHours: extraHours > 0 ? extraHours : undefined,

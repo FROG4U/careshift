@@ -2,7 +2,12 @@
 
 import { Fragment, useState } from "react";
 import { initialsFromName } from "@/lib/format";
-import { DAY_TYPE_LABELS, type DayType } from "@/lib/constants";
+import {
+  DAY_TYPE_LABELS,
+  STREAM_LABELS,
+  type DayType,
+  type StaffStream,
+} from "@/lib/constants";
 import type { DayLine, WorkerRow, Totals } from "@/lib/payReportTypes";
 
 export type { DayLine, WorkerRow, Totals };
@@ -19,6 +24,32 @@ const bandStyle: Record<string, string> = {
   SUNDAY: "bg-orange-50 text-orange-700",
   PUBLIC_HOLIDAY: "bg-rose-50 text-rose-700",
 };
+
+
+/** The actual pay lines: a band at one rate is one line, whatever else varies. */
+function earningLines(r: WorkerRow) {
+  const map = new Map<
+    string,
+    { band: string; stream: string; rate: number; hours: number }
+  >();
+  for (const l of r.lines) {
+    const key = `${l.dayType}|${l.stream}|${l.rate}`;
+    const cur = map.get(key) ?? {
+      band: l.dayType,
+      stream: l.stream,
+      rate: l.rate,
+      hours: 0,
+    };
+    cur.hours += l.hours;
+    map.set(key, cur);
+  }
+  return [...map.values()].sort(
+    (a, b) => a.band.localeCompare(b.band) || b.rate - a.rate,
+  );
+}
+
+const streamLabel = (s: string) =>
+  STREAM_LABELS[s as StaffStream] ?? s;
 
 export function PayrollTable({
   report,
@@ -191,6 +222,9 @@ export function PayrollTable({
                                     {DAY_TYPE_LABELS[l.dayType as DayType] ??
                                       l.dayType}
                                   </span>
+                                  <span className="ml-1 text-[11px] text-[var(--text-secondary)]">
+                                    {streamLabel(l.stream)}
+                                  </span>
                                   {l.holidayName && (
                                     <span className="ml-1 text-[11px] text-rose-700">
                                       {l.holidayName}
@@ -259,24 +293,28 @@ export function PayrollTable({
                               </tr>
                             </thead>
                             <tbody className="tabular-nums">
-                              {Object.entries(r.bands).map(([band, h]) => {
-                                const rate =
-                                  r.lines.find((l) => l.dayType === band)?.rate ?? 0;
-                                return (
-                                  <tr key={band} className="border-t border-[var(--border)]">
-                                    <td className="py-1.5">
-                                      {DAY_TYPE_LABELS[band as DayType] ?? band}
-                                    </td>
-                                    <td className="py-1.5 text-right font-semibold">
-                                      {h.toFixed(4)}
-                                    </td>
-                                    <td className="py-1.5 text-right">{rate.toFixed(2)}</td>
-                                    <td className="py-1.5 text-right">
-                                      {money(h * rate)}
-                                    </td>
-                                  </tr>
-                                );
-                              })}
+                              {earningLines(r).map((e) => (
+                                <tr
+                                  key={`${e.band}|${e.stream}|${e.rate}`}
+                                  className="border-t border-[var(--border)]"
+                                >
+                                  <td className="py-1.5">
+                                    {DAY_TYPE_LABELS[e.band as DayType] ?? e.band}
+                                    <span className="ml-1 text-[var(--text-secondary)]">
+                                      · {streamLabel(e.stream)}
+                                    </span>
+                                  </td>
+                                  <td className="py-1.5 text-right font-semibold">
+                                    {e.hours.toFixed(4)}
+                                  </td>
+                                  <td className="py-1.5 text-right">
+                                    {e.rate.toFixed(2)}
+                                  </td>
+                                  <td className="py-1.5 text-right">
+                                    {money(e.hours * e.rate)}
+                                  </td>
+                                </tr>
+                              ))}
                               {r.km > 0 && (
                                 <tr className="border-t border-[var(--border)]">
                                   <td className="py-1.5">Transport</td>

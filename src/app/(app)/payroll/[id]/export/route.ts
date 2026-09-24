@@ -4,7 +4,12 @@ import { payrollBranchIds } from "@/lib/scope";
 import { prisma } from "@/lib/prisma";
 import { dateKey } from "@/lib/payroll";
 import { buildPayReport } from "@/lib/payReport";
-import { DAY_TYPE_LABELS, type DayType } from "@/lib/constants";
+import {
+  DAY_TYPE_LABELS,
+  STREAM_LABELS,
+  type DayType,
+  type StaffStream,
+} from "@/lib/constants";
 import { fmtInTz, tzForState } from "@/lib/timezone";
 import { isManager } from "@/lib/roles";
 
@@ -78,17 +83,34 @@ export async function GET(
       row(["Worker", "Pay level", "Employment", "Earnings rate", "Hours / KM", "Rate", "Total $"]),
     );
     for (const r of report.rows) {
-      for (const [band, hours] of Object.entries(r.bands)) {
-        const rate = r.lines.find((l) => l.dayType === band)?.rate ?? 0;
+      // A band at one rate is one line. Two participants on different funding
+      // can share a band at different rates, so grouping by band alone would
+      // price every hour at one of them.
+      const earnings = new Map<
+        string,
+        { band: string; stream: string; rate: number; hours: number }
+      >();
+      for (const l of r.lines) {
+        const key = `${l.dayType}|${l.stream}|${l.rate}`;
+        const cur = earnings.get(key) ?? {
+          band: l.dayType,
+          stream: l.stream,
+          rate: l.rate,
+          hours: 0,
+        };
+        cur.hours += l.hours;
+        earnings.set(key, cur);
+      }
+      for (const e of earnings.values()) {
         lines.push(
           row([
             r.name,
             r.level,
             r.employment,
-            DAY_TYPE_LABELS[band as DayType] ?? band,
-            hours.toFixed(4),
-            money(rate),
-            money(hours * rate),
+            `${DAY_TYPE_LABELS[e.band as DayType] ?? e.band} - ${STREAM_LABELS[e.stream as StaffStream] ?? e.stream}`,
+            e.hours.toFixed(4),
+            money(e.rate),
+            money(e.hours * e.rate),
           ]),
         );
       }
