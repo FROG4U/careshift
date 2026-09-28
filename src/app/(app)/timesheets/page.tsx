@@ -200,46 +200,6 @@ export default async function TimesheetsPage({
         </p>
       </header>
 
-      {(() => {
-        // Shifts where the clock sits outside the rostered window at either
-        // end by more than five minutes. Usually the rota, not the worker.
-        const mismatched = shifts.filter((s) => {
-          if (!s.clockInAt || !s.clockOutAt) return false;
-          const before = s.clockInAt < s.start ? s.start.getTime() - s.clockInAt.getTime() : 0;
-          const after = s.clockOutAt > s.end ? s.clockOutAt.getTime() - s.end.getTime() : 0;
-          return (before + after) / 60000 > 5;
-        });
-        if (mismatched.length === 0) return null;
-        return (
-          <div className="mb-4 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
-            <p className="font-semibold">
-              {mismatched.length} shift{mismatched.length === 1 ? "" : "s"}{" "}
-              clocked outside the rostered times
-            </p>
-            <p className="mt-0.5 text-xs">
-              A worker doing the right length of shift at a different time
-              usually means the rota is wrong, and they lose pay at both ends
-              until it is fixed. Open one and use{" "}
-              <span className="font-semibold">Change the rostered times</span>.
-            </p>
-            <ul className="mt-2 space-y-1 text-xs">
-              {mismatched.slice(0, 8).map((m) => (
-                <li key={m.id}>
-                  {fmtDate(m.start)} · {m.staff ? `${m.staff.firstName} ${m.staff.lastName}` : "Unassigned"} ·{" "}
-                  {m.client.firstName} {m.client.lastName}: rostered{" "}
-                  {fmtTime(m.start)}-{fmtTime(m.end)}, clocked{" "}
-                  {m.clockInAt ? fmtTime(m.clockInAt) : "-"}-
-                  {m.clockOutAt ? fmtTime(m.clockOutAt) : "-"}
-                </li>
-              ))}
-              {mismatched.length > 8 && (
-                <li className="italic">and {mismatched.length - 8} more below</li>
-              )}
-            </ul>
-          </div>
-        );
-      })()}
-
       <DayShiftRepair
         items={dayShifted.map((d) => ({
           id: d.id,
