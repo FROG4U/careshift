@@ -15,6 +15,7 @@ import { LocationPinger } from "@/components/worker/LocationPinger";
 import { InstallPrompt } from "@/components/InstallPrompt";
 import { PushRegistrar } from "@/components/PushRegistrar";
 import { PresenceHeartbeat } from "@/components/PresenceHeartbeat";
+import { CallCentre } from "@/components/CallCentre";
 import { UpdateWatcher } from "@/components/UpdateWatcher";
 import { buildId } from "@/lib/buildId";
 
@@ -121,6 +122,7 @@ export default async function WorkerLayout({
       <PushRegistrar />
       <UpdateWatcher buildId={buildId()} />
       <PresenceHeartbeat />
+      <CallCentre myName={session.name} />
     </>
   );
 }

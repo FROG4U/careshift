@@ -114,6 +114,7 @@ export default async function ThreadPage({
       members={members}
       messages={messages}
       callNumber={callNumber}
+      otherUserId={other?.user.id ?? null}
       panel={{
         isOwner: convo.createdById === session.id,
         archived: myMembership?.archivedAt != null,

@@ -1356,3 +1356,36 @@ model ShiftRosterEdit {
   @@index([tenantId])
   @@index([shiftId])
 }
+
+/// A voice call placed inside the app, over wifi or mobile data.
+///
+/// The audio itself never touches this server - it goes peer to peer between
+/// the two phones (WebRTC). What is stored here is the handshake the two ends
+/// need to find each other, and the record of the call: who rang whom, when,
+/// and how long they spoke. No audio is recorded.
+model Call {
+  id             String    @id @default(cuid())
+  tenantId       String
+  conversationId String?
+  fromUserId     String
+  fromName       String
+  toUserId       String
+  toName         String
+  /// RINGING | ACCEPTED | DECLINED | MISSED | ENDED | FAILED
+  status         String    @default("RINGING")
+  /// The caller's WebRTC offer, and the answer once the other end picks up.
+  /// Both already carry their network candidates, so there is nothing else to
+  /// exchange while the phone is ringing.
+  offer          String
+  answer         String?
+  createdAt      DateTime  @default(now())
+  answeredAt     DateTime?
+  endedAt        DateTime?
+  /// Seconds actually connected, written when the call ends.
+  durationSec    Int?
+  /// Which end hung up, for the record.
+  endedBy        String?
+
+  @@index([tenantId, toUserId, status])
+  @@index([tenantId, createdAt])
+}

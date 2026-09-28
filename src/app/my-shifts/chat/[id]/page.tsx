@@ -98,6 +98,7 @@ export default async function WorkerThreadPage({
       messages={messages}
       backHref="/my-shifts/chat"
       callNumber={callNumber}
+      otherUserId={other?.user.id ?? null}
       online={online}
       presence={presence}
     />

@@ -4,6 +4,7 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { initialsFromName } from "@/lib/format";
+import { ringUp } from "@/components/CallCentre";
 import { EmojiPicker } from "@/components/EmojiPicker";
 import { GroupPanel, type PanelMember } from "./GroupPanel";
 import {
@@ -88,6 +89,7 @@ export function Thread({
   messages,
   backHref,
   callNumber,
+  otherUserId,
   panel,
   online,
   presence,
@@ -103,6 +105,8 @@ export function Thread({
   backHref?: string;
   /** The other person's phone (DMs only) — shows a tap-to-call button. */
   callNumber?: string | null;
+  /** The other person's user id in a DM - who an in-app call rings. */
+  otherUserId?: string | null;
   panel?: {
     isOwner: boolean;
     archived: boolean;
@@ -398,15 +402,29 @@ export function Thread({
             </div>
           ) : null}
         </div>
-        {!isGroup && callNumber && (
-          <a
-            href={`tel:${callNumber}`}
-            className="ml-auto flex h-9 w-9 items-center justify-center rounded-full text-[var(--brand)] transition hover:bg-[var(--background)]"
-            title={`Call ${title}`}
-            aria-label={`Call ${title}`}
-          >
-            <span className="material-symbols-rounded text-[24px]">call</span>
-          </a>
+        {!isGroup && (otherUserId || callNumber) && (
+          <div className="ml-auto flex items-center gap-1">
+            {otherUserId && (
+              <button
+                onClick={() => ringUp(otherUserId, title, conversationId)}
+                className="flex h-9 w-9 items-center justify-center rounded-full text-[var(--brand)] transition hover:bg-[var(--background)]"
+                title={`Call ${title} in the app`}
+                aria-label={`Call ${title} in the app`}
+              >
+                <span className="material-symbols-rounded text-[24px]">call</span>
+              </button>
+            )}
+            {callNumber && (
+              <a
+                href={`tel:${callNumber}`}
+                className="flex h-9 w-9 items-center justify-center rounded-full text-[var(--text-secondary)] transition hover:bg-[var(--background)]"
+                title={`Ring ${title}'s mobile instead`}
+                aria-label={`Ring ${title}'s mobile instead`}
+              >
+                <span className="material-symbols-rounded text-[22px]">smartphone</span>
+              </a>
+            )}
+          </div>
         )}
 
         {panel && (

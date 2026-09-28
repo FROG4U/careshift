@@ -11,6 +11,7 @@ import { InstallPrompt } from "@/components/InstallPrompt";
 import { PushRegistrar } from "@/components/PushRegistrar";
 import { AdminBottomNav } from "@/components/AdminBottomNav";
 import { PresenceHeartbeat } from "@/components/PresenceHeartbeat";
+import { CallCentre } from "@/components/CallCentre";
 import { UpdateWatcher } from "@/components/UpdateWatcher";
 import { buildId } from "@/lib/buildId";
 import { loadScope, canSeeAnyCharges, opsWhere, opsWhereVia } from "@/lib/scope";
@@ -169,6 +170,7 @@ export default async function AppLayout({
       <PushRegistrar />
       <UpdateWatcher buildId={buildId()} />
       <PresenceHeartbeat />
+      <CallCentre myName={session.name} />
     </div>
   );
 }
