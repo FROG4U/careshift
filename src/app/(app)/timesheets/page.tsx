@@ -394,6 +394,7 @@ export default async function TimesheetsPage({
                 clockInLabel: s.clockInAt ? fmtTime(s.clockInAt) : "—",
                 clockOutLabel: s.clockOutAt ? fmtTime(s.clockOutAt) : "—",
                 netHours: net,
+                clockedHours: clockedNet,
                 breakHours: breakHrs,
                 breaks: s.pauses
                   .filter((p) => p.endAt)

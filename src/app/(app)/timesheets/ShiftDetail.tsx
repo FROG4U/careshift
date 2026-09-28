@@ -22,7 +22,10 @@ export type ShiftDetailData = {
   clockOutTime: string;
   clockInLabel: string;
   clockOutLabel: string;
+  /** Paid time: the clocked window trimmed to the rostered one, less breaks. */
   netHours: number;
+  /** Clock-out minus clock-in, less breaks - what they were actually there. */
+  clockedHours: number;
   breakHours: number;
   breaks: string[];
   totalKm: number;
@@ -128,11 +131,14 @@ function Stat({
   label,
   value,
   accent,
+  note,
 }: {
   icon: string;
   label: string;
   value: string;
   accent: string;
+  /** The working behind the figure, so nobody has to guess at it. */
+  note?: string;
 }) {
   return (
     <div className="rounded-2xl border border-slate-100 bg-slate-50/60 px-3.5 py-3">
@@ -141,6 +147,7 @@ function Stat({
         {label}
       </div>
       <div className="mt-1 text-base font-bold text-slate-800">{value}</div>
+      {note && <div className="mt-0.5 text-[11px] text-slate-500">{note}</div>}
     </div>
   );
 }
@@ -292,9 +299,14 @@ export function ShiftDetail({ data }: { data: ShiftDetailData }) {
               <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
                 <Stat
                   icon="schedule"
-                  label="Worked"
+                  label="Paid"
                   value={`${data.netHours.toFixed(2)} h`}
                   accent="text-emerald-600"
+                  note={
+                    data.clockedHours > data.netHours + 0.01
+                      ? `${data.clockedHours.toFixed(2)} h clocked`
+                      : undefined
+                  }
                 />
                 <Stat
                   icon="pause_circle"
@@ -315,6 +327,7 @@ export function ShiftDetail({ data }: { data: ShiftDetailData }) {
                   label="Clocked"
                   value={`${data.clockInLabel}-${data.clockOutLabel}`}
                   accent="text-sky-600"
+                  note={`rostered ${data.scheduledLabel}`}
                 />
               </div>
 
