@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireScope } from "@/lib/tenant";
 import { opsWhere } from "@/lib/scope";
 import { prisma } from "@/lib/prisma";
-import { isManager } from "@/lib/roles";
+import { isAdmin, isManager } from "@/lib/roles";
 import {
   tzForState,
   zonedTimeToUtc,
@@ -106,6 +106,153 @@ export async function setApprovedEnd(formData: FormData) {
   revalidatePath("/timesheets");
   revalidatePath("/payroll");
   return { ok: true };
+}
+
+/**
+ * Change a shift's ROSTERED times - the office correcting the rota.
+ *
+ * Separate from editing clock times, and admin only, because this is the
+ * window pay is measured against: a shift rostered 10:30-12:30 that the
+ * worker actually did 11:00-1:00 pays an hour and a half until someone fixes
+ * the roster, and then pays two. Every change is written to ShiftRosterEdit
+ * with who, when, from, to and why.
+ *
+ * `scope` answers "what on the rota do you want to update": this one shift,
+ * or this and every future shift for the same participant that still has the
+ * old times.
+ */
+export async function updateRosteredTimes(formData: FormData) {
+  const { tenant, scope: branchScope, session } = await requireScope();
+  if (!isAdmin(session.role)) {
+    return { error: "Only an admin can change the rostered times." };
+  }
+
+  const shiftId = String(formData.get("shiftId") ?? "");
+  const startHm = String(formData.get("start") ?? "").trim();
+  const endHm = String(formData.get("end") ?? "").trim();
+  const reason = String(formData.get("reason") ?? "").trim();
+  const applyTo = String(formData.get("applyTo") ?? "ONE") === "SERIES" ? "SERIES" : "ONE";
+
+  if (!/^\d{2}:\d{2}$/.test(startHm) || !/^\d{2}:\d{2}$/.test(endHm)) {
+    return { error: "Give both times as HH:MM." };
+  }
+
+  const shift = await prisma.shift.findFirst({
+    where: { id: shiftId, tenantId: tenant.id, ...opsWhere(branchScope) },
+    include: { branch: { select: { state: true } } },
+  });
+  if (!shift) return { error: "That shift no longer exists." };
+
+  const tz = tzForState(shift.branch?.state ?? null);
+
+  /** Same wall-clock times, on that shift's own day, in its own zone. */
+  const windowFor = (s: { start: Date; end: Date }) => {
+    const dayKey = dateKeyInTz(s.start, tz);
+    const newStart = zonedTimeToUtc(dayKey, startHm, tz);
+    let newEnd = zonedTimeToUtc(dayKey, endHm, tz);
+    // An end before the start is the next morning - a sleepover or a night
+    // shift, not a mistake.
+    if (newStart && newEnd && newEnd <= newStart) {
+      newEnd = new Date(newEnd.getTime() + DAY_MS);
+    }
+    return { newStart, newEnd };
+  };
+
+  const { newStart, newEnd } = windowFor(shift);
+  if (!newStart || !newEnd) return { error: "Those times didn't make sense." };
+  if (
+    newStart.getTime() === shift.start.getTime() &&
+    newEnd.getTime() === shift.end.getTime()
+  ) {
+    return { error: "Those are already the rostered times." };
+  }
+
+  // The rest of the rota: same participant, same worker, same old times,
+  // still to come. Past shifts are left alone - their pay is history.
+  const series =
+    applyTo === "SERIES"
+      ? await prisma.shift.findMany({
+          where: {
+            tenantId: tenant.id,
+            clientId: shift.clientId,
+            staffId: shift.staffId,
+            id: { not: shift.id },
+            start: { gt: new Date() },
+            status: { notIn: ["COMPLETED", "CANCELLED"] },
+          },
+          select: { id: true, start: true, end: true },
+        })
+      : [];
+
+  const sameClockTime = series.filter((s) => {
+    const key = `${hmInTz(s.start, tz)}-${hmInTz(s.end, tz)}`;
+    return key === `${hmInTz(shift.start, tz)}-${hmInTz(shift.end, tz)}`;
+  });
+
+  const targets = [
+    { id: shift.id, start: shift.start, end: shift.end },
+    ...sameClockTime,
+  ];
+
+  // A moved shift must not land on top of another one for the same worker.
+  for (const t of targets) {
+    const w = windowFor(t);
+    if (!w.newStart || !w.newEnd) continue;
+    const clash = shift.staffId
+      ? await prisma.shift.findFirst({
+          where: {
+            tenantId: tenant.id,
+            staffId: shift.staffId,
+            id: { notIn: targets.map((x) => x.id) },
+            status: { not: "CANCELLED" },
+            start: { lt: w.newEnd },
+            end: { gt: w.newStart },
+          },
+          select: { start: true },
+        })
+      : null;
+    if (clash) {
+      return {
+        error: `That would overlap another shift on ${fmtInTz(clash.start, tz, {
+          day: "numeric",
+          month: "short",
+        })}.`,
+      };
+    }
+  }
+
+  await prisma.$transaction(
+    targets.flatMap((t) => {
+      const w = windowFor(t);
+      if (!w.newStart || !w.newEnd) return [];
+      return [
+        prisma.shift.update({
+          where: { id: t.id },
+          data: { start: w.newStart, end: w.newEnd },
+        }),
+        prisma.shiftRosterEdit.create({
+          data: {
+            tenantId: tenant.id,
+            shiftId: t.id,
+            byId: session.id,
+            byName: session.name,
+            fromStart: t.start,
+            fromEnd: t.end,
+            toStart: w.newStart,
+            toEnd: w.newEnd,
+            reason: reason || null,
+            scope: applyTo,
+          },
+        }),
+      ];
+    }),
+  );
+
+  revalidatePath("/timesheets");
+  revalidatePath("/schedule");
+  revalidatePath("/payroll");
+  revalidatePath("/my-shifts");
+  return { ok: true, changed: targets.length };
 }
 
 /** Admin edits a shift's clocked times, notes and per-trip mileage. */

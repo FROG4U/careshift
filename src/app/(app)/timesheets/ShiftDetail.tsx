@@ -3,7 +3,12 @@
 import { useState, useEffect, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ShiftMap, type LatLng, type Trip } from "@/components/ShiftMap";
-import { updateShiftDetail, setApproval, setApprovedEnd } from "./actions";
+import {
+  updateShiftDetail,
+  setApproval,
+  setApprovedEnd,
+  updateRosteredTimes,
+} from "./actions";
 
 const ATTEMPT_LABELS: Record<string, string> = {
   REFUSED: "Refused",
@@ -63,6 +68,22 @@ export type ShiftDetailData = {
   approval: string;
   /** Minutes clocked past the rostered finish. 0 when the shift didn't run over. */
   overrunMin: number;
+  /** The rostered window as HH:MM, for the roster editor. */
+  rosterStartTime: string;
+  rosterEndTime: string;
+  /** Minutes the worker clocked OUTSIDE the rostered window, either end. */
+  outsideRosterMin: number;
+  /** Admins only: changing the rota changes what is paid. */
+  canEditRoster: boolean;
+  /** Every change made to this shift's rostered times, newest first. */
+  rosterEdits: {
+    by: string;
+    at: string;
+    from: string;
+    to: string;
+    reason: string | null;
+    scope: string;
+  }[];
   /** Set once the office has authorised extra time past the rostered finish. */
   extraTime: {
     untilLabel: string;
@@ -679,6 +700,10 @@ export function ShiftDetail({ data }: { data: ShiftDetailData }) {
                 </p>
               )}
 
+              {(data.outsideRosterMin > 5 || data.rosterEdits.length > 0) && (
+                <RosterFix data={data} />
+              )}
+
               {/* Time past the rostered finish - a separate decision from
                   approving the timesheet, because the participant's plan only
                   funds the rostered hours. */}
@@ -826,6 +851,174 @@ function ExtraTime({ data }: { data: ShiftDetailData }) {
           {custom ? "Use the clock-out" : "Pay to a different time"}
         </button>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Correcting the rota.
+ *
+ * A worker who clocks the right length of shift at the wrong time is usually
+ * telling you the roster is wrong, not that they were late: the participant
+ * wants 11 to 1, the rota says 10:30 to 12:30, and the worker loses pay at
+ * both ends every visit. Only an admin can change it, the change is recorded
+ * with a reason, and the pay run picks the new window up immediately.
+ */
+function RosterFix({ data }: { data: ShiftDetailData }) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [open, setOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [form, setForm] = useState({
+    start: data.rosterStartTime,
+    end: data.rosterEndTime,
+    reason: "",
+    applyTo: "ONE" as "ONE" | "SERIES",
+  });
+
+  function save() {
+    setError(null);
+    const fd = new FormData();
+    fd.set("shiftId", data.id);
+    fd.set("start", form.start);
+    fd.set("end", form.end);
+    fd.set("reason", form.reason);
+    fd.set("applyTo", form.applyTo);
+    start(async () => {
+      const res = await updateRosteredTimes(fd);
+      if (res?.error) {
+        setError(res.error);
+        return;
+      }
+      setOpen(false);
+      router.refresh();
+    });
+  }
+
+  return (
+    <div className="rounded-xl border border-sky-200 bg-sky-50 px-3.5 py-3">
+      {data.outsideRosterMin > 5 && (
+        <>
+          <p className="text-sm font-semibold text-sky-900">
+            Clocked {data.outsideRosterMin} min outside the rostered times
+          </p>
+          <p className="mt-0.5 text-xs text-sky-800">
+            Rostered {data.scheduledLabel}, clocked {data.clockInLabel}-
+            {data.clockOutLabel}. If the rota has the wrong times, fix it here
+            and the pay follows.
+          </p>
+        </>
+      )}
+
+      {data.rosterEdits.length > 0 && (
+        <ul className="mt-2 space-y-1 text-xs text-sky-900">
+          {data.rosterEdits.map((e, i) => (
+            <li key={i}>
+              <span className="font-semibold">{e.from}</span> changed to{" "}
+              <span className="font-semibold">{e.to}</span> by {e.by}, {e.at}
+              {e.scope === "SERIES" ? " (and future shifts)" : ""}
+              {e.reason ? ` - "${e.reason}"` : ""}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {!data.canEditRoster ? (
+        <p className="mt-2 text-xs text-sky-800">
+          An admin can correct the rostered times.
+        </p>
+      ) : !open ? (
+        <button
+          onClick={() => setOpen(true)}
+          className="mt-2 rounded-lg bg-sky-700 px-3 py-2 text-xs font-bold text-white transition hover:bg-sky-800"
+        >
+          Change the rostered times
+        </button>
+      ) : (
+        <div className="mt-2 space-y-2">
+          <div className="flex gap-2">
+            <label className="flex-1 text-xs font-medium text-sky-900">
+              Rostered start
+              <input
+                type="time"
+                value={form.start}
+                onChange={(e) => setForm({ ...form, start: e.target.value })}
+                className="mt-1 w-full rounded-lg border border-sky-300 bg-white px-3 py-2 text-sm text-slate-800"
+              />
+            </label>
+            <label className="flex-1 text-xs font-medium text-sky-900">
+              Rostered finish
+              <input
+                type="time"
+                value={form.end}
+                onChange={(e) => setForm({ ...form, end: e.target.value })}
+                className="mt-1 w-full rounded-lg border border-sky-300 bg-white px-3 py-2 text-sm text-slate-800"
+              />
+            </label>
+          </div>
+
+          <label className="block text-xs font-medium text-sky-900">
+            Why (kept on the record)
+            <input
+              value={form.reason}
+              onChange={(e) => setForm({ ...form, reason: e.target.value })}
+              placeholder="e.g. rota was typed wrong, participant's time is 11 to 1"
+              className="mt-1 w-full rounded-lg border border-sky-300 bg-white px-3 py-2 text-sm text-slate-800"
+            />
+          </label>
+
+          <fieldset className="rounded-lg border border-sky-200 bg-white px-3 py-2">
+            <legend className="px-1 text-xs font-semibold text-sky-900">
+              What on the rota do you want to update?
+            </legend>
+            {(
+              [
+                ["ONE", "Just this shift"],
+                [
+                  "SERIES",
+                  "This shift and every future shift for this participant at these times",
+                ],
+              ] as const
+            ).map(([value, label]) => (
+              <label
+                key={value}
+                className="flex items-start gap-2 py-1 text-xs text-slate-700"
+              >
+                <input
+                  type="radio"
+                  name="applyTo"
+                  checked={form.applyTo === value}
+                  onChange={() => setForm({ ...form, applyTo: value })}
+                  className="mt-0.5"
+                />
+                {label}
+              </label>
+            ))}
+          </fieldset>
+
+          {error && <p className="text-xs text-red-600">{error}</p>}
+
+          <div className="flex gap-2">
+            <button
+              onClick={save}
+              disabled={pending}
+              className="rounded-lg bg-sky-700 px-3 py-2 text-xs font-bold text-white disabled:opacity-60"
+            >
+              {pending ? "Saving…" : "Update the rota"}
+            </button>
+            <button
+              onClick={() => setOpen(false)}
+              disabled={pending}
+              className="rounded-lg border border-sky-300 px-3 py-2 text-xs font-semibold text-sky-900"
+            >
+              Cancel
+            </button>
+          </div>
+          <p className="text-[11px] text-sky-800">
+            Past shifts already paid are never touched by the series option.
+          </p>
+        </div>
+      )}
     </div>
   );
 }

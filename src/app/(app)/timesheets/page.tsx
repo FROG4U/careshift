@@ -1,4 +1,5 @@
 import { requireScope } from "@/lib/tenant";
+import { isAdmin } from "@/lib/roles";
 import { opsWhere } from "@/lib/scope";
 import { prisma } from "@/lib/prisma";
 import { fmtDate, fmtTime, initials } from "@/lib/format";
@@ -40,7 +41,9 @@ export default async function TimesheetsPage({
     staff?: string;
   }>;
 }) {
-  const { tenant, scope } = await requireScope();
+  const { tenant, scope, session } = await requireScope();
+  // Changing the rota changes what is paid, so it is admin level only.
+  const adminLevel = isAdmin(session.role);
   const { q, from, to, month, client, staff } = await searchParams;
   const query = (q ?? "").trim().toLowerCase();
 
@@ -91,6 +94,7 @@ export default async function TimesheetsPage({
       pauses: true,
       branch: { select: { state: true } },
       clockAttempts: { orderBy: { createdAt: "asc" } },
+      rosterEdits: { orderBy: { createdAt: "desc" } },
       transports: {
         include: {
           points: { orderBy: { at: "asc" } },
@@ -192,6 +196,46 @@ export default async function TimesheetsPage({
           .
         </p>
       </header>
+
+      {(() => {
+        // Shifts where the clock sits outside the rostered window at either
+        // end by more than five minutes. Usually the rota, not the worker.
+        const mismatched = shifts.filter((s) => {
+          if (!s.clockInAt || !s.clockOutAt) return false;
+          const before = s.clockInAt < s.start ? s.start.getTime() - s.clockInAt.getTime() : 0;
+          const after = s.clockOutAt > s.end ? s.clockOutAt.getTime() - s.end.getTime() : 0;
+          return (before + after) / 60000 > 5;
+        });
+        if (mismatched.length === 0) return null;
+        return (
+          <div className="mb-4 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+            <p className="font-semibold">
+              {mismatched.length} shift{mismatched.length === 1 ? "" : "s"}{" "}
+              clocked outside the rostered times
+            </p>
+            <p className="mt-0.5 text-xs">
+              A worker doing the right length of shift at a different time
+              usually means the rota is wrong, and they lose pay at both ends
+              until it is fixed. Open one and use{" "}
+              <span className="font-semibold">Change the rostered times</span>.
+            </p>
+            <ul className="mt-2 space-y-1 text-xs">
+              {mismatched.slice(0, 8).map((m) => (
+                <li key={m.id}>
+                  {fmtDate(m.start)} · {m.staff ? `${m.staff.firstName} ${m.staff.lastName}` : "Unassigned"} ·{" "}
+                  {m.client.firstName} {m.client.lastName}: rostered{" "}
+                  {fmtTime(m.start)}-{fmtTime(m.end)}, clocked{" "}
+                  {m.clockInAt ? fmtTime(m.clockInAt) : "-"}-
+                  {m.clockOutAt ? fmtTime(m.clockOutAt) : "-"}
+                </li>
+              ))}
+              {mismatched.length > 8 && (
+                <li className="italic">and {mismatched.length - 8} more below</li>
+              )}
+            </ul>
+          </div>
+        );
+      })()}
 
       <DayShiftRepair
         items={dayShifted.map((d) => ({
@@ -342,6 +386,13 @@ export default async function TimesheetsPage({
                 s.clockOutAt && s.clockOutAt > s.end
                   ? Math.round((s.clockOutAt.getTime() - s.end.getTime()) / 60000)
                   : 0;
+              // Minutes clocked outside the rostered window at either end -
+              // the signal that the rota, not the worker, is wrong.
+              const beforeMin =
+                s.clockInAt && s.clockInAt < s.start
+                  ? Math.round((s.start.getTime() - s.clockInAt.getTime()) / 60000)
+                  : 0;
+              const outsideRosterMin = beforeMin + overrunMin;
               const paidExtraMin =
                 s.approvedEnd && s.clockOutAt && s.approvedEnd > s.end
                   ? Math.round(
@@ -494,6 +545,18 @@ export default async function TimesheetsPage({
                   km: t.km,
                 })),
                 overrunMin,
+                outsideRosterMin,
+                rosterStartTime: hmInTz(s.start, tzForState(s.branch?.state ?? null)),
+                rosterEndTime: hmInTz(s.end, tzForState(s.branch?.state ?? null)),
+                canEditRoster: adminLevel,
+                rosterEdits: s.rosterEdits.map((e) => ({
+                  by: e.byName,
+                  at: fmtDate(e.createdAt),
+                  from: `${fmtTime(e.fromStart)} - ${fmtTime(e.fromEnd)}`,
+                  to: `${fmtTime(e.toStart)} - ${fmtTime(e.toEnd)}`,
+                  reason: e.reason,
+                  scope: e.scope,
+                })),
                 extraTime: s.approvedEnd
                   ? {
                       untilLabel: fmtTime(s.approvedEnd),
@@ -564,6 +627,14 @@ export default async function TimesheetsPage({
                         title="Pay follows the rostered times unless the extra time is authorised."
                       >
                         clocked {clockedNet.toFixed(2)}h
+                      </div>
+                    )}
+                    {outsideRosterMin > 5 && (
+                      <div
+                        className="text-xs font-normal text-sky-700"
+                        title="Clocked outside the rostered window - open the shift to check the rota"
+                      >
+                        roster mismatch
                       </div>
                     )}
                     {overrunMin > 0 &&

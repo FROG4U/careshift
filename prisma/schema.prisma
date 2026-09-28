@@ -1114,6 +1114,8 @@ model Shift {
   /// asked to stay - or had to - past the rostered finish. Pay runs to the
   /// EARLIER of the clock-out and this time, so accepting extra time pays it
   /// without paying a forgotten clock-out. Null means the rostered end stands.
+  rosterEdits ShiftRosterEdit[]
+
   approvedEnd     DateTime?
   approvedEndBy   String?
   approvedEndAt   DateTime?
@@ -1328,4 +1330,29 @@ model TermsAcceptance {
   @@unique([termsId, userId])
   @@index([tenantId])
   @@index([userId])
+}
+
+/// A change to a shift's ROSTERED times, kept forever.
+///
+/// The rostered window decides what is paid, so moving it moves money. One
+/// row per shift changed, with who did it, when, what it was and why - the
+/// record an auditor or a worker disputing a pay run would ask for.
+model ShiftRosterEdit {
+  id        String   @id @default(cuid())
+  tenantId  String
+  shiftId   String
+  shift     Shift    @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  byId      String
+  byName    String
+  fromStart DateTime
+  fromEnd   DateTime
+  toStart   DateTime
+  toEnd     DateTime
+  reason    String?
+  /// ONE = just this shift. SERIES = this and the matching future shifts.
+  scope     String   @default("ONE")
+  createdAt DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([shiftId])
 }
