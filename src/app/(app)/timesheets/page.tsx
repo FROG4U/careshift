@@ -102,7 +102,10 @@ export default async function TimesheetsPage({
         },
       },
     },
-    orderBy: [{ approval: "asc" }, { start: "desc" }],
+    // Newest shift first, full stop. Sorting by approval first put the
+    // already-approved ones at the top (APPROVED sorts before PENDING), so
+    // yesterday's work sat below last month's.
+    orderBy: { start: "desc" },
   });
 
   const shifts = query
