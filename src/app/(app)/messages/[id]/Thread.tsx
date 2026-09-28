@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { initialsFromName } from "@/lib/format";
@@ -34,6 +34,34 @@ function time(iso: string) {
   return new Date(iso).toLocaleTimeString("en-AU", {
     hour: "numeric",
     minute: "2-digit",
+  });
+}
+
+/** The day a message belongs to, in the reader's own zone. */
+function dayKey(iso: string) {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
+
+/**
+ * The divider between days, the way a phone does it: Today, Yesterday, then
+ * the weekday for the last week, then the date.
+ */
+function dayLabel(iso: string) {
+  const d = new Date(iso);
+  const today = new Date();
+  const midnight = (x: Date) =>
+    new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const days = Math.round((midnight(today) - midnight(d)) / 86_400_000);
+  if (days === 0) return "Today";
+  if (days === 1) return "Yesterday";
+  if (days > 1 && days < 7) {
+    return d.toLocaleDateString("en-AU", { weekday: "long" });
+  }
+  return d.toLocaleDateString("en-AU", {
+    day: "numeric",
+    month: "short",
+    year: d.getFullYear() === today.getFullYear() ? undefined : "numeric",
   });
 }
 
@@ -435,10 +463,20 @@ export function Thread({
         {messages.map((m, i) => {
           const mine = m.senderId === meId;
           const prev = messages[i - 1];
+          // A divider whenever the day changes, and above the first message.
+          const newDay = !prev || dayKey(prev.createdAt) !== dayKey(m.createdAt);
           const showName = isGroup && !mine && prev?.senderId !== m.senderId;
           const iLiked = m.likes.some((l) => l.userId === meId);
           return (
-            <div key={m.id} className={`flex flex-col ${mine ? "items-end" : "items-start"}`}>
+            <Fragment key={m.id}>
+            {newDay && (
+              <div className="my-2 flex items-center justify-center">
+                <span className="rounded-full bg-[var(--border)]/60 px-3 py-1 text-[11px] font-semibold text-[var(--text-secondary)]">
+                  {dayLabel(m.createdAt)}
+                </span>
+              </div>
+            )}
+            <div className={`flex flex-col ${mine ? "items-end" : "items-start"}`}>
               {showName && (
                 <span className="mb-0.5 ml-2 text-[11px] font-medium text-[var(--text-muted)]">
                   {m.senderName}
@@ -533,6 +571,7 @@ export function Thread({
                 </div>
               </div>
             </div>
+            </Fragment>
           );
         })}
         {/* Seen receipt on my own latest message */}
