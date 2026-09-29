@@ -68,6 +68,7 @@ const GROUPS: Group[] = [
     items: [
       { href: "/messages", label: "Messages", icon: "chat_bubble", badgeKey: "unreadChat" },
       { href: "/announcements", label: "Send Message", icon: "campaign", managerOnly: true },
+      { href: "/comms-report", label: "Communication Report", icon: "summarize", managerOnly: true },
     ],
   },
   {
