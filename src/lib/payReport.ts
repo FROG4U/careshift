@@ -8,6 +8,8 @@ import {
   ENGAGEMENT_GAP_MIN,
 } from "@/lib/payroll";
 import { effectiveRates } from "@/lib/rates";
+import { payableDuties, internalStream, DUTY_LABELS, type DutyKind } from "@/lib/duties";
+import { dayTypeFor, hourlyRate } from "@/lib/payroll";
 import { calendarDateKey, fmtInTz, tzForState } from "@/lib/timezone";
 import type { DayLine, Totals, WorkerRow } from "@/lib/payReportTypes";
 
@@ -259,6 +261,101 @@ export async function buildPayReport(
     rows.set(key, row);
   }
 
+  // Meetings, supervisions and training.
+  //
+  // Not participant visits, so they come from their own table - but they are
+  // the worker's hours and belong in the same pay run, costed with the same
+  // bands and the same rates (see lib/duties).
+  const duties = await payableDuties(
+    tenantId,
+    { gte: scope.startDate, lte: scope.endDate },
+    { branchId: scope.branchId, staffId: opts.staffId ?? null },
+  );
+
+  if (duties.length > 0) {
+    const need = [...new Set(duties.map((d) => d.staffId))];
+    const dutyStaff = await prisma.staff.findMany({
+      where: { id: { in: need }, tenantId },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        employmentType: true,
+        branch: { select: { state: true } },
+        payLevel: {
+          select: {
+            name: true,
+            mileageRate: true,
+            rates: { select: { stream: true, dayType: true, rate: true } },
+          },
+        },
+        rateOverrides: { select: { stream: true, dayType: true, rate: true } },
+      },
+    });
+    const byId = new Map(dutyStaff.map((s2) => [s2.id, s2]));
+
+    for (const d of duties) {
+      const person = byId.get(d.staffId);
+      if (!person) continue;
+      const state = d.branchState ?? person.branch?.state ?? null;
+      if (state) states.add(state);
+      const tz = tzForState(state);
+      const holidays = holidaysFor(state, null);
+      const { grid } = effectiveRates(person);
+
+      const dayType = dayTypeFor(d.start, d.end, holidays.keys, tz);
+      const stream = internalStream(grid, dayType);
+      const rate = hourlyRate(grid, stream, dayType);
+      const time = (x: Date) =>
+        fmtInTz(x, tz, { hour: "numeric", minute: "2-digit" });
+
+      const line: DayLine = {
+        id: `duty-${d.dutyId}-${d.staffId}`,
+        dateLabel: fmtInTz(d.start, tz, {
+          weekday: "short",
+          day: "numeric",
+          month: "short",
+        }),
+        timeLabel: `${time(d.start)} - ${time(d.end)}`,
+        startIso: d.start.toISOString(),
+        endIso: d.end.toISOString(),
+        tz,
+        clientName: `${DUTY_LABELS[d.kind as DutyKind] ?? d.kind}: ${d.title}`,
+        dayType,
+        stream,
+        internal: true,
+        holidayName: holidays.names.get(dateKey(d.start, tz)) ?? null,
+        hours: d.hours,
+        rate,
+        km: 0,
+        kmPay: 0,
+        pay: d.hours * rate,
+      };
+
+      const key = person.id;
+      const row: WorkerRow = rows.get(key) ?? {
+        staffId: key,
+        name: `${person.firstName} ${person.lastName}`,
+        level: person.payLevel?.name ?? "No level",
+        employment: person.employmentType,
+        shifts: 0,
+        hours: 0,
+        km: 0,
+        wagePay: 0,
+        kmPay: 0,
+        total: 0,
+        bands: {},
+        unrated: false,
+        rateGap: false,
+        lines: [],
+      };
+      row.lines.push(line);
+      row.shifts += 1;
+      if (rate === 0) row.unrated = true;
+      rows.set(key, row);
+    }
+  }
+
   // Minimum engagement, then the totals.
   //
   // Done here rather than per shift because the minimum belongs to the
@@ -320,7 +417,9 @@ export async function buildPayReport(
   return {
     rows: report,
     totals,
-    shiftCount: shifts.length,
+    // Meetings count as a line on the run, so the header total matches
+    // what is listed underneath.
+    shiftCount: shifts.length + duties.length,
     pendingCount,
     holidayCount: usedHolidayIds.size,
     states: [...states].sort(),

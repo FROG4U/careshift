@@ -3,6 +3,8 @@ import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { fmtDate, fmtTime } from "@/lib/format";
 import { ShiftOffer } from "@/components/ShiftOffer";
+import { DutyInvite } from "@/components/worker/DutyInvite";
+import { DUTY_LABELS, type DutyKind } from "@/lib/dutyTypes";
 
 export default async function PendingShiftsPage() {
   const session = await getSession();
@@ -32,6 +34,18 @@ export default async function PendingShiftsPage() {
     orderBy: { start: "asc" },
   });
 
+  // Meetings, supervision and training they have been asked to.
+  const dutyInvites = await prisma.dutyAttendee.findMany({
+    where: {
+      tenantId: session.tenantId,
+      staffId: session.staffId,
+      status: "INVITED",
+      duty: { end: { gte: new Date() } },
+    },
+    include: { duty: true },
+    orderBy: { duty: { start: "asc" } },
+  });
+
   return (
     <div className="space-y-4 p-4">
       <div className="px-1">
@@ -41,7 +55,40 @@ export default async function PendingShiftsPage() {
         </p>
       </div>
 
-      {offers.length === 0 ? (
+      {dutyInvites.length > 0 && (
+        <div className="space-y-3">
+          {dutyInvites.map((i) => (
+            <div
+              key={i.id}
+              className="rounded-2xl border-2 border-sky-200 bg-sky-50/60 p-5 shadow-sm"
+            >
+              <div className="mb-1 text-xs font-medium uppercase tracking-wide text-sky-700">
+                {DUTY_LABELS[i.duty.kind as DutyKind] ?? i.duty.kind} ·{" "}
+                {fmtDate(i.duty.start)}
+              </div>
+              <div className="text-lg font-semibold text-slate-900">
+                {i.duty.title}
+              </div>
+              <div className="text-sm text-slate-500">
+                {fmtTime(i.duty.start)} - {fmtTime(i.duty.end)} ·{" "}
+                {((i.duty.end.getTime() - i.duty.start.getTime()) / 3600000).toFixed(2)} h
+                paid
+              </div>
+              {i.duty.location && (
+                <div className="mt-1 text-sm text-slate-400">📍 {i.duty.location}</div>
+              )}
+              {i.duty.notes && (
+                <div className="mt-1 text-sm italic text-slate-500">{i.duty.notes}</div>
+              )}
+              <div className="mt-4">
+                <DutyInvite dutyId={i.dutyId} />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {offers.length === 0 && dutyInvites.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-10 text-center">
           <span className="material-symbols-rounded text-[40px] text-slate-300">
             inbox

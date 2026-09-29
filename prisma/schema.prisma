@@ -93,6 +93,7 @@ model Tenant {
   payrollLines     PayrollLine[]
   termsVersions    TermsVersion[]
   termsAcceptances TermsAcceptance[]
+  duties           Duty[]
 }
 
 /// A message broadcast from the office to a group of people (a branch's
@@ -263,6 +264,7 @@ model Branch {
   incidents      Incident[]
   broadcasts     Broadcast[]
   access         BranchAccess[]
+  duties         Duty[]
 
   @@index([tenantId])
 }
@@ -931,6 +933,7 @@ model Staff {
   incidents      Incident[]
   rateOverrides  StaffRate[]
   payrollLines   PayrollLine[]
+  dutyAttendance DutyAttendee[]
 
   @@index([tenantId])
   @@index([branchId])
@@ -1388,4 +1391,64 @@ model Call {
 
   @@index([tenantId, toUserId, status])
   @@index([tenantId, createdAt])
+}
+
+/// Paid work that is not a participant visit: team meetings, supervisions,
+/// training days.
+///
+/// Deliberately its own model rather than a Shift with no participant. A
+/// shift carries a participant, a plan, funding, charges, mileage and
+/// geofenced clock-in; making all of that optional to squeeze a staff meeting
+/// in would weaken every one of those rules. A duty is simpler: a time, a
+/// title, and the people asked to attend.
+model Duty {
+  id       String  @id @default(cuid())
+  tenantId String
+  tenant   Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  branchId String?
+  branch   Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
+
+  title String
+  /// MEETING | SUPERVISION | TRAINING | OTHER
+  kind  String @default("MEETING")
+
+  start    DateTime
+  end      DateTime
+  location String?
+  notes    String?
+
+  createdById   String
+  createdByName String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  attendees DutyAttendee[]
+
+  @@index([tenantId, start])
+}
+
+/// One worker asked to a duty: their answer, and whether it is payable.
+model DutyAttendee {
+  id       String @id @default(cuid())
+  tenantId String
+  dutyId   String
+  duty     Duty   @relation(fields: [dutyId], references: [id], onDelete: Cascade)
+  staffId  String
+  staff    Staff  @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  /// INVITED | ACCEPTED | DECLINED - the worker's own answer.
+  status        String    @default("INVITED")
+  respondedAt   DateTime?
+  declineReason String?
+
+  /// PENDING | APPROVED | REJECTED - the office confirming they attended.
+  /// Nothing is paid until this is APPROVED, the same rule as a timesheet.
+  approval   String    @default("PENDING")
+  approvedBy String?
+  approvedAt DateTime?
+  /// Hours to pay, when it differs from the scheduled length.
+  hours      Float?
+
+  @@unique([dutyId, staffId])
+  @@index([tenantId, staffId])
 }

@@ -19,6 +19,8 @@ export type DayLine = {
   dayType: string;
   /** Funding stream from the participant's agreement: NDIS, AGED_CARE, ... */
   stream: string;
+  /** True for a meeting, supervision or training rather than a participant visit. */
+  internal?: boolean;
   /**
    * True when this rate came from the pay level rather than a rate agreed for
    * this worker. Harmless on its own - but on a worker who HAS agreed rates

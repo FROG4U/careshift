@@ -8,6 +8,9 @@ import {
   type GridDay,
 } from "@/components/ScheduleGrid";
 import { ScheduleBranchBar } from "@/components/ScheduleBranchBar";
+import { DutyBar, type DutyRow } from "./DutyBar";
+import { dutyHours } from "@/lib/duties";
+import { isManager } from "@/lib/roles";
 import { netHoursOf, kmOf } from "@/lib/payroll";
 import {
   tzForState as tzOf,
@@ -110,6 +113,23 @@ export default async function SchedulePage({
       : (branches[0]?.id ?? "");
   const selectedBranch = branches.find((b) => b.id === selected) ?? null;
 
+  // Meetings, supervision and training for the same window - their own band
+  // above the grid, because they have no participant to sit under.
+  const dutyRows = await prisma.duty.findMany({
+    where: {
+      tenantId: tenant.id,
+      start: { gte: start, lt: end },
+      ...(selected ? { branchId: selected } : {}),
+    },
+    include: {
+      branch: { select: { state: true } },
+      attendees: {
+        include: { staff: { select: { firstName: true, lastName: true } } },
+      },
+    },
+    orderBy: { start: "asc" },
+  });
+
   const prevWeek = isoDate(addDays(start, -7));
   const nextWeek = isoDate(addDays(start, 7));
   // Week navigation keeps the worker/participant filters, but drops a custom
@@ -130,6 +150,43 @@ export default async function SchedulePage({
     month: "short",
     year: "numeric",
   })}`;
+
+  const now = new Date();
+  const fmtDay = (d: Date) =>
+    d.toLocaleDateString("en-AU", { day: "numeric", month: "short" });
+  const duties: DutyRow[] = dutyRows.map((d) => {
+    const tz = tzOf(d.branch?.state ?? null);
+    const t = (x: Date) =>
+      x.toLocaleTimeString("en-AU", {
+        hour: "numeric",
+        minute: "2-digit",
+        timeZone: tz,
+      });
+    return {
+      id: d.id,
+      title: d.title,
+      kind: d.kind,
+      dateLabel: d.start.toLocaleDateString("en-AU", {
+        weekday: "short",
+        day: "numeric",
+        month: "short",
+        timeZone: tz,
+      }),
+      timeLabel: `${t(d.start)} - ${t(d.end)}`,
+      hours: (d.end.getTime() - d.start.getTime()) / 3600000,
+      location: d.location,
+      notes: d.notes,
+      past: d.end < now,
+      attendees: d.attendees.map((a) => ({
+        id: a.id,
+        name: `${a.staff.firstName} ${a.staff.lastName}`,
+        status: a.status,
+        approval: a.approval,
+        declineReason: a.declineReason,
+        hours: a.hours,
+      })),
+    };
+  });
 
   const days: GridDay[] = Array.from({ length: dayCount }, (_, i) => {
     const d = addDays(start, i);
@@ -359,6 +416,17 @@ export default async function SchedulePage({
 
       {selected ? (
         <>
+          <DutyBar
+            duties={duties}
+            staff={staff.map((x) => ({
+              id: x.id,
+              name: `${x.firstName} ${x.lastName}`,
+            }))}
+            branchId={selected}
+            weekLabel={`${fmtDay(start)} - ${fmtDay(addDays(start, dayCount - 1))}`}
+            canManage={isManager(session.role)}
+          />
+
           <ScheduleGrid
             days={days}
             branchId={selected}
