@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createDuty, setDutyAttendance, deleteDuty } from "./dutyActions";
 import { DUTY_KINDS, DUTY_LABELS, type DutyKind } from "@/lib/dutyTypes";
+import { Linkify } from "@/components/Linkify";
 
 /**
  * Meetings, supervisions and training for the week on screen.
@@ -236,11 +237,16 @@ export function DutyBar({
                   </span>
                   <div className="text-xs text-slate-500">
                     {d.dateLabel} · {d.timeLabel} · {d.hours.toFixed(2)} h
-                    {d.location ? ` · ${d.location}` : ""}
+                    {d.location ? (
+                      <>
+                        {" · "}
+                        <Linkify text={d.location} />
+                      </>
+                    ) : null}
                   </div>
                   {d.notes && (
                     <div className="mt-0.5 text-xs italic text-slate-500">
-                      {d.notes}
+                      <Linkify text={d.notes} />
                     </div>
                   )}
                 </div>

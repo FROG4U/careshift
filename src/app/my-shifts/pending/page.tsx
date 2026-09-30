@@ -5,6 +5,7 @@ import { fmtDate, fmtTime } from "@/lib/format";
 import { ShiftOffer } from "@/components/ShiftOffer";
 import { DutyInvite } from "@/components/worker/DutyInvite";
 import { DUTY_LABELS, type DutyKind } from "@/lib/dutyTypes";
+import { Linkify } from "@/components/Linkify";
 
 export default async function PendingShiftsPage() {
   const session = await getSession();
@@ -75,10 +76,14 @@ export default async function PendingShiftsPage() {
                 paid
               </div>
               {i.duty.location && (
-                <div className="mt-1 text-sm text-slate-400">📍 {i.duty.location}</div>
+                <div className="mt-1 text-sm text-slate-500">
+                  📍 <Linkify text={i.duty.location} />
+                </div>
               )}
               {i.duty.notes && (
-                <div className="mt-1 text-sm italic text-slate-500">{i.duty.notes}</div>
+                <div className="mt-1 text-sm italic text-slate-500">
+                  <Linkify text={i.duty.notes} />
+                </div>
               )}
               <div className="mt-4">
                 <DutyInvite dutyId={i.dutyId} />

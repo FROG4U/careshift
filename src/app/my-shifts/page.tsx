@@ -4,6 +4,8 @@ import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 import { tzForState, dateKeyInTz, fmtInTz } from "@/lib/timezone";
+import { DUTY_LABELS, type DutyKind } from "@/lib/dutyTypes";
+import { Linkify } from "@/components/Linkify";
 
 /**
  * The worker's shift list, grouped into Today / This week / This month /
@@ -36,6 +38,22 @@ export default async function MyShiftsPage() {
   startOfToday.setHours(0, 0, 0, 0);
   const horizon = new Date(now);
   horizon.setMonth(horizon.getMonth() + 3);
+
+  // Meetings, supervision and training they have said yes to. Without this
+  // an accepted invitation disappears: the pending list only holds the ones
+  // still to answer, so the time, the place and the meeting link were gone
+  // the moment they tapped Accept.
+  const myDuties = await prisma.dutyAttendee.findMany({
+    where: {
+      tenantId: session.tenantId,
+      staffId: session.staffId,
+      status: "ACCEPTED",
+      duty: { end: { gte: new Date() } },
+    },
+    include: { duty: true },
+    orderBy: { duty: { start: "asc" } },
+    take: 10,
+  });
 
   const shifts = await prisma.shift.findMany({
     where: {
@@ -191,6 +209,49 @@ export default async function MyShiftsPage() {
             chevron_right
           </span>
         </Link>
+      )}
+
+      {myDuties.length > 0 && (
+        <section>
+          <h2 className="mb-2 px-1 text-sm font-bold text-slate-900">
+            Meetings &amp; training
+          </h2>
+          <ul className="space-y-2">
+            {myDuties.map((d) => (
+              <li
+                key={d.id}
+                className="rounded-2xl border border-sky-200 bg-sky-50/60 p-4"
+              >
+                <div className="text-[11px] font-bold uppercase tracking-wide text-sky-700">
+                  {DUTY_LABELS[d.duty.kind as DutyKind] ?? d.duty.kind}
+                </div>
+                <div className="text-base font-semibold text-slate-900">
+                  {d.duty.title}
+                </div>
+                <div className="text-sm text-slate-500">
+                  {fmtInTz(d.duty.start, tz, {
+                    weekday: "short",
+                    day: "numeric",
+                    month: "short",
+                  })}{" "}
+                  · {fmtInTz(d.duty.start, tz, { hour: "numeric", minute: "2-digit" })}
+                  {" - "}
+                  {fmtInTz(d.duty.end, tz, { hour: "numeric", minute: "2-digit" })}
+                </div>
+                {d.duty.location && (
+                  <div className="mt-1 text-sm text-slate-600">
+                    📍 <Linkify text={d.duty.location} />
+                  </div>
+                )}
+                {d.duty.notes && (
+                  <div className="mt-1 text-sm italic text-slate-500">
+                    <Linkify text={d.duty.notes} />
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
 
       <Group
