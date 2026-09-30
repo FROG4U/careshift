@@ -177,8 +177,14 @@ export default async function SchedulePage({
       location: d.location,
       notes: d.notes,
       past: d.end < now,
+      // What the edit form puts back in its date and time boxes, in the
+      // branch's own zone rather than the server's.
+      dateValue: dateKeyInTz(d.start, tz),
+      startValue: hmInTz(d.start, tz),
+      endValue: hmInTz(d.end, tz),
       attendees: d.attendees.map((a) => ({
         id: a.id,
+        staffId: a.staffId,
         name: `${a.staff.firstName} ${a.staff.lastName}`,
         status: a.status,
         approval: a.approval,

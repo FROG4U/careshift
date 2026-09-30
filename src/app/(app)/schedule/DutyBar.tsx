@@ -2,7 +2,12 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { createDuty, setDutyAttendance, deleteDuty } from "./dutyActions";
+import {
+  createDuty,
+  updateDuty,
+  setDutyAttendance,
+  deleteDuty,
+} from "./dutyActions";
 import { DUTY_KINDS, DUTY_LABELS, type DutyKind } from "@/lib/dutyTypes";
 import { Linkify } from "@/components/Linkify";
 
@@ -25,8 +30,13 @@ export type DutyRow = {
   location: string | null;
   notes: string | null;
   past: boolean;
+  /** The values the edit form needs back: yyyy-mm-dd and HH:MM, branch time. */
+  dateValue: string;
+  startValue: string;
+  endValue: string;
   attendees: {
     id: string;
+    staffId: string;
     name: string;
     status: string;
     approval: string;
@@ -56,6 +66,8 @@ export function DutyBar({
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  /** The duty being edited, if any. */
+  const [editing, setEditing] = useState<DutyRow | null>(null);
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -69,6 +81,21 @@ export function DutyBar({
         return;
       }
       setOpen(false);
+      router.refresh();
+    });
+  }
+
+  function saveEdit(fd: FormData) {
+    if (!editing) return;
+    setError(null);
+    fd.set("dutyId", editing.id);
+    start(async () => {
+      const res = await updateDuty(fd);
+      if (res?.error) {
+        setError(res.error);
+        return;
+      }
+      setEditing(null);
       router.refresh();
     });
   }
@@ -219,6 +246,126 @@ export function DutyBar({
         </form>
       )}
 
+      {editing && (
+        <form action={saveEdit} className="mb-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            <label className="text-xs font-medium text-slate-600">
+              What is it
+              <input
+                name="title"
+                required
+                defaultValue={editing.title}
+                placeholder="e.g. Monthly team meeting"
+                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              />
+            </label>
+            <label className="text-xs font-medium text-slate-600">
+              Type
+              <select
+                name="kind"
+                defaultValue={editing.kind}
+                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              >
+                {DUTY_KINDS.map((k) => (
+                  <option key={k} value={k}>
+                    {DUTY_LABELS[k as DutyKind]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="text-xs font-medium text-slate-600">
+              Date
+              <input
+                name="date"
+                type="date"
+                required
+                defaultValue={editing.dateValue}
+                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              />
+            </label>
+            <label className="text-xs font-medium text-slate-600">
+              Where (optional)
+              <input
+                name="location"
+                defaultValue={editing.location ?? ""}
+                placeholder="Office, Zoom, participant's home"
+                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              />
+            </label>
+            <label className="text-xs font-medium text-slate-600">
+              Start
+              <input
+                name="start"
+                type="time"
+                required
+                defaultValue={editing.startValue}
+                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              />
+            </label>
+            <label className="text-xs font-medium text-slate-600">
+              Finish
+              <input
+                name="end"
+                type="time"
+                required
+                defaultValue={editing.endValue}
+                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              />
+            </label>
+            <label className="text-xs font-medium text-slate-600 sm:col-span-2">
+              Notes for the workers (optional)
+              <input
+                name="notes"
+                defaultValue={editing.notes ?? ""}
+                placeholder="Agenda, what to bring"
+                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              />
+            </label>
+          </div>
+
+          <fieldset className="mt-3">
+            <legend className="text-xs font-semibold text-slate-600">
+              Who has to be there
+            </legend>
+            <div className="mt-1 flex flex-wrap gap-2">
+              {staff.map((s) => (
+                <label
+                  key={s.id}
+                  className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs"
+                >
+                  <input
+                    type="checkbox"
+                    name="staffIds"
+                    value={s.id}
+                    defaultChecked={editing.attendees.some((a) => a.staffId === s.id)}
+                  />
+                  {s.name}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+
+          <button
+            disabled={pending}
+            className="mt-3 rounded-lg bg-[var(--brand)] px-4 py-2 text-xs font-bold text-white disabled:opacity-60"
+          >
+            {pending ? "Saving…" : "Save changes"}
+          </button>
+          <button
+            type="button"
+            onClick={() => setEditing(null)}
+            className="mt-3 ml-2 rounded-lg border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-600"
+          >
+            Cancel
+          </button>
+          <p className="mt-1.5 text-[11px] text-slate-500">
+            Changing the date or time asks everyone to accept again, because a
+            yes to one time is not a yes to another. Anyone already approved
+            for pay cannot be removed here.
+          </p>
+        </form>
+      )}
+
       {duties.length === 0 ? (
         <p className="py-3 text-center text-xs text-slate-400">
           Nothing scheduled this week.
@@ -251,6 +398,17 @@ export function DutyBar({
                   )}
                 </div>
                 {canManage && (
+                  <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => {
+                      setOpen(false);
+                      setEditing(d);
+                    }}
+                    disabled={pending}
+                    className="text-xs font-semibold text-[var(--brand)] hover:underline disabled:opacity-60"
+                  >
+                    Edit
+                  </button>
                   <button
                     onClick={() => remove(d.id)}
                     disabled={pending}
@@ -258,6 +416,7 @@ export function DutyBar({
                   >
                     Delete
                   </button>
+                  </div>
                 )}
               </div>
 
