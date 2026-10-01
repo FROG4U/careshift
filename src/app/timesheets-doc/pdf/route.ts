@@ -28,18 +28,23 @@ export async function GET(req: NextRequest) {
     staff: p.get("staff") ?? undefined,
   });
 
-  const buf = await renderShiftNotesPdf(doc, {
-    tenantName: tenant.name,
-    brand: tenant.brandColor || "#003146",
-    generatedBy: session.name,
-  });
+  const mode = p.get("mode") === "hours" ? "hours" : "notes";
+  const buf = await renderShiftNotesPdf(
+    doc,
+    {
+      tenantName: tenant.name,
+      brand: tenant.brandColor || "#003146",
+      generatedBy: session.name,
+    },
+    mode,
+  );
 
   const slug = doc.rangeText.replace(/[^a-z0-9]+/gi, "-").toLowerCase();
   return new NextResponse(new Uint8Array(buf), {
     headers: {
       "Content-Type": "application/pdf",
       // attachment = the browser saves the file, no printer involved.
-      "Content-Disposition": `attachment; filename="shift-notes-${slug}.pdf"`,
+      "Content-Disposition": `attachment; filename="${mode === "hours" ? "hours" : "shift-notes"}-${slug}.pdf"`,
       "Cache-Control": "no-store",
     },
   });

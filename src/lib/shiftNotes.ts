@@ -1,6 +1,6 @@
 import "server-only";
 import { prisma } from "./prisma";
-import { netHoursOf } from "./payroll";
+import { netHoursOf, kmOf } from "./payroll";
 import { fmtInTz, tzForState } from "./timezone";
 
 /**
@@ -24,11 +24,18 @@ export type NotesFilters = {
 export type NoteRow = {
   id: string;
   dateLabel: string;
+  /** "Sun 13 Sep" - for the hours table, where the year is in the heading. */
+  shortDate: string;
   timeLabel: string;
   clientName: string;
   ndisNumber: string | null;
   workerName: string;
+  /** Paid hours: the clocked window trimmed to the rostered one, less breaks. */
   hours: number;
+  /** What the worker actually clocked, for the hours-only report. */
+  clockedLabel: string;
+  clockedHours: number;
+  km: number;
   note: string;
   handover: string | null;
   handoverAck: boolean;
@@ -89,6 +96,9 @@ export async function loadShiftNotes(
         client: true,
         staff: true,
         pauses: true,
+        // kmOf prefers tracked trips over the typed figure, so the report
+        // shows the same mileage the pay run used.
+        transports: { select: { km: true } },
         branch: { select: { state: true } },
         tasks: { orderBy: [{ dueTime: "asc" }, { sortOrder: "asc" }] },
       },
@@ -157,6 +167,11 @@ export async function loadShiftNotes(
           month: "short",
           year: "numeric",
         }),
+        shortDate: fmtInTz(s.start, tz, {
+          weekday: "short",
+          day: "numeric",
+          month: "short",
+        }),
         timeLabel: `${t(s.start)} - ${t(s.end)}`,
         clientName: `${s.client.firstName} ${s.client.lastName}`,
         ndisNumber: s.client.ndisNumber ?? null,
@@ -164,6 +179,23 @@ export async function loadShiftNotes(
           ? `${s.staff.firstName} ${s.staff.lastName}`
           : "Unassigned",
         hours: netHoursOf(s),
+        clockedLabel:
+          s.clockInAt && s.clockOutAt
+            ? `${t(s.clockInAt)} - ${t(s.clockOutAt)}`
+            : "not clocked",
+        clockedHours:
+          s.clockInAt && s.clockOutAt
+            ? Math.max(
+                0,
+                (s.clockOutAt.getTime() - s.clockInAt.getTime()) / 3600000 -
+                  s.pauses.reduce(
+                    (n, b) =>
+                      b.endAt ? n + (b.endAt.getTime() - b.startAt.getTime()) / 3600000 : n,
+                    0,
+                  ),
+              )
+            : 0,
+        km: kmOf(s),
         note: s.progressNote?.trim() ?? "",
         handover: s.handoverNote?.trim() || null,
         handoverAck: !!s.handoverAckAt,

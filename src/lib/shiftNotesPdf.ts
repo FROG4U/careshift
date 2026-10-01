@@ -53,6 +53,13 @@ export type PdfMeta = {
 export async function renderShiftNotesPdf(
   doc: NotesDoc,
   meta: PdfMeta,
+  /**
+   * "notes" is the care record: every word the worker wrote.
+   * "hours" is the timesheet: rostered against clocked, and nothing else -
+   * the version you hand to a bookkeeper or put in front of a worker who is
+   * querying their pay, without the participant's private details in it.
+   */
+  mode: "notes" | "hours" = "notes",
 ): Promise<Buffer> {
   const tenant = { name: meta.tenantName };
   const session = { name: meta.generatedBy };
@@ -72,7 +79,7 @@ export async function renderShiftNotesPdf(
     bufferPages: true,
     margins: { top: MARGIN, bottom: MARGIN + 18, left: MARGIN, right: MARGIN },
     info: {
-      Title: `Shift notes - ${doc.rangeText}`,
+      Title: `${mode === "hours" ? "Hours" : "Shift notes"} - ${doc.rangeText}`,
       Author: tenant.name,
       Subject: "Shift notes record",
     },
@@ -89,9 +96,13 @@ export async function renderShiftNotesPdf(
   pdf.fillColor("#0f172a").font("Helvetica-Bold").fontSize(16);
   pdf.text(tenant.name, MARGIN, MARGIN + 14);
   pdf.font("Helvetica").fontSize(9).fillColor("#64748b");
-  pdf.text("Shift Notes Record", { continued: false });
+  pdf.text(mode === "hours" ? "Hours Record" : "Shift Notes Record", {
+    continued: false,
+  });
   pdf.text(`Generated ${generated} by ${session.name}`);
-  pdf.text("Contains participant care information - handle confidentially");
+  if (mode === "notes") {
+    pdf.text("Contains participant care information - handle confidentially");
+  }
 
   pdf.moveDown(1);
   pdf.font("Helvetica-Bold").fontSize(18).fillColor("#0f172a");
@@ -102,7 +113,7 @@ export async function renderShiftNotesPdf(
       doc.rows.length === 1 ? "" : "s"
     } · ${doc.totalHours.toFixed(1)} hours`,
   );
-  if (doc.withNotes < doc.rows.length) {
+  if (mode === "notes" && doc.withNotes < doc.rows.length) {
     pdf.fillColor("#b45309");
     pdf.text(
       `${doc.rows.length - doc.withNotes} of these shifts have no notes recorded.`,
@@ -116,7 +127,104 @@ export async function renderShiftNotesPdf(
     pdf.text("No completed shifts match these filters.", { align: "center" });
   }
 
-  for (const r of doc.rows) {
+  if (mode === "hours") {
+    // One line per shift: what was rostered, what was clocked, what is paid.
+    // Widths add up to the text column. Names are clipped with an ellipsis
+    // rather than wrapped, so every shift stays on one line and the eye can
+    // run down the rostered and clocked columns.
+    const cols = [
+      { label: "Date", w: 62 },
+      { label: "Participant", w: 88 },
+      { label: "Worker", w: 100 },
+      { label: "Rostered", w: 90 },
+      { label: "Clocked", w: 90 },
+      { label: "Paid h", w: 34 },
+      { label: "KM", w: 31 },
+    ];
+    /** Trim to what actually fits, so a long name cannot spill onto the row below. */
+    const fit = (text: string, width: number) => {
+      const t = clean(text);
+      if (pdf.widthOfString(t) <= width) return t;
+      let out = t;
+      while (out.length > 1 && pdf.widthOfString(out + "...") > width) {
+        out = out.slice(0, -1);
+      }
+      return out + "...";
+    };
+
+    const header = () => {
+      pdf.font("Helvetica-Bold").fontSize(8).fillColor("#64748b");
+      // One y for the whole row - taking pdf.y per column walks it down the
+      // page and leaves the headings in a staircase.
+      const hy = pdf.y;
+      let x = MARGIN;
+      for (const c of cols) {
+        pdf.text(fit(c.label.toUpperCase(), c.w - 4), x, hy, { lineBreak: false });
+        x += c.w;
+      }
+      pdf.y = hy;
+      pdf.moveDown(0.9);
+      pdf
+        .moveTo(MARGIN, pdf.y - 3)
+        .lineTo(A4.width - MARGIN, pdf.y - 3)
+        .strokeColor("#cbd5e1")
+        .lineWidth(0.7)
+        .stroke();
+    };
+    header();
+
+    let paid = 0;
+    let km = 0;
+    for (const r of doc.rows) {
+      if (pdf.y > A4.height - MARGIN - 40) {
+        pdf.addPage();
+        header();
+      }
+      paid += r.hours;
+      km += r.km;
+      const cells = [
+        r.shortDate,
+        r.clientName,
+        r.workerName,
+        r.timeLabel,
+        r.clockedLabel,
+        r.hours.toFixed(2),
+        r.km ? r.km.toFixed(1) : "-",
+      ];
+      pdf.font("Helvetica").fontSize(8.5).fillColor("#0f172a");
+      const y = pdf.y;
+      let x = MARGIN;
+      cells.forEach((cell, i) => {
+        pdf.text(fit(cell, cols[i].w - 4), x, y, { lineBreak: false });
+        x += cols[i].w;
+      });
+      pdf.y = y;
+      pdf.moveDown(1.05);
+    }
+
+    pdf
+      .moveTo(MARGIN, pdf.y - 2)
+      .lineTo(A4.width - MARGIN, pdf.y - 2)
+      .strokeColor("#334155")
+      .lineWidth(1)
+      .stroke();
+    pdf.moveDown(0.3);
+    pdf.font("Helvetica-Bold").fontSize(9).fillColor("#0f172a");
+    pdf.text(
+      `${doc.rows.length} shift${doc.rows.length === 1 ? "" : "s"} · ${paid.toFixed(2)} hours paid · ${km.toFixed(1)} km`,
+      MARGIN,
+      pdf.y,
+      { width: CONTENT },
+    );
+    pdf.moveDown(0.6);
+    pdf.font("Helvetica").fontSize(8).fillColor("#64748b");
+    pdf.text(
+      "Rostered is the shift as scheduled. Clocked is what the worker recorded on the app. Paid hours are the clocked time inside the rostered window, less breaks.",
+      { width: CONTENT },
+    );
+  }
+
+  for (const r of mode === "hours" ? [] : doc.rows) {
     // Start a new page rather than splitting a shift's heading from its note.
     if (pdf.y > A4.height - MARGIN - 120) pdf.addPage();
 
@@ -175,7 +283,7 @@ export async function renderShiftNotesPdf(
     pdf.page.margins.bottom = 0;
     pdf.font("Helvetica").fontSize(8).fillColor("#94a3b8");
     pdf.text(
-      `${tenant.name} · Shift notes · Page ${i - range.start + 1} of ${range.count}`,
+      `${tenant.name} · ${mode === "hours" ? "Hours" : "Shift notes"} · Page ${i - range.start + 1} of ${range.count}`,
       MARGIN,
       A4.height - MARGIN + 4,
       { width: CONTENT, align: "center", lineBreak: false },
