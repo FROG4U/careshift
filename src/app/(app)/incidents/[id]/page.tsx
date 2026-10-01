@@ -1,7 +1,8 @@
 import Link from "next/link";
 import Image from "next/image";
 import { notFound, redirect } from "next/navigation";
-import { requireTenant } from "@/lib/tenant";
+import { requireScope } from "@/lib/tenant";
+import { opsWhere } from "@/lib/scope";
 import { prisma } from "@/lib/prisma";
 import { isManager } from "@/lib/roles";
 import { fmtDateTime } from "@/lib/format";
@@ -20,12 +21,15 @@ export default async function IncidentDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const { tenant, session } = await requireTenant();
+  const { tenant, session, scope } = await requireScope();
   if (!isManager(session.role)) redirect("/dashboard");
 
   const { id } = await params;
   const incident = await prisma.incident.findFirst({
-    where: { id, tenantId: tenant.id },
+    // The same branch filter the save uses. Without it a manager could open
+    // an incident their access does not cover, press Save, and have nothing
+    // happen with nothing to tell them why.
+    where: { id, tenantId: tenant.id, ...opsWhere(scope) },
     include: {
       client: true,
       staff: true,
