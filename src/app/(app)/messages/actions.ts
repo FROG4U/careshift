@@ -9,6 +9,7 @@ import { requireTenant } from "@/lib/tenant";
 import { prisma } from "@/lib/prisma";
 import { notifyUser } from "@/lib/notify";
 import { messageableWhere } from "@/lib/messaging";
+import { UPLOAD_DIR, fileUrl } from "@/lib/uploads";
 
 const str = (v: FormDataEntryValue | null) => String(v ?? "").trim();
 
@@ -99,11 +100,11 @@ export async function uploadAttachment(
   const bytes = Buffer.from(await file.arrayBuffer());
   const ext = (file.name.split(".").pop() || "jpg").toLowerCase().slice(0, 5);
   const name = `${Date.now()}-${Math.round(Math.random() * 1e9)}.${ext}`;
-  const dir = path.join(process.cwd(), "public", "uploads");
+  const dir = UPLOAD_DIR;
   await mkdir(dir, { recursive: true });
   await writeFile(path.join(dir, name), bytes);
   return {
-    url: `/uploads/${name}`,
+    url: fileUrl(name),
     type: file.type.startsWith("image/") ? "image" : "file",
   };
 }

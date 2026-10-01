@@ -12,6 +12,7 @@ import {
   isReportableIncident,
   incidentLabel,
 } from "@/lib/constants";
+import { UPLOAD_DIR, fileUrl } from "@/lib/uploads";
 
 const str = (v: FormDataEntryValue | null) => String(v ?? "").trim();
 const bool = (v: FormDataEntryValue | null) => String(v ?? "") === "on";
@@ -27,10 +28,10 @@ async function savePhoto(file: File): Promise<string | null> {
   const bytes = Buffer.from(await file.arrayBuffer());
   const ext = (file.name.split(".").pop() || "jpg").toLowerCase().slice(0, 5);
   const name = `incident-${Date.now()}-${Math.round(Math.random() * 1e9)}.${ext}`;
-  const dir = path.join(process.cwd(), "public", "uploads");
+  const dir = UPLOAD_DIR;
   await mkdir(dir, { recursive: true });
   await writeFile(path.join(dir, name), bytes);
-  return `/uploads/${name}`;
+  return fileUrl(name);
 }
 
 /**
