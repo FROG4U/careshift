@@ -82,7 +82,11 @@ export async function renderAttendancePdf(
   pdf.y = 96;
   pdf.x = MARGIN;
   pdf.font("Helvetica-Bold").fontSize(20).fillColor("#0f172a");
-  pdf.text("Worker reliability", MARGIN, pdf.y);
+  pdf.text(
+    rows.length === 1 ? rows[0].name : "Worker reliability",
+    MARGIN,
+    pdf.y,
+  );
   pdf.font("Helvetica").fontSize(9).fillColor("#64748b");
   pdf.text(
     `A shift counts as clean when the worker starts within ${cfg.lateGraceMin} min of the rostered start and does not leave more than ${cfg.earlyFinishGraceMin} min early. Staying past the end is never a penalty. Recent shifts count for more than old ones. ${cfg.ratingGreenAt} and above is green, ${cfg.ratingAmberAt} to ${cfg.ratingGreenAt - 1} is amber.`,
@@ -97,12 +101,22 @@ export async function renderAttendancePdf(
     amber: rows.filter((r) => r.band === "AMBER").length,
     red: rows.filter((r) => r.band === "RED").length,
   };
-  const stats: [string, string][] = [
-    ["Workers", String(rows.length)],
-    ["Green", String(counts.green)],
-    ["Amber", String(counts.amber)],
-    ["Red", String(counts.red)],
-  ];
+  // "Workers 1, Green 0, Amber 0, Red 1" tells one person nothing. Their own
+  // report leads with their own figures.
+  const one = rows.length === 1 ? rows[0] : null;
+  const stats: [string, string][] = one
+    ? [
+        ["Score", String(one.score)],
+        ["Shifts judged", String(one.total)],
+        ["Clean", `${one.clean} of ${one.total}`],
+        ["Avg late", one.avgLateLabel],
+      ]
+    : [
+        ["Workers", String(rows.length)],
+        ["Green", String(counts.green)],
+        ["Amber", String(counts.amber)],
+        ["Red", String(counts.red)],
+      ];
   const sw = (CONTENT - 24) / 4;
   const stop = pdf.y + 14;
   stats.forEach(([label, value], i) => {
@@ -190,8 +204,11 @@ export async function renderAttendancePdf(
   });
 
   // ── The shifts behind each score ──────────────────────────────────────
+  // Twelve each is enough to show a pattern across a team. For one person
+  // the whole history is the point, so show all of it.
+  const perWorker = rows.length === 1 ? 60 : 12;
   const flagged = (r: AttendanceRow) =>
-    r.lines.filter((l) => l.lateStart || l.earlyFinish).slice(0, 12);
+    r.lines.filter((l) => l.lateStart || l.earlyFinish).slice(0, perWorker);
 
   const withIssues = rows.filter((r) => flagged(r).length > 0);
   if (withIssues.length > 0) {
@@ -200,7 +217,9 @@ export async function renderAttendancePdf(
     pdf.text("The shifts behind the scores", MARGIN, pdf.y);
     pdf.font("Helvetica").fontSize(8).fillColor("#64748b");
     pdf.text(
-      "Only shifts that counted against a score: started late, or left early. Up to twelve per worker, most recent first.",
+      one
+        ? "Every shift that counted against the score: started late, or left early, most recent first."
+        : "Only shifts that counted against a score: started late, or left early. Up to twelve per worker, most recent first.",
       MARGIN,
       pdf.y + 2,
       { width: CONTENT },

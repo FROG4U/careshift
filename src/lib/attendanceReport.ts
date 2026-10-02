@@ -50,9 +50,16 @@ export async function loadAttendance(
   tenantId: string,
   scope: BranchScope,
   cfg: AttendanceSettings,
+  /** One worker's report, for a one-to-one conversation about their shifts. */
+  staffId?: string | null,
 ): Promise<AttendanceRow[]> {
   const staff = await prisma.staff.findMany({
-    where: { tenantId, active: true, ...opsWhere(scope) },
+    where: {
+      tenantId,
+      active: true,
+      ...opsWhere(scope),
+      ...(staffId ? { id: staffId } : {}),
+    },
     include: {
       branch: true,
       shifts: {

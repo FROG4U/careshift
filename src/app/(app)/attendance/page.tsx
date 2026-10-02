@@ -13,7 +13,12 @@ import { AttendanceTable, type WorkerRow } from "./AttendanceTable";
 import { loadAttendance } from "@/lib/attendanceReport";
 
 import { isManager } from "@/lib/roles";
-export default async function AttendancePage() {
+export default async function AttendancePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ staff?: string }>;
+}) {
+  const { staff: staffId } = await searchParams;
   const { tenant, session, scope } = await requireScope();
   if (!isManager(session.role)) {
     redirect("/dashboard");
@@ -37,7 +42,19 @@ export default async function AttendancePage() {
 
   // One loader for the screen and the PDF - a worker shown a score in a
   // meeting will have the printout in front of them.
-  const rows: WorkerRow[] = await loadAttendance(tenant.id, scope, cfg);
+  const rows: WorkerRow[] = await loadAttendance(
+    tenant.id,
+    scope,
+    cfg,
+    staffId || null,
+  );
+
+  // Everyone in scope, for the picker - the rows themselves may be one person.
+  const everyone = await prisma.staff.findMany({
+    where: { tenantId: tenant.id, active: true, ...opsWhere(scope) },
+    select: { id: true, firstName: true, lastName: true },
+    orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
+  });
 
   return (
     <div className="p-6 lg:p-8 max-w-6xl mx-auto">
@@ -54,13 +71,32 @@ export default async function AttendancePage() {
           positive, never a penalty. Change the thresholds in Settings.
         </p>
         </div>
+        <div className="flex flex-wrap items-center gap-2">
+        <form method="GET" className="flex items-center gap-2">
+          <select
+            name="staff"
+            defaultValue={staffId ?? ""}
+            className="rounded-xl border border-[var(--border)] bg-white px-3 py-2.5 text-sm"
+          >
+            <option value="">Everyone</option>
+            {everyone.map((w) => (
+              <option key={w.id} value={w.id}>
+                {w.firstName} {w.lastName}
+              </option>
+            ))}
+          </select>
+          <button className="rounded-xl border border-[var(--border)] px-4 py-2.5 text-sm font-semibold text-[var(--text-primary)] transition hover:bg-[var(--background)]">
+            Show
+          </button>
+        </form>
         <a
-          href="/attendance/pdf"
+          href={`/attendance/pdf${staffId ? `?staff=${staffId}` : ""}`}
           className="flex items-center gap-2 rounded-xl bg-[var(--brand)] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-90"
         >
           <span className="material-symbols-rounded text-[18px]">download</span>
           Download PDF
         </a>
+        </div>
       </header>
 
       {/* Worker scores — click a row for the shift-by-shift detail */}
