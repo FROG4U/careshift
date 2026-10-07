@@ -53,6 +53,13 @@ model Tenant {
   /// Always rounds up, never down, so it can never pay less than time worked.
   payRoundingMin Int @default(0)
 
+  /// Whether the 2 hour minimum engagement applies to meetings, supervision
+  /// and training as well as to participant visits. Off by default: a half
+  /// hour online supervision is not the engagement the minimum was written
+  /// for, and paying four times the time surprises everyone. Turn it on if
+  /// workers travel in to attend.
+  minEngagementOnDuties Boolean @default(false)
+
   // ── Leave & time-off allowances (per year) ──
   annualLeaveDays  Int     @default(20)
   sickLeaveDays    Int     @default(10)

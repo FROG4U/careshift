@@ -214,8 +214,28 @@ export default async function SettingsPage() {
           </label>
           <p className="text-xs text-slate-500">
             On this fortnight, 6 minute blocks add about 1.6 hours across both
-            branches. The 2 hour minimum engagement still applies on top.
+            branches.
           </p>
+
+          <label className="flex items-start gap-2 rounded-xl border border-slate-200 p-3 text-xs text-slate-600">
+            <input
+              type="checkbox"
+              name="minEngagementOnDuties"
+              defaultChecked={tenant.minEngagementOnDuties}
+              className="mt-0.5"
+            />
+            <span>
+              <span className="font-semibold text-slate-800">
+                Apply the 2 hour minimum engagement to meetings and training
+              </span>
+              <br />
+              A participant visit always pays at least 2 hours. Meetings do not,
+              unless you tick this: a half hour online supervision would
+              otherwise pay two hours. Tick it if your workers travel in to
+              attend. A meeting held straight before or after a shift counts as
+              part of that shift&apos;s engagement either way.
+            </span>
+          </label>
           <button
             type="submit"
             className="rounded-xl bg-[var(--brand)] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-90"

@@ -123,10 +123,11 @@ export async function buildPayReport(
     prisma.publicHoliday.findMany({ where: { tenantId, date: window } }),
     prisma.tenant.findUnique({
       where: { id: tenantId },
-      select: { payRoundingMin: true },
+      select: { payRoundingMin: true, minEngagementOnDuties: true },
     }),
   ]);
   const roundingMin = tenantSettings?.payRoundingMin ?? 0;
+  const minOnDuties = tenantSettings?.minEngagementOnDuties ?? false;
 
   // Holidays that apply to a shift: national ones, its state's, and any
   // pinned to its branch. Built once per state/branch pair, not per shift.
@@ -380,9 +381,18 @@ export async function buildPayReport(
       }
       const run = row.lines.slice(i, j + 1);
       const worked = run.reduce((n, l) => n + l.hours, 0);
+      // A run of nothing but meetings only attracts the minimum if the office
+      // has asked for it. Half an hour of online supervision paying two hours
+      // is not what anyone means by a minimum engagement - but a meeting
+      // sitting beside a visit is part of that engagement either way.
+      const dutyOnly = run.every((l) => l.internal);
       // Nothing worked means nobody attended, so there is no engagement to
       // pay a minimum on.
-      if (worked > 0 && worked < MIN_ENGAGEMENT_HOURS) {
+      if (
+        worked > 0 &&
+        worked < MIN_ENGAGEMENT_HOURS &&
+        (!dutyOnly || minOnDuties)
+      ) {
         const top = MIN_ENGAGEMENT_HOURS - worked;
         const first = run[0];
         first.topUpHours = top;

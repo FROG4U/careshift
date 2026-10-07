@@ -160,6 +160,8 @@ export async function updateAttendanceSettings(formData: FormData) {
       ratingAmberAt: num("ratingAmberAt", 0, 99, 65),
       lateNoticePenalty: num("lateNoticePenalty", 0, 50, 2),
       payRoundingMin: num("payRoundingMin", 0, 60, 0),
+      minEngagementOnDuties:
+        String(formData.get("minEngagementOnDuties") ?? "") === "on",
     },
   });
 
