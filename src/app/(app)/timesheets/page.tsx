@@ -11,7 +11,7 @@ import { DayShiftRepair } from "@/components/DayShiftRepair";
 import { TripRepair } from "@/components/TripRepair";
 import { findShortTrips } from "@/lib/tripRepair";
 import { isDayShifted } from "@/lib/dayShift";
-import { hmInTz, tzForState } from "@/lib/timezone";
+import { hmInTz, tzForState, dateKeyInTz } from "@/lib/timezone";
 import type { LatLng } from "@/components/ShiftMap";
 import { DEFAULT_GEOFENCE_FT } from "@/lib/constants";
 import { gpsQualityOf } from "@/lib/gpsQuality";
@@ -142,6 +142,26 @@ export default async function TimesheetsPage({
       orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
     }),
   ]);
+
+  // Public holidays covering the listed shifts. A holiday pays a different
+  // rate, so it belongs on the timesheet the approver is looking at, not just
+  // in the pay run afterwards.
+  const holidayRows = await prisma.publicHoliday.findMany({
+    where: { tenantId: tenant.id },
+    select: { date: true, name: true, state: true, branchId: true },
+  });
+  /** The holiday for a shift, if its own state or the nation has one. */
+  const holidayFor = (when: Date, state: string | null, branchId: string | null) => {
+    const key = dateKeyInTz(when, tzForState(state));
+    const hit = holidayRows.find(
+      (h) =>
+        h.date.toISOString().slice(0, 10) === key &&
+        ((h.state == null && h.branchId == null) ||
+          (state != null && h.state === state) ||
+          (branchId != null && h.branchId === branchId)),
+    );
+    return hit?.name ?? null;
+  };
 
   // Clock times the old edit form saved a day early (see lib/dayShift).
   const dayShifted = (
@@ -352,6 +372,11 @@ export default async function TimesheetsPage({
               const clockedNet = Math.max(0, gross - breakHrs);
               // Minutes clocked past the rostered finish. Unpaid unless the
               // office authorises them (see setApprovedEnd).
+              const holidayName = holidayFor(
+                s.start,
+                s.branch?.state ?? null,
+                s.branchId,
+              );
               const overrunMin =
                 s.clockOutAt && s.clockOutAt > s.end
                   ? Math.round((s.clockOutAt.getTime() - s.end.getTime()) / 60000)
@@ -515,6 +540,7 @@ export default async function TimesheetsPage({
                   km: t.km,
                 })),
                 overrunMin,
+                holidayName,
                 outsideRosterMin,
                 rosterStartTime: hmInTz(s.start, tzForState(s.branch?.state ?? null)),
                 rosterEndTime: hmInTz(s.end, tzForState(s.branch?.state ?? null)),
@@ -567,7 +593,14 @@ export default async function TimesheetsPage({
                       </div>
                     )}
                   </td>
-                  <td className="px-5 py-3 whitespace-nowrap text-slate-600">{fmtDate(s.start)}</td>
+                  <td className="px-5 py-3 whitespace-nowrap text-slate-600">
+                    {fmtDate(s.start)}
+                    {holidayName && (
+                      <div className="mt-0.5 rounded-md bg-rose-50 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700">
+                        {holidayName}
+                      </div>
+                    )}
+                  </td>
                   <td className="px-5 py-3">
                     {s.clockInAt ? (
                       <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-emerald-50 px-2.5 py-1 font-medium text-emerald-700">

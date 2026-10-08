@@ -68,6 +68,8 @@ export type ShiftDetailData = {
   approval: string;
   /** Minutes clocked past the rostered finish. 0 when the shift didn't run over. */
   overrunMin: number;
+  /** Set when the shift falls on a public holiday where the branch is. */
+  holidayName: string | null;
   /** The rostered window as HH:MM, for the roster editor. */
   rosterStartTime: string;
   rosterEndTime: string;
@@ -313,6 +315,17 @@ export function ShiftDetail({ data }: { data: ShiftDetailData }) {
               ) : (
                 <div className="rounded-2xl bg-slate-50 px-4 py-4 text-center text-xs text-slate-400">
                   No GPS location captured for this shift.
+                </div>
+              )}
+
+              {data.holidayName && (
+                <div className="rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2.5">
+                  <p className="text-sm font-semibold text-rose-900">
+                    Public holiday - {data.holidayName}
+                  </p>
+                  <p className="text-xs text-rose-800">
+                    Paid at the public holiday rate for this worker&apos;s level.
+                  </p>
                 </div>
               )}
 

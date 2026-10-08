@@ -1,7 +1,7 @@
 import "server-only";
 import { prisma } from "./prisma";
 import { netHoursOf, kmOf } from "./payroll";
-import { fmtInTz, tzForState } from "./timezone";
+import { fmtInTz, tzForState, dateKeyInTz } from "./timezone";
 
 /**
  * The shift notes record: one query, used by the on-screen document and by
@@ -32,6 +32,8 @@ export type NoteRow = {
   workerName: string;
   /** Paid hours: the clocked window trimmed to the rostered one, less breaks. */
   hours: number;
+  /** Set when the shift fell on a public holiday where the branch is. */
+  holidayName: string | null;
   /** What the worker actually clocked, for the hours-only report. */
   clockedLabel: string;
   clockedHours: number;
@@ -76,7 +78,7 @@ export async function loadShiftNotes(
   const { start, end } = windowOf(f);
   const query = (f.q ?? "").trim().toLowerCase();
 
-  const [rows, clientRow, staffRow] = await Promise.all([
+  const [rows, clientRow, staffRow, holidays] = await Promise.all([
     prisma.shift.findMany({
       where: {
         tenantId,
@@ -116,7 +118,24 @@ export async function loadShiftNotes(
           select: { firstName: true, lastName: true },
         })
       : Promise.resolve(null),
+    prisma.publicHoliday.findMany({
+      where: { tenantId },
+      select: { date: true, name: true, state: true, branchId: true },
+    }),
   ]);
+
+  /** A holiday that applies where the shift's branch is. */
+  const holidayFor = (when: Date, state: string | null, branchId: string | null) => {
+    const key = dateKeyInTz(when, tzForState(state));
+    const hit = holidays.find(
+      (h) =>
+        h.date.toISOString().slice(0, 10) === key &&
+        ((h.state == null && h.branchId == null) ||
+          (state != null && h.state === state) ||
+          (branchId != null && h.branchId === branchId)),
+    );
+    return hit?.name ?? null;
+  };
 
   const shifts = query
     ? rows.filter((s) =>
@@ -179,6 +198,7 @@ export async function loadShiftNotes(
           ? `${s.staff.firstName} ${s.staff.lastName}`
           : "Unassigned",
         hours: netHoursOf(s),
+        holidayName: holidayFor(s.start, s.branch?.state ?? null, s.branchId),
         clockedLabel:
           s.clockInAt && s.clockOutAt
             ? `${t(s.clockInAt)} - ${t(s.clockOutAt)}`

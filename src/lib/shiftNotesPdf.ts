@@ -180,9 +180,9 @@ export async function renderShiftNotesPdf(
     // rather than wrapped, so every shift stays on one line and the eye can
     // run down the rostered and clocked columns.
     const cols = [
-      { label: "Date", w: 62, right: false },
-      { label: "Participant", w: 88, right: false },
-      { label: "Worker", w: 100, right: false },
+      { label: "Date", w: 74, right: false },
+      { label: "Participant", w: 86, right: false },
+      { label: "Worker", w: 90, right: false },
       { label: "Rostered", w: 90, right: false },
       { label: "Clocked", w: 90, right: false },
       { label: "Paid h", w: 34, right: true },
@@ -230,7 +230,7 @@ export async function renderShiftNotesPdf(
       paid += r.hours;
       km += r.km;
       const cells = [
-        r.shortDate,
+        r.holidayName ? `${r.shortDate} (PH)` : r.shortDate,
         r.clientName,
         r.workerName,
         r.timeLabel,
@@ -283,7 +283,9 @@ export async function renderShiftNotesPdf(
     pdf.x = MARGIN;
     pdf.font("Helvetica").fontSize(8).fillColor("#94a3b8");
     pdf.text(
-      "Rostered is the shift as scheduled. Clocked is what the worker recorded on the app. Paid hours are the clocked time inside the rostered window, less breaks.",
+      doc.rows.some((r) => r.holidayName)
+        ? "Rostered is the shift as scheduled. Clocked is what the worker recorded on the app. Paid hours are the clocked time inside the rostered window, less breaks. (PH) marks a public holiday, paid at the public holiday rate."
+        : "Rostered is the shift as scheduled. Clocked is what the worker recorded on the app. Paid hours are the clocked time inside the rostered window, less breaks.",
       { width: CONTENT },
     );
   }
