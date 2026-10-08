@@ -5,6 +5,7 @@ import { canSeeAnyCharges } from "@/lib/scope";
 import { prisma } from "@/lib/prisma";
 import { isSuperAdmin } from "@/lib/roles";
 import { loadPricedShifts, groupTotals } from "@/lib/salesData";
+import { TrendChart } from "./TrendChart";
 import { aud, emptyTotals, addMargin, type MarginTotals } from "@/lib/billing";
 import {
   autoBuckets,
@@ -377,31 +378,28 @@ export default async function SalesPage({
           </div>
         </div>
 
-        <div className="flex items-end gap-2 overflow-x-auto pb-1" style={{ height: 200 }}>
-          {buckets.map((b) => {
-            const rH = Math.round((b.totals.revenue / peak) * 150);
-            const cH = Math.round((b.totals.cost / peak) * 150);
-            return (
-              <div key={b.key} className="flex min-w-[38px] flex-1 flex-col items-center gap-1">
-                <div className="flex h-[150px] w-full items-end justify-center gap-1">
-                  <div
-                    className="w-1/2 rounded-t bg-[var(--brand)] transition-all"
-                    style={{ height: `${rH}px` }}
-                    title={`Income ${aud(b.totals.revenue)}`}
-                  />
-                  <div
-                    className="w-1/2 rounded-t bg-orange-400 transition-all"
-                    style={{ height: `${cH}px` }}
-                    title={`Cost ${aud(b.totals.cost)}`}
-                  />
-                </div>
-                <div className="text-[11px] font-medium text-[var(--text-muted)]">
-                  {b.label}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+        <TrendChart
+          bars={buckets.map((b) => ({
+            key: b.key,
+            label: b.label,
+            // The tooltip needs a label that stands on its own: "S" means
+            // nothing once it is out of the row.
+            fullLabel: `${b.label} · ${new Intl.DateTimeFormat("en-AU", {
+              day: "numeric",
+              month: "short",
+            }).format(b.from)} to ${new Intl.DateTimeFormat("en-AU", {
+              day: "numeric",
+              month: "short",
+            }).format(b.to)}`,
+            revenue: b.totals.revenue,
+            cost: b.totals.cost,
+            profit: b.totals.profit,
+            marginPct: b.totals.marginPct,
+            hours: b.totals.hours,
+            shifts: b.totals.shifts,
+          }))}
+        />
+
       </section>
 
       {/* Breakdowns */}
