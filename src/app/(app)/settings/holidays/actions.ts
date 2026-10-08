@@ -184,6 +184,110 @@ function parseJson(text: string): Parsed[] {
 }
 
 /**
+ * Load this year and next from a public holiday feed, in one press.
+ *
+ * Pasting a URL assumes someone has found a machine readable file for every
+ * state, which nobody has time for - and an empty holiday table does not
+ * announce itself, it just quietly pays a public holiday at the weekday rate.
+ *
+ * National days are stored with no state so they apply to every branch;
+ * everything else is stored per state, because a Queensland holiday must not
+ * put the Sydney roster on holiday pay.
+ */
+export async function importAustralianHolidays(
+  _prev: ImportResult | undefined,
+  formData: FormData,
+): Promise<ImportResult> {
+  const { tenant } = await requireManager();
+  const thisYear = new Date().getFullYear();
+  const years = str(formData.get("years")) === "next"
+    ? [thisYear + 1]
+    : [thisYear, thisYear + 1];
+
+  type Feed = {
+    date: string;
+    localName: string;
+    name: string;
+    counties: string[] | null;
+  };
+
+  const rows: { date: string; name: string; state: string | null }[] = [];
+  for (const year of years) {
+    let feed: Feed[];
+    try {
+      const res = await fetch(
+        `https://date.nager.at/api/v3/PublicHolidays/${year}/AU`,
+        {
+          headers: { "User-Agent": "PCG Shift Care/1.0 (+holiday-import)" },
+          signal: AbortSignal.timeout(20_000),
+          cache: "no-store",
+        },
+      );
+      if (!res.ok) {
+        return { ok: false, message: `The holiday service returned HTTP ${res.status}. Try again shortly.` };
+      }
+      feed = (await res.json()) as Feed[];
+    } catch {
+      return {
+        ok: false,
+        message: "Couldn't reach the holiday service. Check the server has internet access and try again.",
+      };
+    }
+
+    for (const h of feed) {
+      const name = h.localName || h.name;
+      if (!h.counties || h.counties.length === 0) {
+        rows.push({ date: h.date, name, state: null });
+        continue;
+      }
+      for (const c of h.counties) {
+        const st = c.replace(/^AU-/, "");
+        if ((AU_STATES as readonly string[]).includes(st)) {
+          rows.push({ date: h.date, name, state: st });
+        }
+      }
+    }
+  }
+
+  const existing = await prisma.publicHoliday.findMany({
+    where: { tenantId: tenant.id },
+    select: { date: true, state: true },
+  });
+  const have = new Set(
+    existing.map((e) => `${e.date.toISOString().slice(0, 10)}|${e.state ?? ""}`),
+  );
+
+  const fresh = rows.filter((r) => {
+    const key = `${r.date}|${r.state ?? ""}`;
+    if (have.has(key)) return false;
+    have.add(key); // the feed itself can repeat a date across counties
+    return true;
+  });
+
+  if (fresh.length > 0) {
+    await prisma.publicHoliday.createMany({
+      data: fresh.map((r) => ({
+        tenantId: tenant.id,
+        date: toCalendarDate(r.date),
+        name: r.name,
+        state: r.state,
+      })),
+    });
+  }
+
+  revalidatePath("/settings/holidays");
+  revalidatePath("/schedule");
+  revalidatePath("/payroll");
+  return {
+    ok: true,
+    message: `Loaded ${years.join(" and ")}: ${fresh.length} added, ${rows.length - fresh.length} already there.`,
+    added: fresh.length,
+    skipped: rows.length - fresh.length,
+    sample: fresh.slice(0, 5).map((r) => `${r.date} ${r.state ?? "national"} - ${r.name}`),
+  };
+}
+
+/**
  * Fetch a machine-readable holiday feed (CSV or JSON) and add any dates we
  * don't already have. Idempotent — re-running never duplicates.
  */

@@ -8,6 +8,7 @@ import {
   updateHoliday,
   deleteHoliday,
   importHolidaysFromUrl,
+  importAustralianHolidays,
   type ImportResult,
 } from "./actions";
 
@@ -43,6 +44,12 @@ export function HolidaysClient({
     ImportResult | undefined,
     FormData
   >(importHolidaysFromUrl, undefined);
+
+  // The one-press version: every state, this year and next.
+  const [autoResult, autoAction, autoBusy] = useActionState<
+    ImportResult | undefined,
+    FormData
+  >(importAustralianHolidays, undefined);
 
   const isNew = editing?.id === "";
 
@@ -184,8 +191,32 @@ export function HolidaysClient({
               </button>
             </div>
 
+            <form action={autoAction} className="mb-4 rounded-xl border border-[var(--brand)] bg-blue-50/40 p-3">
+              <p className="text-sm font-semibold text-[var(--text-primary)]">
+                Load every Australian public holiday
+              </p>
+              <p className="mt-0.5 text-xs text-[var(--text-secondary)]">
+                This year and next, for every state and territory. National days
+                apply to all branches; state days only to that state&apos;s
+                branches. Running it again never duplicates anything.
+              </p>
+              <button
+                disabled={autoBusy}
+                className="mt-2 rounded-lg bg-[var(--brand)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+              >
+                {autoBusy ? "Loading…" : "Load holidays"}
+              </button>
+              {autoResult && (
+                <p
+                  className={`mt-2 text-xs ${autoResult.ok ? "text-emerald-700" : "text-red-600"}`}
+                >
+                  {autoResult.message}
+                </p>
+              )}
+            </form>
+
             <p className="mb-3 text-xs text-[var(--text-secondary)]">
-              Paste a link to a <strong>CSV or JSON</strong> holiday file. It needs
+              Or paste a link to a <strong>CSV or JSON</strong> holiday file. It needs
               a date column and a holiday-name column; a state/jurisdiction
               column is used to tag each date. Ordinary web pages won&apos;t work —
               many government sites also block automated requests.

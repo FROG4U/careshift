@@ -104,7 +104,12 @@ export default async function SchedulePage({
     where: { tenantId: tenant.id, ...visibleBranchWhere(scope) },
     orderBy: { createdAt: "asc" },
   });
-  const branches = branchRecords.map((b) => ({ id: b.id, name: b.name }));
+  const branches = branchRecords.map((b) => ({
+    id: b.id,
+    name: b.name,
+    // The state decides which public holidays apply to this calendar.
+    state: b.state,
+  }));
 
   // Selected branch schedule: the ?branch= param, else the first branch.
   const selected =
@@ -194,13 +199,36 @@ export default async function SchedulePage({
     };
   });
 
+  // Public holidays for THIS branch: national days, its own state's days, and
+  // anything pinned to the branch itself. A Queensland holiday must not put
+  // the Sydney roster on holiday pay.
+  const holidayRows = await prisma.publicHoliday.findMany({
+    where: {
+      tenantId: tenant.id,
+      date: { gte: start, lt: end },
+      OR: [
+        { state: null, branchId: null },
+        ...(selectedBranch?.state ? [{ state: selectedBranch.state }] : []),
+        ...(selected ? [{ branchId: selected }] : []),
+      ],
+    },
+    select: { date: true, name: true },
+  });
+  const holidayByDate = new Map<string, string>();
+  for (const h of holidayRows) {
+    // Stored as a calendar date at UTC midnight (see settings/holidays).
+    holidayByDate.set(h.date.toISOString().slice(0, 10), h.name);
+  }
+
   const days: GridDay[] = Array.from({ length: dayCount }, (_, i) => {
     const d = addDays(start, i);
+    const iso = isoDate(d);
     return {
-      iso: isoDate(d),
+      iso,
       weekday: d.toLocaleDateString("en-AU", { weekday: "short" }),
       dayNum: d.toLocaleDateString("en-AU", { day: "numeric", month: "short" }),
-      isToday: isoDate(d) === todayIso,
+      isToday: iso === todayIso,
+      holiday: holidayByDate.get(iso) ?? null,
     };
   });
 

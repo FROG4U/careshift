@@ -49,7 +49,14 @@ const pubBadge: Record<string, { label: string; cls: string }> = {
 };
 
 export type GridStaff = { id: string; name: string };
-export type GridDay = { iso: string; weekday: string; dayNum: string; isToday: boolean };
+export type GridDay = {
+  iso: string;
+  weekday: string;
+  dayNum: string;
+  isToday: boolean;
+  /** Set when this date is a public holiday where the branch is. */
+  holiday?: string | null;
+};
 export type GridClient = {
   id: string;
   name: string;
@@ -450,8 +457,13 @@ export function ScheduleGrid({
             {days.map((d) => (
               <th
                 key={d.iso}
-                className="border-b border-l border-slate-100 p-2 text-center"
+                // A public holiday changes what every shift on it costs, so
+                // it is marked before anyone rosters into it, not after.
+                className={`border-b border-l border-slate-100 p-2 text-center ${
+                  d.holiday ? "bg-rose-50" : ""
+                }`}
                 style={{ width: DAY_COL_PX }}
+                title={d.holiday ?? undefined}
               >
                 <div className="text-xs font-medium uppercase tracking-wide text-slate-400">
                   {d.weekday}
@@ -463,6 +475,11 @@ export function ScheduleGrid({
                 >
                   {d.dayNum}
                 </div>
+                {d.holiday && (
+                  <div className="mt-0.5 truncate text-[10px] font-semibold text-rose-700">
+                    {d.holiday}
+                  </div>
+                )}
               </th>
             ))}
           </tr>
