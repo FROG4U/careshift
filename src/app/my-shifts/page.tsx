@@ -70,6 +70,11 @@ export default async function MyShiftsPage() {
   const offers = shifts.filter((s) => s.publishState === "PUBLISHED");
   const mine = shifts.filter((s) => s.publishState === "ACCEPTED");
 
+  // Shown only to workers who actually go somewhere with a card on the wall.
+  const hasCards = mine.some(
+    (s) => s.client.qrToken && s.status !== "COMPLETED",
+  );
+
   // ── bucket boundaries, all in the branch's local calendar ──
   const todayKey = dateKeyInTz(now, tz);
 
@@ -192,6 +197,31 @@ export default async function MyShiftsPage() {
 
   return (
     <div className="space-y-5 p-4">
+      {/* Scanning the card at the door. A plain link, not a Next one: this is
+          the way out of the app when there is no signal, and a client-side
+          navigation needs the network the worker hasn't got. */}
+      {hasCards && (
+        <a
+          href="/clock"
+          className="flex items-center justify-between rounded-2xl bg-[#003146] px-4 py-3.5 text-white shadow-sm"
+        >
+          <span className="flex items-center gap-2.5">
+            <span className="material-symbols-rounded text-[24px]">
+              qr_code_scanner
+            </span>
+            <span>
+              <span className="block text-sm font-bold">Scan card</span>
+              <span className="block text-xs text-white/70">
+                Clock in and out where there is no signal
+              </span>
+            </span>
+          </span>
+          <span className="material-symbols-rounded text-white/60">
+            chevron_right
+          </span>
+        </a>
+      )}
+
       {/* Offers waiting for a yes/no live on the Pending tab. */}
       {offers.length > 0 && (
         <Link

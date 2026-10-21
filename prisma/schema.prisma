@@ -750,6 +750,13 @@ model Client {
   lng        Float?
   geofenceFt Int    @default(150)
 
+  /// The code printed on the QR card left at this participant's home. A
+  /// worker scanning it inside the app proves they were at the door, which is
+  /// why the phone never holds the token itself - only a hash to match on.
+  /// Null until a card has been issued; reissuing retires the old card.
+  qrToken    String?   @unique
+  qrIssuedAt DateTime?
+
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
 
@@ -775,6 +782,7 @@ model Client {
   workers       ClientWorker[]
   incidents     Incident[]
   taskTemplates TaskTemplate[]
+  qrScans       QrScan[]
 
   @@index([tenantId])
   @@index([branchId])
@@ -941,6 +949,7 @@ model Staff {
   rateOverrides  StaffRate[]
   payrollLines   PayrollLine[]
   dutyAttendance DutyAttendee[]
+  qrScans        QrScan[]
 
   @@index([tenantId])
   @@index([branchId])
@@ -1052,6 +1061,7 @@ model Shift {
   // Transport trips (e.g. taking the participant to the doctor/shops).
   transports    Transport[]
   clockAttempts ClockAttempt[]
+  qrScans       QrScan[]
 
   // Publish / acceptance lifecycle.
   // publishState ∈ DRAFT | PUBLISHED | ACCEPTED | REJECTED
@@ -1097,6 +1107,19 @@ model Shift {
   // is visible to admins instead of stranding someone at a doorstep.
   clockInOnSiteConfirmed Boolean @default(false)
   clockInDistanceM       Float?
+
+  // Clocked by scanning the QR card at the participant's home rather than by
+  // tapping Start. The scan is the stronger evidence of the two - a phone can
+  // read its position badly at the door, but the card is only there.
+  clockInQr  Boolean @default(false)
+  clockOutQr Boolean @default(false)
+
+  // Set when the clock was recorded on the phone with no signal and sent
+  // later. The clock times are the worker's own device times, so a timesheet
+  // reader can see the gap, and `clockDriftSec` is how far that phone's clock
+  // was from the server's when it finally synced (positive = phone ahead).
+  offlineSyncedAt DateTime?
+  clockDriftSec   Int?
 
   // Starting away from the participant's home is routine for some people - a
   // pickup from work, a meeting point that changes week to week and isn't
@@ -1219,6 +1242,47 @@ model ClockAttempt {
 
   @@index([shiftId])
   @@index([tenantId, createdAt])
+}
+
+/// Every scan of a participant's QR card: the evidence trail behind a
+/// QR clock-in, including the ones that couldn't be used.
+///
+/// The id is generated on the phone and is the idempotency key - a queue of
+/// offline scans sent twice (the first reply lost on a bad connection) must
+/// not clock a worker out of the shift it has just clocked them into.
+model QrScan {
+  /// Generated on the phone, so a resend is recognised as the same scan.
+  id       String  @id
+  tenantId String
+  staffId  String
+  staff    Staff   @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  clientId String
+  client   Client  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  /// Null when the scan couldn't be matched to a shift.
+  shiftId  String?
+  shift    Shift?  @relation(fields: [shiftId], references: [id], onDelete: SetNull)
+
+  /// IN | OUT
+  kind      String
+  /// When the phone recorded the scan - the time the clock is set from.
+  scannedAt DateTime
+  /// When the server received it. Later than scannedAt for an offline scan.
+  syncedAt  DateTime @default(now())
+  /// True when the phone had no signal and held the scan until it did.
+  offline   Boolean  @default(false)
+  /// How far the phone's clock was from the server's at sync (positive = ahead).
+  driftSec  Int?
+  lat       Float?
+  lng       Float?
+  /// Metres from the participant's registered address, where both are known.
+  distanceM Float?
+  /// CLOCKED_IN | CLOCKED_OUT | NO_SHIFT | UNKNOWN_CODE | ERROR
+  outcome   String
+  message   String?
+
+  @@index([tenantId, scannedAt])
+  @@index([clientId, scannedAt])
+  @@index([staffId, scannedAt])
 }
 
 /// One GPS sample along a transport trip (builds the route polyline).

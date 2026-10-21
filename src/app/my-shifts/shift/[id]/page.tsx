@@ -154,6 +154,23 @@ export default async function WorkerShiftPage({
             address={shift.client.address}
           />
 
+          {/* The card on the wall at their home. Offered here as well as on
+              the shift list, because this is the screen a worker is on when
+              they arrive and find they have no bars. */}
+          {shift.client.qrToken && shift.status !== "COMPLETED" && (
+            <a
+              href="/clock"
+              className="mt-3 flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white py-3 text-sm font-semibold text-slate-700"
+            >
+              <span className="material-symbols-rounded text-[20px]">
+                qr_code_scanner
+              </span>
+              {shift.status === "IN_PROGRESS"
+                ? "Finish by scanning the card"
+                : "No signal? Scan the card at the door"}
+            </a>
+          )}
+
           {shift.status === "SCHEDULED" && (
             <div className="mt-3">
               {isLate && (

@@ -171,6 +171,13 @@ export default async function ClientProfilePage({
           >
             Team
           </Link>
+          <Link
+            href={`/clients/${client.id}/qr`}
+            className="flex items-center gap-1.5 rounded-xl border border-[var(--border)] bg-white px-3.5 py-2 text-sm font-semibold text-[var(--text-primary)]"
+          >
+            <span className="material-symbols-rounded text-[18px]">qr_code_2</span>
+            Clock-in card
+          </Link>
         </div>
       </header>
 

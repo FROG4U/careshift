@@ -497,6 +497,28 @@ export default async function TimesheetsPage({
                         : null,
                     }
                   : null,
+                // Scanning the card is the strongest evidence of attendance
+                // the app has, so it is said plainly rather than left for
+                // someone to work out from the map.
+                qrClock:
+                  s.clockInQr || s.clockOutQr
+                    ? {
+                        clockedIn: s.clockInQr,
+                        clockedOut: s.clockOutQr,
+                        distanceFt:
+                          s.clockInDistanceM != null
+                            ? Math.round(s.clockInDistanceM * FT_PER_M)
+                            : null,
+                        syncedAt: s.offlineSyncedAt
+                          ? `${fmtDate(s.offlineSyncedAt)} ${fmtTime(s.offlineSyncedAt)}`
+                          : null,
+                        driftMin:
+                          s.clockDriftSec != null &&
+                          Math.abs(s.clockDriftSec) > 300
+                            ? Math.round(s.clockDriftSec / 60)
+                            : null,
+                      }
+                    : null,
                 manualEntry:
                   s.manualEntryBy && s.manualEntryAt
                     ? {

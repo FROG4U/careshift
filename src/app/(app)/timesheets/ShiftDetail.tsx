@@ -59,6 +59,17 @@ export type ShiftDetailData = {
     /** True when they said the address was right and the phone was wrong. */
     onSite: boolean;
   } | null;
+  /** Set when either clock came from scanning the card at the home. */
+  qrClock: {
+    clockedIn: boolean;
+    clockedOut: boolean;
+    /** How far from the home the scan was, where both positions are known. */
+    distanceFt: number | null;
+    /** Set when the scan was taken with no signal and sent later. */
+    syncedAt: string | null;
+    /** How far out the phone's clock was, in minutes. Null when it was fine. */
+    driftMin: number | null;
+  } | null;
   /** Set when the office entered this shift by hand rather than it being clocked. */
   manualEntry: { by: string; at: string; reason: string } | null;
   /** Set when the office clocked the worker in on their behalf. */
@@ -576,6 +587,43 @@ export function ShiftDetail({ data }: { data: ShiftDetailData }) {
                       className={box}
                     />
                   </label>
+                )}
+
+                {data.qrClock && (
+                  <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+                    <div className="flex items-center gap-1 text-sm font-medium text-slate-700">
+                      <Icon name="qr_code_2" className="text-[16px] text-emerald-600" />
+                      {data.qrClock.clockedIn && data.qrClock.clockedOut
+                        ? "Both clocks by scanning the card"
+                        : data.qrClock.clockedIn
+                          ? "Clocked in by scanning the card"
+                          : "Clocked out by scanning the card"}
+                    </div>
+                    <p className="mt-1 text-xs text-slate-600">
+                      The card only exists at the participant&apos;s home, so a
+                      scan of it places the worker there
+                      {data.qrClock.distanceFt != null && (
+                        <> - the phone read {data.qrClock.distanceFt} ft from the
+                          address pin</>
+                      )}
+                      .
+                    </p>
+                    {data.qrClock.syncedAt && (
+                      <p className="mt-1 text-xs text-slate-500">
+                        Taken with no signal and sent at {data.qrClock.syncedAt}.
+                        The times above are the phone&apos;s own.
+                        {data.qrClock.driftMin != null && (
+                          <>
+                            {" "}
+                            That phone&apos;s clock was{" "}
+                            {Math.abs(data.qrClock.driftMin)} min{" "}
+                            {data.qrClock.driftMin > 0 ? "ahead of" : "behind"}{" "}
+                            ours, so treat the minutes as approximate.
+                          </>
+                        )}
+                      </p>
+                    )}
+                  </div>
                 )}
 
                 {data.manualEntry && (

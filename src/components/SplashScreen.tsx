@@ -21,6 +21,13 @@ export function SplashScreen() {
       setShow(false);
       return;
     }
+    // The clock screen is what a worker opens when they have no signal and
+    // someone is waiting at the door. Two seconds of branding is the last
+    // thing it needs.
+    if (window.location.pathname === "/clock") {
+      setShow(false);
+      return;
+    }
     if (sessionStorage.getItem("pcg-splash-seen")) {
       setShow(false);
       return;

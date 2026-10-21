@@ -12,6 +12,7 @@ import { HandoverGuard } from "@/components/worker/HandoverGuard";
 import { BroadcastGuard } from "@/components/BroadcastGuard";
 import { TermsGuard } from "@/components/worker/TermsGuard";
 import { LocationPinger } from "@/components/worker/LocationPinger";
+import { ClockPrep } from "@/components/worker/ClockPrep";
 import { InstallPrompt } from "@/components/InstallPrompt";
 import { PushRegistrar } from "@/components/PushRegistrar";
 import { PresenceHeartbeat } from "@/components/PresenceHeartbeat";
@@ -120,6 +121,7 @@ export default async function WorkerLayout({
       )}
       <InstallPrompt />
       <PushRegistrar />
+      <ClockPrep />
       <UpdateWatcher buildId={buildId()} />
       <PresenceHeartbeat />
       <CallCentre myName={session.name} />
