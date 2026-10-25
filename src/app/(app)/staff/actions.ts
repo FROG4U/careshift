@@ -5,6 +5,7 @@ import { requireScope } from "@/lib/tenant";
 import { opsWhere, resolveBranch } from "@/lib/scope";
 import { isManager } from "@/lib/roles";
 import { prisma } from "@/lib/prisma";
+import { recordDeletion } from "@/lib/deletions";
 import { effectiveRates } from "@/lib/rates";
 import { DAY_TYPES, STAFF_STREAMS } from "@/lib/constants";
 
@@ -232,6 +233,7 @@ export async function deleteStaff(formData: FormData) {
   });
 
   await prisma.staff.delete({ where: { id: staff.id } });
+  await recordDeletion(tenant.id, "staff", [staff.id], session.name);
 
   revalidatePath("/staff");
   revalidatePath("/schedule");

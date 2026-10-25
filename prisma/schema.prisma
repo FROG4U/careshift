@@ -98,6 +98,7 @@ model Tenant {
   incidents        Incident[]
   broadcasts       Broadcast[]
   payrollLines     PayrollLine[]
+  apiTokens        ApiToken[]
   termsVersions    TermsVersion[]
   termsAcceptances TermsAcceptance[]
   duties           Duty[]
@@ -759,6 +760,8 @@ model Client {
 
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
+  /// Last time this row changed. Read by the export API's `since` filter.
+  updatedAt DateTime @default(now()) @updatedAt
 
   // ── Charge rates ($/hr) ──
   // What THIS participant is billed, overriding the agreement-type defaults
@@ -911,6 +914,8 @@ model Staff {
   clearanceExpiry DateTime? // drives compliance/expiry alerts
   active          Boolean   @default(true)
   createdAt       DateTime  @default(now())
+  /// Last time this row changed. Read by the export API's `since` filter.
+  updatedAt       DateTime  @default(now()) @updatedAt
 
   // Employment basis ∈ PERMANENT | CASUAL. Casual adds the casual loading
   // on top of the pay level's (permanent base) rates.
@@ -1161,6 +1166,8 @@ model Shift {
   authorisedBy  String?
 
   createdAt DateTime @default(now())
+  /// Last time this row changed. The export API hands Omexx only what has moved since its last pull.
+  updatedAt DateTime @default(now()) @updatedAt
 
   swaps           ShiftSwap[]
   lateNotices     LateNotice[]
@@ -1179,11 +1186,14 @@ model Shift {
 /// A break within a shift. Open while `endAt` is null (worker on break).
 /// Net worked hours = (clockOut − clockIn) − Σ break durations.
 model ShiftPause {
-  id      String    @id @default(cuid())
-  shiftId String
-  shift   Shift     @relation(fields: [shiftId], references: [id], onDelete: Cascade)
-  startAt DateTime  @default(now())
-  endAt   DateTime?
+  id        String    @id @default(cuid())
+  shiftId   String
+  shift     Shift     @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  startAt   DateTime  @default(now())
+  endAt     DateTime?
+  /// A break edited after the shift closed changes what the shift is worth
+  /// without touching the shift row, so the export watches this too.
+  updatedAt DateTime  @default(now()) @updatedAt
 
   @@index([shiftId])
 }
@@ -1204,6 +1214,9 @@ model Transport {
   /// Set when an admin changes the distance by hand. A deliberate correction
   /// is never overwritten by the automatic mileage repair.
   kmEditedAt DateTime?
+  /// Same reason as ShiftPause: corrected mileage has to reach Omexx even
+  /// when the shift itself hasn't changed.
+  updatedAt  DateTime  @default(now()) @updatedAt
 
   startLat Float?
   startLng Float?
@@ -1242,6 +1255,90 @@ model ClockAttempt {
 
   @@index([shiftId])
   @@index([tenantId, createdAt])
+}
+
+/// A read-only key for another system to pull data out of here - today that
+/// is Omexx, PCG's CRM.
+///
+/// The key itself is NEVER stored: only its SHA-256 and the first few
+/// characters, so a leaked database gives nobody a working key and the office
+/// can still tell which key a log line belongs to. Rotating issues a new key
+/// and leaves the old one working for a day, so the other end can be changed
+/// over without a failed sync.
+model ApiToken {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  /// Who it was issued to, e.g. "Omexx".
+  name     String
+
+  /// SHA-256 of the key. Unique, so a lookup is one indexed read.
+  hash   String @unique
+  /// First 8 characters, for identifying it on screen and in the log.
+  prefix String
+
+  /// READ is the only scope today. Nothing here writes.
+  scope     String @default("READ")
+  createdBy String
+
+  createdAt  DateTime  @default(now())
+  /// Keys are issued for a year by default.
+  expiresAt  DateTime?
+  /// Set when rotated: the key keeps working until this moment, then stops.
+  retiresAt  DateTime?
+  /// Set when switched off by hand, which takes effect immediately.
+  revokedAt  DateTime?
+  lastUsedAt DateTime?
+
+  requests ApiRequest[]
+
+  @@index([tenantId])
+}
+
+/// One call to the export API. Kept so the office can see what has been taken,
+/// when, and from where - which is the only way to notice a key being used
+/// somewhere it should not be.
+model ApiRequest {
+  id       String    @id @default(cuid())
+  tenantId String
+  tokenId  String?
+  token    ApiToken? @relation(fields: [tokenId], references: [id], onDelete: SetNull)
+
+  path   String
+  query  String?
+  status Int
+  /// How many rows went out. Null when the call failed.
+  rows   Int?
+  /// Milliseconds spent answering.
+  ms     Int?
+  ip     String?
+
+  createdAt DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+  @@index([tokenId, createdAt])
+}
+
+/// A record that no longer exists.
+///
+/// An export that only sends what changed can never mention a deleted shift,
+/// so the other system would keep it forever. This is the list of what has
+/// gone, which /api/export/deletions hands over.
+model DeletedRecord {
+  id        String   @id @default(cuid())
+  tenantId  String
+  /// shift | client | staff
+  kind      String
+  /// The id the other system knows it by.
+  recordId  String
+  /// Kept so a deletion can be matched to the right participant or worker
+  /// without the row it came from.
+  parentId  String?
+  deletedAt DateTime @default(now())
+  deletedBy String?
+
+  @@index([tenantId, deletedAt])
+  @@index([kind, recordId])
 }
 
 /// Every scan of a participant's QR card: the evidence trail behind a

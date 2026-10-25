@@ -409,6 +409,26 @@ export default async function SettingsPage() {
         </span>
       </Link>
 
+      {/* The read-only door another system pulls data through. Super admins
+          only - one key here reads everything. */}
+      {session.role === "SUPER_ADMIN" && (
+        <Link
+          href="/settings/api"
+          className="mt-6 flex max-w-lg items-center justify-between rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:border-[var(--brand)]"
+        >
+          <div>
+            <h2 className="font-semibold text-slate-900">Data export (API)</h2>
+            <p className="mt-1 text-sm text-slate-500">
+              Issue the read-only key another system uses to pull shifts, notes,
+              timesheets and payroll out of here, and see what it has taken.
+            </p>
+          </div>
+          <span className="material-symbols-rounded text-[22px] text-slate-400">
+            arrow_forward
+          </span>
+        </Link>
+      )}
+
       <div className="mt-6 max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <h2 className="mb-2 font-semibold text-slate-900">Plan</h2>
         <p className="text-sm text-slate-500">

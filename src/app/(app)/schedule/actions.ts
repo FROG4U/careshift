@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireScope } from "@/lib/tenant";
 import { opsWhere, opsWhereVia, canOps } from "@/lib/scope";
 import { prisma } from "@/lib/prisma";
+import { recordDeletion } from "@/lib/deletions";
 import {
   tzForState,
   zonedTimeToUtc,
@@ -392,9 +393,16 @@ export async function reassignShift(formData: FormData) {
 }
 
 export async function deleteShift(formData: FormData) {
-  const { tenant, scope } = await requireScope();
+  const { tenant, session, scope } = await requireScope();
   const shiftId = String(formData.get("shiftId") ?? "");
-  await prisma.shift.deleteMany({ where: { id: shiftId, tenantId: tenant.id, ...opsWhere(scope) } });
+  const { count } = await prisma.shift.deleteMany({
+    where: { id: shiftId, tenantId: tenant.id, ...opsWhere(scope) },
+  });
+  // Noted so the export API can tell Omexx it has gone; an incremental pull
+  // can never mention a row that no longer exists.
+  if (count > 0) {
+    await recordDeletion(tenant.id, "shift", [shiftId], session.name);
+  }
   revalidatePath("/schedule");
   revalidatePath("/dashboard");
 }
@@ -486,7 +494,17 @@ export async function deleteScheduleBranch(formData: FormData) {
   const id = String(formData.get("branchId") ?? "");
   if (!id) return;
   // Remove the branch's shifts, then the branch itself.
+  const doomed = await prisma.shift.findMany({
+    where: { tenantId: tenant.id, branchId: id },
+    select: { id: true },
+  });
   await prisma.shift.deleteMany({ where: { tenantId: tenant.id, branchId: id } });
+  await recordDeletion(
+    tenant.id,
+    "shift",
+    doomed.map((d) => d.id),
+    session.name,
+  );
   await prisma.branch.deleteMany({ where: { id, tenantId: tenant.id } });
   revalidatePath("/schedule");
   revalidatePath("/settings");
