@@ -59,6 +59,7 @@ export async function GET(req: Request) {
         formats: "JSON by default. Add ?format=csv for the same rows as a CSV file.",
         times:
           "Every timestamp ending _utc is a UTC instant and is what you should store. The _local columns are the same moment in the branch's own timezone, for people to read.",
+        pay: "Pay is frozen when a run is completed, and only completed runs are exported. A run still in draft appears in pay-runs with is_final false and no lines, because its figures are not final yet. Reconcile on pay_run_id plus worker_id: re-importing a run replaces it rather than adding to it.",
       },
 
       datasets: [
@@ -78,13 +79,19 @@ export async function GET(req: Request) {
           name: "timesheets",
           url: `${base}/timesheets`,
           supports: ["from", "to", "branch", "limit", "cursor", "format"],
-          note: "Approved hours per worker for a period. from and to are required.",
+          note: "Approved HOURS per worker for any window you ask for, worked out live. This is not pay: for money, use pay-runs and payroll. from and to are required.",
+        },
+        {
+          name: "pay-runs",
+          url: `${base}/pay-runs`,
+          supports: ["since", "from", "to", "branch", "limit", "cursor", "format"],
+          note: "The pay periods themselves: dates, branch, who completed the run and when, and its totals. `is_final` is true once a run is completed, which is the point its figures stop moving.",
         },
         {
           name: "payroll",
           url: `${base}/payroll`,
-          supports: ["from", "to", "branch", "format"],
-          note: "One line per worker per earnings rate, plus mileage and super. from and to are required. Hours are to four decimals on purpose: rounding them changes the total.",
+          supports: ["since", "from", "to", "branch", "payRun", "level", "limit", "cursor", "format"],
+          note: "The lines of COMPLETED pay runs - what each worker was actually paid, frozen at completion and never recalculated. Default level=rate gives one line per worker per earnings rate, the shape a payroll system wants. level=shift breaks the same money down by the shift that earned it. Every row carries its pay_run_id and the period dates. Hours are to four decimals on purpose: rounding them changes the total.",
         },
         {
           name: "staff",

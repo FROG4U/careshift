@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { isManager } from "@/lib/roles";
 import { fmtDate } from "@/lib/format";
 import { notifyWorker } from "@/lib/notify";
+import type { FrozenDetail } from "@/lib/payReportTypes";
 import { buildPayReport } from "@/lib/payReport";
 import { isDayShifted } from "@/lib/dayShift";
 import { findShortTrips } from "@/lib/tripRepair";
@@ -231,19 +232,32 @@ async function completeOne(
         // money they were paid even if a shift is edited afterwards.
         bands: JSON.stringify(r.bands),
         detail: JSON.stringify(
-          r.lines.map((l) => ({
-            date: l.dateLabel,
-            time: l.timeLabel,
-            client: l.clientName,
-            band: l.dayType,
-            stream: l.stream,
-            holiday: l.holidayName,
-            hours: l.hours,
-            rate: l.rate,
-            km: l.km,
-            kmPay: l.kmPay,
-            pay: l.pay,
-          })),
+          r.lines.map(
+            (l): FrozenDetail => ({
+              date: l.dateLabel,
+              time: l.timeLabel,
+              client: l.clientName,
+              band: l.dayType,
+              stream: l.stream,
+              holiday: l.holidayName,
+              hours: l.hours,
+              // Which of those hours were worked and which were a top-up or
+              // authorised overtime. The worker's own breakdown already
+              // expected these; without them a total can't be explained.
+              topUpHours: l.topUpHours,
+              extraHours: l.extraHours,
+              rate: l.rate,
+              km: l.km,
+              kmPay: l.kmPay,
+              pay: l.pay,
+              // The shift behind the figure, so a pay line can be traced back
+              // to it - in the app, and by anything reading the export.
+              ref: l.id,
+              internal: l.internal,
+              startIso: l.startIso,
+              endIso: l.endIso,
+            }),
+          ),
         ),
       })),
     });

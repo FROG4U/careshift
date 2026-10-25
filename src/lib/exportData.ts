@@ -1,7 +1,7 @@
 import "server-only";
 import { prisma } from "./prisma";
 import { netHoursOf, kmOf, paidWindowOf } from "./payroll";
-import { buildPayReport } from "./payReport";
+import type { FrozenDetail } from "./payReportTypes";
 import { tzForState, fmtInTz } from "./timezone";
 
 /**
@@ -42,6 +42,10 @@ export type ExportQuery = {
   limit: number;
   cursor?: string | null;
   branchId?: string | null;
+  /** One specific pay run, by its id. */
+  payRunId?: string | null;
+  /** "rate" (one line per earnings rate) or "shift". */
+  level?: string | null;
 };
 
 export type ExportPage = {
@@ -75,6 +79,11 @@ export function parseQuery(params: URLSearchParams): ExportQuery | { error: stri
     limit = Math.min(Math.floor(n), MAX_LIMIT);
   }
 
+  const level = params.get("level");
+  if (level && level !== "rate" && level !== "shift") {
+    return { error: 'level must be "rate" or "shift".' };
+  }
+
   return {
     since: since ?? null,
     from: from ?? null,
@@ -82,6 +91,8 @@ export function parseQuery(params: URLSearchParams): ExportQuery | { error: stri
     limit,
     cursor: params.get("cursor"),
     branchId: params.get("branch"),
+    payRunId: params.get("payRun"),
+    level,
   };
 }
 
@@ -391,109 +402,250 @@ export async function exportTimesheets(
   return { hasMore, nextCursor, rows: kept.map((k) => k.row) };
 }
 
-// ── 4. Payroll: the Xero-facing lines ───────────────────────────────────
+// ── 4. Pay runs and their lines ─────────────────────────────────────────
 
-export async function exportPayroll(
+/**
+ * A completed pay run is FROZEN: the figures are written down at the moment
+ * the office completes it, and never recalculated. That is the whole point -
+ * editing a shift next month must not quietly change a figure that has
+ * already been paid and filed with the tax office.
+ *
+ * So the export sends what was paid, not what a fresh calculation says today.
+ * A run still in draft is deliberately left out: it has no final figures yet,
+ * and importing numbers that are about to move is worse than waiting.
+ */
+export async function exportPayRuns(
   tenantId: string,
   q: ExportQuery,
 ): Promise<ExportPage> {
-  if (!q.from || !q.to) {
-    throw new BadRequest("payroll needs from and to, e.g. ?from=2026-10-01&to=2026-10-15");
-  }
+  const superRate = await superRateOf(tenantId);
 
+  const runs = await prisma.payrollPeriod.findMany({
+    where: {
+      tenantId,
+      ...(q.branchId ? { branchId: q.branchId } : {}),
+      ...(q.since ? { updatedAt: { gt: q.since } } : {}),
+      // A run overlapping the asked-for window, not one wholly inside it: a
+      // fortnight that straddles the end of a month still belongs to it.
+      ...(q.from ? { endDate: { gte: q.from } } : {}),
+      ...(q.to ? { startDate: { lte: q.to } } : {}),
+      ...cursorWhere(q.cursor),
+    },
+    include: {
+      branch: { select: { name: true, state: true } },
+      lines: {
+        select: { hours: true, km: true, wagePay: true, kmPay: true, total: true },
+      },
+    },
+    orderBy: { id: "asc" },
+    take: q.limit + 1,
+  });
+
+  const { kept, hasMore, nextCursor } = page(runs, q.limit);
+  return {
+    hasMore,
+    nextCursor,
+    rows: kept.map((r) => {
+      const sum = (pick: (l: (typeof r.lines)[number]) => number) =>
+        r.lines.reduce((n, l) => n + pick(l), 0);
+      const wagePay = sum((l) => l.wagePay);
+      return {
+        pay_run_id: r.id,
+        updated_at: iso(r.updatedAt),
+        branch: r.branch?.name ?? "",
+        state: r.branch?.state ?? "",
+        period_start: iso(r.startDate),
+        period_end: iso(r.endDate),
+        /** DRAFT until the office completes it; APPROVED once it is final. */
+        status: r.status,
+        /** Only an APPROVED run has figures that will not move. */
+        is_final: r.status === "APPROVED",
+        completed_by: r.approvedBy ?? "",
+        completed_at: iso(r.approvedAt),
+        workers: r.lines.length,
+        hours: round(sum((l) => l.hours), 4),
+        km: round(sum((l) => l.km), 2),
+        wage_pay_aud: round(wagePay, 2),
+        mileage_pay_aud: round(sum((l) => l.kmPay), 2),
+        total_pay_aud: round(sum((l) => l.total), 2),
+        /** On wages only. Mileage is an allowance, not a wage. */
+        super_aud: round(wagePay * superRate, 2),
+        super_rate: superRate,
+      };
+    }),
+  };
+}
+
+async function superRateOf(tenantId: string) {
   const tenant = await prisma.tenant.findUnique({
     where: { id: tenantId },
     select: { superRate: true },
   });
-  const superRate = tenant?.superRate ?? 0;
+  return tenant?.superRate ?? 0;
+}
 
-  const branches = await prisma.branch.findMany({
-    where: { tenantId, ...(q.branchId ? { id: q.branchId } : {}) },
-    select: { id: true, name: true },
-    orderBy: { name: "asc" },
+/**
+ * The lines of completed pay runs: what each worker was actually paid.
+ *
+ * `level=rate` (the default) is the shape a payroll system wants - one line
+ * per worker per earnings rate, which is how it goes into Xero. `level=shift`
+ * is the same money broken down by the shift that earned it, which is what
+ * answers "why is this total what it is".
+ */
+export async function exportPayroll(
+  tenantId: string,
+  q: ExportQuery,
+): Promise<ExportPage> {
+  const superRate = await superRateOf(tenantId);
+  const byShift = q.level === "shift";
+
+  const runs = await prisma.payrollPeriod.findMany({
+    where: {
+      tenantId,
+      // Frozen runs only. See the note on exportPayRuns.
+      status: "APPROVED",
+      ...(q.payRunId ? { id: q.payRunId } : {}),
+      ...(q.branchId ? { branchId: q.branchId } : {}),
+      ...(q.since ? { updatedAt: { gt: q.since } } : {}),
+      ...(q.from ? { endDate: { gte: q.from } } : {}),
+      ...(q.to ? { startDate: { lte: q.to } } : {}),
+      ...cursorWhere(q.cursor),
+    },
+    include: {
+      branch: { select: { name: true } },
+      lines: { orderBy: { name: "asc" } },
+    },
+    orderBy: { id: "asc" },
+    take: q.limit + 1,
   });
 
+  const { kept, hasMore, nextCursor } = page(runs, q.limit);
   const rows: Record<string, unknown>[] = [];
-  for (const b of branches) {
-    // Costed branch by branch, which is how PCG runs its pay: each branch has
-    // its own timezone and its own state's public holidays.
-    const report = await buildPayReport(tenantId, {
-      startDate: q.from,
-      endDate: q.to,
-      branchId: b.id,
-    });
 
-    for (const w of report.rows) {
+  for (const run of kept) {
+    const header = {
+      pay_run_id: run.id,
+      branch: run.branch?.name ?? "",
+      period_start: iso(run.startDate),
+      period_end: iso(run.endDate),
+      completed_at: iso(run.approvedAt),
+    };
+
+    for (const line of run.lines) {
+      const detail = parseDetail(line.detail);
+
+      if (byShift) {
+        for (const d of detail) {
+          rows.push({
+            ...header,
+            worker_id: line.staffId ?? "",
+            worker_name: line.name,
+            /** The shift that earned it, where the run recorded one. */
+            shift_id: d.ref && !d.ref.startsWith("duty-") ? d.ref : "",
+            /** A meeting, supervision or training rather than a visit. */
+            internal: !!d.internal,
+            worked_for: d.client,
+            shift_start_utc: d.startIso ?? "",
+            shift_end_utc: d.endIso ?? "",
+            date_label: d.date,
+            time_label: d.time,
+            day_type: d.band,
+            funding_stream: d.stream ?? "",
+            public_holiday: d.holiday ?? "",
+            hours: round(d.hours, 4),
+            /** Of those hours, ones added to reach the 2 hour minimum. */
+            top_up_hours: d.topUpHours ? round(d.topUpHours, 4) : 0,
+            /** Of those hours, ones past the rostered finish the office authorised. */
+            extra_hours: d.extraHours ? round(d.extraHours, 4) : 0,
+            rate: round(d.rate, 2),
+            // Split out deliberately. The frozen `pay` figure is wages PLUS
+            // mileage, so a column next to mileage_pay_aud that quietly
+            // included it would be added twice by anyone summing them.
+            wage_pay_aud: round(d.hours * d.rate, 2),
+            km: round(d.km, 2),
+            mileage_pay_aud: round(d.kmPay, 2),
+            total_pay_aud: round(d.pay, 2),
+          });
+        }
+        continue;
+      }
+
+      // One line per earnings rate: the band AND the rate, because a worker
+      // on two fundings has two different rates in the same band and merging
+      // them misstates the money.
       const earnings = new Map<string, { hours: number; rate: number }>();
-      for (const line of w.lines) {
-        const key = `${line.dayType}|${line.stream}|${line.rate}`;
-        const cur = earnings.get(key) ?? { hours: 0, rate: line.rate };
-        cur.hours += line.hours;
+      for (const d of detail) {
+        const key = `${d.band}|${d.stream ?? ""}|${d.rate}`;
+        const cur = earnings.get(key) ?? { hours: 0, rate: d.rate };
+        cur.hours += d.hours;
         earnings.set(key, cur);
+      }
+
+      // An older run with no frozen detail still has its totals, so it goes
+      // out as a single wages line rather than disappearing.
+      if (earnings.size === 0 && line.wagePay > 0) {
+        earnings.set(`WAGES||0`, { hours: line.hours, rate: 0 });
       }
 
       for (const [key, e] of earnings) {
         const [band, stream] = key.split("|");
         rows.push({
-          worker_id: w.staffId,
-          worker_name: w.name,
-          branch: b.name,
-          period_start: iso(q.from),
-          period_end: iso(q.to),
-          pay_level: w.level,
-          employment_type: w.employment,
-          earnings_rate: `${band} (${stream})`,
+          ...header,
+          worker_id: line.staffId ?? "",
+          worker_name: line.name,
+          pay_item: stream ? `${band} (${stream})` : band,
           day_type: band,
           funding_stream: stream,
           // Four decimals on purpose: rounding them changes the total.
           units: round(e.hours, 4),
           unit: "HOURS",
-          rate: round(e.rate, 2),
+          rate: e.rate > 0 ? round(e.rate, 2) : null,
           amount_aud: round(e.hours * e.rate, 2),
         });
       }
 
-      if (w.km > 0) {
+      if (line.km > 0) {
         rows.push({
-          worker_id: w.staffId,
-          worker_name: w.name,
-          branch: b.name,
-          period_start: iso(q.from),
-          period_end: iso(q.to),
-          pay_level: w.level,
-          employment_type: w.employment,
-          earnings_rate: "MILEAGE_KM",
+          ...header,
+          worker_id: line.staffId ?? "",
+          worker_name: line.name,
+          pay_item: "MILEAGE_KM",
           day_type: "",
           funding_stream: "",
-          units: round(w.km, 2),
+          units: round(line.km, 2),
           unit: "KM",
           rate: null,
-          amount_aud: round(w.kmPay, 2),
+          amount_aud: round(line.kmPay, 2),
         });
       }
 
-      // Superannuation on wages only. Mileage is an allowance, not a wage.
       rows.push({
-        worker_id: w.staffId,
-        worker_name: w.name,
-        branch: b.name,
-        period_start: iso(q.from),
-        period_end: iso(q.to),
-        pay_level: w.level,
-        employment_type: w.employment,
-        earnings_rate: `SUPER_${(superRate * 100).toFixed(0)}PC_ON_WAGES`,
+        ...header,
+        worker_id: line.staffId ?? "",
+        worker_name: line.name,
+        pay_item: `SUPER_${(superRate * 100).toFixed(0)}PC_ON_WAGES`,
         day_type: "",
         funding_stream: "",
         units: null,
         unit: "",
         rate: null,
-        amount_aud: round(w.wagePay * superRate, 2),
+        amount_aud: round(line.wagePay * superRate, 2),
       });
     }
   }
 
-  // One period's pay is a few hundred lines at most, so it goes in one answer.
-  return { rows, hasMore: false, nextCursor: null };
+  return { rows, hasMore, nextCursor };
+}
+
+/** The frozen per-shift breakdown, or nothing if the run predates it. */
+function parseDetail(raw: string | null): FrozenDetail[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as FrozenDetail[]) : [];
+  } catch {
+    return [];
+  }
 }
 
 // ── 5. Staff ────────────────────────────────────────────────────────────
@@ -620,6 +772,7 @@ export const DATASETS = {
   shifts: exportShifts,
   "shift-notes": exportShiftNotes,
   timesheets: exportTimesheets,
+  "pay-runs": exportPayRuns,
   payroll: exportPayroll,
   staff: exportStaff,
   participants: exportParticipants,

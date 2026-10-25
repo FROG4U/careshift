@@ -58,6 +58,38 @@ export type WorkerRow = {
   lines: DayLine[];
 };
 
+/**
+ * One shift (or meeting) exactly as it was paid, frozen into
+ * PayrollLine.detail when a run is completed.
+ *
+ * This is a stored shape, not a computed one: anything added here appears on
+ * runs completed from then on, and is simply absent from older ones. Readers
+ * must treat every field after `pay` as optional for that reason.
+ */
+export type FrozenDetail = {
+  date: string;
+  time: string;
+  client: string;
+  band: string;
+  stream?: string;
+  holiday: string | null;
+  hours: number;
+  /** Hours added to reach the 2 hour minimum engagement. */
+  topUpHours?: number;
+  /** Hours paid past the rostered finish because the office authorised them. */
+  extraHours?: number;
+  rate: number;
+  km: number;
+  kmPay: number;
+  pay: number;
+  /** The shift this line paid, so a pay figure can be traced back to it. */
+  ref?: string;
+  /** True for a meeting, supervision or training rather than a visit. */
+  internal?: boolean;
+  startIso?: string;
+  endIso?: string;
+};
+
 export type Totals = {
   hours: number;
   km: number;

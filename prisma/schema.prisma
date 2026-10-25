@@ -323,6 +323,9 @@ model PayrollPeriod {
   approvedBy String?
   approvedAt DateTime?
   createdAt  DateTime  @default(now())
+  /// Read by the export API's `since` filter, so a run re-opened and
+  /// completed again reaches Omexx as a change rather than going unnoticed.
+  updatedAt  DateTime  @default(now()) @updatedAt
 
   lines PayrollLine[]
 

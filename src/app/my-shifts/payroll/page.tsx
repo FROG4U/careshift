@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { fmtDate } from "@/lib/format";
+import type { FrozenDetail } from "@/lib/payReportTypes";
 import {
   DAY_TYPE_LABELS,
   STREAM_LABELS,
@@ -9,22 +10,12 @@ import {
   type StaffStream,
 } from "@/lib/constants";
 
-/** One shift as it was when the run was completed (see PayrollLine.detail). */
-type Detail = {
-  date: string;
-  time: string;
-  client: string;
-  band: string;
-  stream?: string;
-  holiday: string | null;
-  hours: number;
-  topUpHours?: number;
-  extraHours?: number;
-  rate: number;
-  km: number;
-  kmPay: number;
-  pay: number;
-};
+/**
+ * One shift as it was when the run was completed (see PayrollLine.detail).
+ * Shared with the code that writes it and the export that reads it, so the
+ * three can't drift apart.
+ */
+type Detail = FrozenDetail;
 
 function parse<T>(raw: string | null): T | null {
   if (!raw) return null;
