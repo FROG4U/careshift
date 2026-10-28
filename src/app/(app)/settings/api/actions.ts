@@ -57,7 +57,7 @@ export async function rotateApiKey(formData: FormData) {
   const id = String(formData.get("tokenId") ?? "");
   const old = await prisma.apiToken.findFirst({
     where: { id, tenantId: ctx.tenant.id, revokedAt: null },
-    select: { id: true, name: true },
+    select: { id: true, name: true, notifyUrl: true },
   });
   if (!old) return { error: "That key no longer exists." };
 
@@ -73,6 +73,10 @@ export async function rotateApiKey(formData: FormData) {
         hash,
         prefix,
         createdBy: ctx.session.name,
+        // Carry the notify address over. It belongs to the system at the far
+        // end, not to the key: rotating is swapping a lock, not moving house.
+        // Leaving it behind silently turned Push now into a dead button.
+        notifyUrl: old.notifyUrl,
       },
     }),
   ]);
