@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { requireScope } from "@/lib/tenant";
 import { opsWhere, canSeeCharges } from "@/lib/scope";
 import { prisma } from "@/lib/prisma";
-import { isManager } from "@/lib/roles";
+import { isManager, isSuperAdmin } from "@/lib/roles";
 import { fmtDate } from "@/lib/format";
 import { budgetFor, loadPricedShifts } from "@/lib/salesData";
 import { aud, aud2, chargeRatesFor } from "@/lib/billing";
@@ -171,13 +171,17 @@ export default async function ClientProfilePage({
           >
             Team
           </Link>
-          <Link
-            href={`/clients/${client.id}/qr`}
-            className="flex items-center gap-1.5 rounded-xl border border-[var(--border)] bg-white px-3.5 py-2 text-sm font-semibold text-[var(--text-primary)]"
-          >
-            <span className="material-symbols-rounded text-[18px]">qr_code_2</span>
-            Clock-in card
-          </Link>
+          {/* Super admin only: they print the card and hand it to the
+              worker themselves, so nobody else needs to see the code. */}
+          {isSuperAdmin(session.role) && (
+            <Link
+              href={`/clients/${client.id}/qr`}
+              className="flex items-center gap-1.5 rounded-xl border border-[var(--border)] bg-white px-3.5 py-2 text-sm font-semibold text-[var(--text-primary)]"
+            >
+              <span className="material-symbols-rounded text-[18px]">qr_code_2</span>
+              Clock-in card
+            </Link>
+          )}
         </div>
       </header>
 

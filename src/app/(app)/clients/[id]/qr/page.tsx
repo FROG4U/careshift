@@ -4,7 +4,7 @@ import { notFound, redirect } from "next/navigation";
 import QRCode from "qrcode";
 import { requireScope } from "@/lib/tenant";
 import { opsWhere } from "@/lib/scope";
-import { isManager } from "@/lib/roles";
+import { isSuperAdmin } from "@/lib/roles";
 import { prisma } from "@/lib/prisma";
 import { qrUrlFor, DRIFT_WARN_SEC } from "@/lib/qrClock";
 import { tzForState, fmtInTz } from "@/lib/timezone";
@@ -35,7 +35,10 @@ export default async function ClientQrPage({
   params: Promise<{ id: string }>;
 }) {
   const { tenant, session, scope } = await requireScope();
-  if (!isManager(session.role)) redirect("/dashboard");
+  // The card is the key to a participant's door in evidence terms: anyone
+  // holding it can be placed at that address. Super admin only, by Danu's
+  // rule - they download it and hand it to the worker themselves.
+  if (!isSuperAdmin(session.role)) redirect("/clients");
 
   const { id } = await params;
   const client = await prisma.client.findFirst({

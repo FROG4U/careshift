@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { requireScope } from "@/lib/tenant";
 import { opsWhere } from "@/lib/scope";
-import { isManager } from "@/lib/roles";
+import { isSuperAdmin } from "@/lib/roles";
 import { prisma } from "@/lib/prisma";
 import { qrUrlFor } from "@/lib/qrClock";
 import { renderQrCardPdf } from "@/lib/qrCardPdf";
@@ -28,7 +28,8 @@ export async function GET(
   const ctx = await requireScope().catch(() => null);
   if (!ctx) return new NextResponse("Not signed in", { status: 401 });
   const { tenant, session, scope } = ctx;
-  if (!isManager(session.role)) {
+  // Super admin only - see the note on the page this is downloaded from.
+  if (!isSuperAdmin(session.role)) {
     return new NextResponse("Not authorised", { status: 403 });
   }
 

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireScope } from "@/lib/tenant";
 import { opsWhere } from "@/lib/scope";
-import { isManager } from "@/lib/roles";
+import { isSuperAdmin } from "@/lib/roles";
 import { prisma } from "@/lib/prisma";
 import { newQrToken } from "@/lib/qrClock";
 
@@ -17,7 +17,9 @@ import { newQrToken } from "@/lib/qrClock";
  */
 export async function issueQrCard(formData: FormData) {
   const { tenant, session, scope } = await requireScope();
-  if (!isManager(session.role)) return { error: "Not authorised." };
+  if (!isSuperAdmin(session.role)) {
+    return { error: "Only PCG management can issue a clock-in card." };
+  }
 
   const id = String(formData.get("clientId") ?? "");
   const client = await prisma.client.findFirst({
