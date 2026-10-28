@@ -57,6 +57,7 @@ export default async function AdminGuidePage() {
           ratingGreenAt: tenant.ratingGreenAt,
           ratingAmberAt: tenant.ratingAmberAt,
           lateNoticePenalty: tenant.lateNoticePenalty,
+          payRoundingMin: tenant.payRoundingMin,
         }}
       />
     </div>
