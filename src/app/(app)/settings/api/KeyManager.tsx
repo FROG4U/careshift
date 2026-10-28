@@ -313,8 +313,19 @@ function PushPanel({ row }: { row: KeyRow }) {
           Save address
         </button>
         <button
-          disabled={pending || !row.notifyUrl || dirty}
-          onClick={() => run(() => pushNow(fd()), "Pushed.")}
+          disabled={pending || !url.trim()}
+          onClick={() =>
+            run(async () => {
+              // Save first if the box has something the server hasn't seen.
+              // Typing an address and pressing the obvious button should not
+              // quietly do nothing because a second button went unnoticed.
+              if (dirty) {
+                const saved = await setNotifyUrl(fd({ notifyUrl: url }));
+                if (saved?.error) return saved;
+              }
+              return pushNow(fd());
+            }, "Pushed.")
+          }
           className="flex items-center gap-1.5 rounded-xl bg-[var(--brand)] px-3.5 py-2 text-sm font-semibold text-white disabled:opacity-50"
         >
           <span className="material-symbols-rounded text-[18px]">sync</span>
@@ -331,7 +342,12 @@ function PushPanel({ row }: { row: KeyRow }) {
           {msg.text}
         </p>
       )}
-      {!msg && row.notifiedLabel && (
+      {!msg && dirty && url.trim() && (
+        <p className="mt-2 text-xs text-amber-700">
+          Not saved yet. Press Save address, or Push now, which saves it first.
+        </p>
+      )}
+      {!msg && !dirty && row.notifiedLabel && (
         <p className="mt-2 text-xs text-[var(--text-muted)]">
           Last pushed {row.notifiedLabel}
           {row.notifyResult && <> - {row.notifyResult}</>}
