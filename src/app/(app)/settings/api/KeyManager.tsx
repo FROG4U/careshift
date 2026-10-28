@@ -79,7 +79,8 @@ export function KeyManager({
           <p className="mt-3 text-sm text-amber-900">{fresh.note}</p>
           <p className="mt-2 text-xs text-amber-800">
             Put it straight into the other system. Do not send it in an email or
-            a chat message.
+            a chat message. It does not expire, so this is a one-off: it keeps
+            working until you switch it off or rotate it.
           </p>
           <button
             onClick={() => setFresh(null)}
@@ -140,7 +141,11 @@ export function KeyManager({
                   </code>
                   <p className="mt-2 text-xs text-[var(--text-secondary)]">
                     Issued by {k.createdBy} on {k.createdLabel}
-                    {k.expiresLabel && <> - expires {k.expiresLabel}</>}
+                    {k.expiresLabel ? (
+                      <> - expires {k.expiresLabel}</>
+                    ) : (
+                      <> - does not expire</>
+                    )}
                   </p>
                   <p className="text-xs text-[var(--text-secondary)]">
                     {k.lastUsedLabel

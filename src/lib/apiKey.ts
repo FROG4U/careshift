@@ -11,14 +11,22 @@ import { prisma } from "./prisma";
  * by the wrong person still hands them nothing that works.
  *
  * Rotating issues a new key and gives the old one a day to live, so the far
- * end can be changed over without a failed overnight sync.
+ * end can be changed over without a failed overnight sync. Keys do not
+ * expire on their own - see the note on ROTATION_GRACE_HOURS.
  */
 
 /** Readable, so a key found in a log or a config file is identifiable. */
 const KEY_PREFIX = "pcgsc_";
-/** How long a new key lasts unless the office says otherwise. */
-export const DEFAULT_KEY_DAYS = 365;
-/** How long a rotated key keeps working. */
+/**
+ * Keys do not expire. Danu's call, and a fair one: the app gains datasets
+ * and deploys constantly without any of it touching the key, so an annual
+ * expiry buys nothing except a sync that stops on a date nobody remembers.
+ *
+ * A key still dies the moment it is switched off or a rotation retires it,
+ * and `expiresAt` is still honoured below, so one can be given a lifetime by
+ * hand if that is ever wanted.
+ */
+/** How long a rotated key keeps working, so the far end can change over. */
 export const ROTATION_GRACE_HOURS = 24;
 
 export function newApiKey() {

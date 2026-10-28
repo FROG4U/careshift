@@ -4,11 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireScope } from "@/lib/tenant";
 import { isSuperAdmin } from "@/lib/roles";
 import { prisma } from "@/lib/prisma";
-import {
-  DEFAULT_KEY_DAYS,
-  ROTATION_GRACE_HOURS,
-  newApiKey,
-} from "@/lib/apiKey";
+import { ROTATION_GRACE_HOURS, newApiKey } from "@/lib/apiKey";
 
 /**
  * Issuing, rotating and switching off the export key.
@@ -27,9 +23,6 @@ async function gate() {
   return { tenant, session };
 }
 
-const inDays = (days: number) =>
-  new Date(Date.now() + days * 24 * 3_600_000);
-
 export async function createApiKey(formData: FormData) {
   const ctx = await gate();
   if (!ctx) return { error: "Only a super admin at head office can do this." };
@@ -44,7 +37,7 @@ export async function createApiKey(formData: FormData) {
       hash,
       prefix,
       createdBy: ctx.session.name,
-      expiresAt: inDays(DEFAULT_KEY_DAYS),
+      // No expiry: it works until it is switched off or rotated away.
     },
   });
 
@@ -79,7 +72,6 @@ export async function rotateApiKey(formData: FormData) {
         hash,
         prefix,
         createdBy: ctx.session.name,
-        expiresAt: inDays(DEFAULT_KEY_DAYS),
       },
     }),
   ]);
