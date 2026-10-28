@@ -141,23 +141,45 @@ export default async function IncidentDetailPage({
                 Photos
               </div>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                {incident.photos.map((p) => (
-                  <a
+                {incident.photos.map((p, i) => (
+                  <figure
                     key={p.id}
-                    href={p.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="block overflow-hidden rounded-xl border border-slate-200"
+                    className="overflow-hidden rounded-xl border border-slate-200"
                   >
-                    <Image
-                      src={p.url}
-                      alt="Incident photo"
-                      width={400}
-                      height={300}
-                      className="h-32 w-full object-cover"
-                      unoptimized
-                    />
-                  </a>
+                    <a href={p.url} target="_blank" rel="noreferrer" className="block">
+                      <Image
+                        src={p.url}
+                        alt={p.caption ?? `Incident photo ${i + 1}`}
+                        width={400}
+                        height={300}
+                        className="h-32 w-full object-cover"
+                        unoptimized
+                      />
+                    </a>
+                    <figcaption className="space-y-1.5 px-2.5 py-2">
+                      {p.caption ? (
+                        <p className="text-xs text-slate-700">{p.caption}</p>
+                      ) : (
+                        <p className="text-xs italic text-slate-400">
+                          No comment added
+                        </p>
+                      )}
+                      {/* The worker's own words, then the link itself, which
+                          is what gets pasted into an NDIS notification or
+                          sent on to a plan manager. */}
+                      <a
+                        href={p.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex items-center gap-1 text-[11px] font-semibold text-[var(--brand)]"
+                      >
+                        <span className="material-symbols-rounded text-[14px]">
+                          open_in_new
+                        </span>
+                        Open photo {i + 1}
+                      </a>
+                    </figcaption>
+                  </figure>
                 ))}
               </div>
             </div>

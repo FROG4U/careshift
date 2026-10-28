@@ -59,6 +59,8 @@ export async function GET(req: Request) {
         formats: "JSON by default. Add ?format=csv for the same rows as a CSV file.",
         times:
           "Every timestamp ending _utc is a UTC instant and is what you should store. The _local columns are the same moment in the branch's own timezone, for people to read.",
+        files:
+          "Photo links (incident photos, chat attachments) point at /api/export/files/<name> and need the same key as everything else. They are absolute, so they can be fetched as they come. Nothing is public.",
         pay: "Pay is frozen when a run is completed, and only completed runs are exported. A run still in draft appears in pay-runs with is_final false and no lines, because its figures are not final yet. Reconcile on pay_run_id plus worker_id: re-importing a run replaces it rather than adding to it.",
       },
 
@@ -104,6 +106,30 @@ export async function GET(req: Request) {
           url: `${base}/participants`,
           supports: ["since", "limit", "cursor", "format"],
           note: "Participants and their plan dates, budget and agreed weekly hours.",
+        },
+        {
+          name: "incidents",
+          url: `${base}/incidents`,
+          supports: ["since", "from", "to", "branch", "limit", "cursor", "format"],
+          note: "Incident reports in full, including NDIS reportable ones, what was done, who was told, and the office's review. Each row carries its photos with the worker's comment on each. from and to filter on when the incident happened, not when it was filed.",
+        },
+        {
+          name: "conversations",
+          url: `${base}/conversations`,
+          supports: ["since", "limit", "cursor", "format"],
+          note: "Chat threads and who is in them. Messages point back here by conversation_id.",
+        },
+        {
+          name: "messages",
+          url: `${base}/messages`,
+          supports: ["since", "from", "to", "limit", "cursor", "format"],
+          note: "Every chat message, including deleted ones: the row stays with an empty body and a deleted_at, so a gap in a thread is explained rather than silent. Image attachments come as links.",
+        },
+        {
+          name: "calls",
+          url: `${base}/calls`,
+          supports: ["since", "from", "to", "limit", "cursor", "format"],
+          note: "Calls placed in the app: who rang whom, when and for how long. Audio is peer to peer and never recorded, so there is no recording or transcript to send.",
         },
         {
           name: "deletions",

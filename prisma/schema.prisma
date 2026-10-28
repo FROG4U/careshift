@@ -492,6 +492,8 @@ model Incident {
   reviewedAt   DateTime?
 
   createdAt DateTime @default(now())
+  /// Read by the export API's `since` filter, so a review decision reaches Omexx.
+  updatedAt DateTime @default(now()) @updatedAt
 
   photos IncidentPhoto[]
 
@@ -507,6 +509,10 @@ model IncidentPhoto {
   incidentId String
   incident   Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
   url        String
+  /// What the worker says this picture shows. A photograph on its own is
+  /// evidence of nothing in particular - the sentence beside it is what an
+  /// auditor or a plan manager actually reads.
+  caption    String?
   createdAt  DateTime @default(now())
 
   @@index([incidentId])
@@ -706,6 +712,8 @@ model Message {
   /// the content is replaced with "This message was deleted".
   deletedAt      DateTime?
   createdAt      DateTime     @default(now())
+  /// Read by the export's `since` filter, so an edit or a deletion is sent on.
+  updatedAt      DateTime     @default(now()) @updatedAt
 
   reactions MessageReaction[]
 
@@ -1553,6 +1561,8 @@ model Call {
   offer          String
   answer         String?
   createdAt      DateTime  @default(now())
+  /// Read by the export's `since` filter: a call's status changes as it runs.
+  updatedAt      DateTime  @default(now()) @updatedAt
   answeredAt     DateTime?
   endedAt        DateTime?
   /// Seconds actually connected, written when the call ends.

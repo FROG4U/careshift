@@ -108,13 +108,20 @@ export async function createIncident(
     },
   });
 
-  // Photos (optional, several allowed).
+  // Photos (optional, several allowed), each with what the worker says it
+  // shows. The captions are sent in the same order as the files, so they are
+  // paired by position.
   const files = formData.getAll("photos").filter((f): f is File => f instanceof File);
-  for (const file of files.slice(0, 6)) {
+  const captions = formData.getAll("photoCaptions").map((c) => String(c ?? ""));
+  for (const [i, file] of files.slice(0, 6).entries()) {
     const url = await savePhoto(file).catch(() => null);
     if (url) {
       await prisma.incidentPhoto.create({
-        data: { incidentId: incident.id, url },
+        data: {
+          incidentId: incident.id,
+          url,
+          caption: captions[i]?.trim().slice(0, 300) || null,
+        },
       });
     }
   }

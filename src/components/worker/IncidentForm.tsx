@@ -13,6 +13,9 @@ import { createIncident, type IncidentResult } from "@/app/my-shifts/incidents/a
 
 type Option = { id: string; name: string };
 
+/** One picked photo: the file, a thumbnail to look at, and its caption. */
+type Shot = { file: File; preview: string; caption: string };
+
 const field =
   "w-full rounded-xl border border-slate-300 px-3.5 py-3 text-base outline-none focus:border-[var(--brand)] focus:ring-2 focus:ring-[var(--brand)]/15";
 const label = "mb-1.5 block text-sm font-semibold text-slate-700";
@@ -50,7 +53,9 @@ export function IncidentForm({
 }) {
   const router = useRouter();
   const [type, setType] = useState("");
-  const [photos, setPhotos] = useState<File[]>([]);
+  // A picture and the sentence that explains it travel together. A bare
+  // photograph in an incident file is evidence of very little.
+  const [photos, setPhotos] = useState<Shot[]>([]);
   const [medical, setMedical] = useState(false);
   const [police, setPolice] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -60,11 +65,18 @@ export function IncidentForm({
       setSubmitting(true);
       // Replace the raw files with compressed versions.
       fd.delete("photos");
-      for (const p of photos) {
-        const blob = await compress(p);
-        fd.append("photos", new File([blob], p.name.replace(/\.\w+$/, ".jpg"), {
-          type: "image/jpeg",
-        }));
+      fd.delete("photoCaptions");
+      for (const shot of photos) {
+        const blob = await compress(shot.file);
+        fd.append(
+          "photos",
+          new File([blob], shot.file.name.replace(/\.\w+$/, ".jpg"), {
+            type: "image/jpeg",
+          }),
+        );
+        // Appended in step with the file above, so the server can pair them
+        // by position. An empty string keeps the two lists the same length.
+        fd.append("photoCaptions", shot.caption.trim());
       }
       const res = await createIncident(prev, fd);
       setSubmitting(false);
@@ -73,6 +85,33 @@ export function IncidentForm({
     },
     undefined,
   );
+
+  const addPhotos = (list: FileList | null) => {
+    const picked = Array.from(list ?? []);
+    if (picked.length === 0) return;
+    setPhotos((prev) =>
+      [
+        ...prev,
+        ...picked.map((file) => ({
+          file,
+          preview: URL.createObjectURL(file),
+          caption: "",
+        })),
+      ].slice(0, 6),
+    );
+  };
+
+  const removePhoto = (index: number) =>
+    setPhotos((prev) => {
+      // Let go of the thumbnail's memory; the browser will not do it for us.
+      URL.revokeObjectURL(prev[index]?.preview ?? "");
+      return prev.filter((_, j) => j !== index);
+    });
+
+  const setCaption = (index: number, caption: string) =>
+    setPhotos((prev) =>
+      prev.map((shot, j) => (j === index ? { ...shot, caption } : shot)),
+    );
 
   const reportable = type ? isReportableIncident(type) : false;
 
@@ -281,46 +320,81 @@ export function IncidentForm({
       <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <label className={label}>Photos</label>
         <p className="mb-3 text-xs text-slate-500">
-          Add photos if they help show what happened (up to 6). Only take
-          photos where it&apos;s appropriate and the participant has consented.
+          Add photos if they help show what happened (up to 6), then say what
+          each one shows. Only take photos where it&apos;s appropriate and the
+          participant has consented.
         </p>
 
-        <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-300 px-4 py-5 text-sm font-semibold text-slate-500">
-          <span className="material-symbols-rounded">add_a_photo</span>
-          Add photos
-          <input
-            type="file"
-            accept="image/*"
-            multiple
-            className="hidden"
-            onChange={(e) =>
-              setPhotos((prev) =>
-                [...prev, ...Array.from(e.target.files ?? [])].slice(0, 6),
-              )
-            }
-          />
-        </label>
+        {/* Two ways in, said plainly. The phone's own sheet offers both, but
+            a worker in a hurry reads buttons, not sheets - and "capture"
+            opens the camera straight away. */}
+        <div className="grid grid-cols-2 gap-2">
+          <label className="flex cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-slate-300 px-3 py-5 text-sm font-semibold text-slate-600">
+            <span className="material-symbols-rounded text-[26px] text-[var(--brand)]">
+              photo_camera
+            </span>
+            Take a photo
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              onChange={(e) => addPhotos(e.target.files)}
+            />
+          </label>
+          <label className="flex cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-slate-300 px-3 py-5 text-sm font-semibold text-slate-600">
+            <span className="material-symbols-rounded text-[26px] text-[var(--brand)]">
+              attach_file
+            </span>
+            Attach a photo
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={(e) => addPhotos(e.target.files)}
+            />
+          </label>
+        </div>
 
         {photos.length > 0 && (
-          <ul className="mt-3 space-y-2">
-            {photos.map((p, i) => (
+          <ul className="mt-3 space-y-3">
+            {photos.map((shot, i) => (
               <li
-                key={`${p.name}-${i}`}
-                className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 text-sm"
+                key={shot.preview}
+                className="rounded-xl border border-slate-200 bg-slate-50 p-3"
               >
-                <span className="material-symbols-rounded text-[18px] text-slate-400">
-                  image
-                </span>
-                <span className="min-w-0 flex-1 truncate text-slate-600">
-                  {p.name}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setPhotos((prev) => prev.filter((_, j) => j !== i))}
-                  className="text-xs font-semibold text-red-500"
-                >
-                  Remove
-                </button>
+                <div className="flex gap-3">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- a
+                      local blob: preview, never a remote image */}
+                  <img
+                    src={shot.preview}
+                    alt=""
+                    className="h-20 w-20 shrink-0 rounded-lg object-cover"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="text-xs font-semibold text-slate-500">
+                        Photo {i + 1}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => removePhoto(i)}
+                        className="text-xs font-semibold text-red-500"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                    <textarea
+                      value={shot.caption}
+                      onChange={(e) => setCaption(i, e.target.value)}
+                      rows={2}
+                      maxLength={300}
+                      placeholder="What does this photo show? (optional)"
+                      className="mt-1 w-full rounded-lg border border-slate-300 px-2.5 py-2 text-sm outline-none focus:border-[var(--brand)]"
+                    />
+                  </div>
+                </div>
               </li>
             ))}
           </ul>

@@ -46,6 +46,8 @@ export type ExportQuery = {
   payRunId?: string | null;
   /** "rate" (one line per earnings rate) or "shift". */
   level?: string | null;
+  /** This server's own address, so photo links come back ready to fetch. */
+  origin?: string;
 };
 
 export type ExportPage = {
@@ -99,6 +101,22 @@ export function parseQuery(params: URLSearchParams): ExportQuery | { error: stri
 /** The `since` the caller should send next time, overlap included. */
 export function nextSince(generatedAt: Date) {
   return new Date(generatedAt.getTime() - OVERLAP_MIN * 60_000).toISOString();
+}
+
+/**
+ * The link to an uploaded photo, as something Omexx can actually fetch.
+ *
+ * Stored links point at /api/files, which needs a signed-in person. A system
+ * holding an export key has no session, so links are rewritten to the key's
+ * own door and made absolute - a relative path in an export is a link to
+ * nowhere once it has left this building.
+ */
+function fileLink(stored: string | null | undefined, origin?: string): string {
+  if (!stored) return "";
+  const name = stored.split("/").pop();
+  if (!name) return "";
+  const path = `/api/export/files/${name}`;
+  return origin ? `${origin}${path}` : path;
 }
 
 const iso = (d: Date | null | undefined) => (d ? d.toISOString() : "");
@@ -765,6 +783,234 @@ export async function exportDeletions(
   };
 }
 
+// ── 8. Incidents ────────────────────────────────────────────────────────
+
+/**
+ * Incident reports, with their photos and what the worker said each one
+ * shows.
+ *
+ * An NDIS provider is asked for these by the Commission, by plan managers
+ * and by families, so the export carries the whole record rather than a
+ * summary: what happened, what was done about it, who was told, and where
+ * the office got to in reviewing it.
+ */
+export async function exportIncidents(
+  tenantId: string,
+  q: ExportQuery,
+): Promise<ExportPage> {
+  const rows = await prisma.incident.findMany({
+    where: {
+      tenantId,
+      ...(q.branchId ? { branchId: q.branchId } : {}),
+      ...(q.since ? { updatedAt: { gt: q.since } } : {}),
+      ...(q.from ? { occurredAt: { gte: q.from } } : {}),
+      ...(q.to ? { occurredAt: { lte: q.to } } : {}),
+      ...cursorWhere(q.cursor),
+    },
+    include: {
+      client: { select: { id: true, firstName: true, lastName: true } },
+      staff: { select: { id: true, firstName: true, lastName: true } },
+      reportedBy: { select: { name: true } },
+      branch: { select: { name: true, state: true } },
+      photos: { orderBy: { createdAt: "asc" } },
+    },
+    orderBy: { id: "asc" },
+    take: q.limit + 1,
+  });
+
+  const { kept, hasMore, nextCursor } = page(rows, q.limit);
+  return {
+    hasMore,
+    nextCursor,
+    rows: kept.map((i) => ({
+      incident_id: i.id,
+      updated_at: iso(i.updatedAt),
+      created_at: iso(i.createdAt),
+      occurred_at_utc: iso(i.occurredAt),
+      location: i.location ?? "",
+      type: i.type,
+      severity: i.severity,
+      /** True when the category is an NDIS reportable incident. */
+      ndis_reportable: i.reportable,
+      description: i.description,
+      immediate_action: i.immediateAction ?? "",
+      injuries: i.injuries ?? "",
+      medical_treatment: i.medicalTreatment,
+      medical_detail: i.medicalDetail ?? "",
+      witnesses: i.witnesses ?? "",
+      police_notified: i.policeNotified,
+      police_reference: i.policeReference ?? "",
+      family_notified: i.familyNotified,
+      reported_by: i.reportedBy?.name ?? "",
+      worker_id: i.staffId ?? "",
+      worker_name: i.staff ? `${i.staff.firstName} ${i.staff.lastName}` : "",
+      participant_id: i.clientId ?? "",
+      participant_name: i.client
+        ? `${i.client.firstName} ${i.client.lastName}`
+        : "",
+      shift_id: i.shiftId ?? "",
+      branch: i.branch?.name ?? "",
+      state: i.branch?.state ?? "",
+      /** SUBMITTED | UNDER_REVIEW | CLOSED */
+      status: i.status,
+      review_notes: i.reviewNotes ?? "",
+      reviewed_at: iso(i.reviewedAt),
+      photo_count: i.photos.length,
+      // Each photo with the worker's own comment beside it. The links need
+      // the same key as this call, and nothing else.
+      photos: i.photos.map((ph) => ({
+        photo_id: ph.id,
+        url: fileLink(ph.url, q.origin),
+        caption: ph.caption ?? "",
+        added_at: iso(ph.createdAt),
+      })),
+    })),
+  };
+}
+
+// ── 9. Communications: conversations, messages and calls ────────────────
+
+/** The threads. Without them a message list is a pile of lines with no home. */
+export async function exportConversations(
+  tenantId: string,
+  q: ExportQuery,
+): Promise<ExportPage> {
+  const rows = await prisma.conversation.findMany({
+    where: {
+      tenantId,
+      ...(q.since ? { updatedAt: { gt: q.since } } : {}),
+      ...cursorWhere(q.cursor),
+    },
+    include: {
+      members: { include: { user: { select: { id: true, name: true } } } },
+      _count: { select: { messages: true } },
+    },
+    orderBy: { id: "asc" },
+    take: q.limit + 1,
+  });
+
+  const { kept, hasMore, nextCursor } = page(rows, q.limit);
+  return {
+    hasMore,
+    nextCursor,
+    rows: kept.map((c) => ({
+      conversation_id: c.id,
+      updated_at: iso(c.updatedAt),
+      created_at: iso(c.createdAt),
+      /** DIRECT (two people) or GROUP. */
+      type: c.type,
+      /** Groups are named; a direct chat takes its title from the two members. */
+      name: c.name ?? "",
+      member_count: c.members.length,
+      members: c.members
+        .map((m) => m.user?.name ?? "")
+        .filter(Boolean)
+        .join("; "),
+      member_ids: c.members.map((m) => m.userId).join(";"),
+      message_count: c._count.messages,
+    })),
+  };
+}
+
+/**
+ * Every message, including the ones that were deleted.
+ *
+ * A deleted message keeps its row here: the body is gone from the app, but an
+ * auditor asking "was anything removed from this thread" deserves a straight
+ * answer rather than a gap.
+ */
+export async function exportMessages(
+  tenantId: string,
+  q: ExportQuery,
+): Promise<ExportPage> {
+  const rows = await prisma.message.findMany({
+    where: {
+      tenantId,
+      ...(q.since ? { updatedAt: { gt: q.since } } : {}),
+      ...(q.from ? { createdAt: { gte: q.from } } : {}),
+      ...(q.to ? { createdAt: { lte: q.to } } : {}),
+      ...cursorWhere(q.cursor),
+    },
+    include: {
+      sender: { select: { id: true, name: true, role: true } },
+      conversation: { select: { type: true, name: true } },
+    },
+    orderBy: { id: "asc" },
+    take: q.limit + 1,
+  });
+
+  const { kept, hasMore, nextCursor } = page(rows, q.limit);
+  return {
+    hasMore,
+    nextCursor,
+    rows: kept.map((m) => ({
+      message_id: m.id,
+      updated_at: iso(m.updatedAt),
+      sent_at_utc: iso(m.createdAt),
+      conversation_id: m.conversationId,
+      conversation_type: m.conversation?.type ?? "",
+      conversation_name: m.conversation?.name ?? "",
+      sender_id: m.senderId,
+      sender_name: m.sender?.name ?? "",
+      sender_role: m.sender?.role ?? "",
+      /** Empty once deleted; `deleted_at` says why. */
+      body: m.deletedAt ? "" : m.body,
+      /** The message this one was a reply to, if any. */
+      reply_to_message_id: m.parentId ?? "",
+      attachment_url: fileLink(m.attachmentUrl, q.origin),
+      attachment_type: m.attachmentType ?? "",
+      deleted_at: iso(m.deletedAt),
+    })),
+  };
+}
+
+/**
+ * Calls placed through the app.
+ *
+ * Who rang whom, when, and for how long. There is no recording and no
+ * transcript: the audio goes straight between the two phones and never
+ * touches this server, so there is nothing here to hand over.
+ */
+export async function exportCalls(
+  tenantId: string,
+  q: ExportQuery,
+): Promise<ExportPage> {
+  const rows = await prisma.call.findMany({
+    where: {
+      tenantId,
+      ...(q.since ? { updatedAt: { gt: q.since } } : {}),
+      ...(q.from ? { createdAt: { gte: q.from } } : {}),
+      ...(q.to ? { createdAt: { lte: q.to } } : {}),
+      ...cursorWhere(q.cursor),
+    },
+    orderBy: { id: "asc" },
+    take: q.limit + 1,
+  });
+
+  const { kept, hasMore, nextCursor } = page(rows, q.limit);
+  return {
+    hasMore,
+    nextCursor,
+    rows: kept.map((c) => ({
+      call_id: c.id,
+      updated_at: iso(c.updatedAt),
+      started_at_utc: iso(c.createdAt),
+      answered_at_utc: iso(c.answeredAt),
+      ended_at_utc: iso(c.endedAt),
+      conversation_id: c.conversationId ?? "",
+      from_user_id: c.fromUserId,
+      from_name: c.fromName,
+      to_user_id: c.toUserId,
+      to_name: c.toName,
+      status: c.status,
+      duration_sec: c.durationSec ?? 0,
+      ended_by: c.endedBy ?? "",
+      /** Audio is peer to peer. Nothing is recorded, so nothing can be sent. */
+      recording: "none",
+    })),
+  };
+}
+
 /** Thrown when the caller asked for something that cannot be answered. */
 export class BadRequest extends Error {}
 
@@ -776,6 +1022,10 @@ export const DATASETS = {
   payroll: exportPayroll,
   staff: exportStaff,
   participants: exportParticipants,
+  incidents: exportIncidents,
+  conversations: exportConversations,
+  messages: exportMessages,
+  calls: exportCalls,
   deletions: exportDeletions,
 } as const;
 

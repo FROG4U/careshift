@@ -58,7 +58,10 @@ export async function serveExport(req: Request, dataset: DatasetName) {
 
   try {
     const generatedAt = new Date();
-    const page = await DATASETS[dataset](caller.tenantId, q);
+    const page = await DATASETS[dataset](caller.tenantId, {
+      ...q,
+      origin: url.origin,
+    });
     await finish(200, page.rows.length);
 
     const headers: Record<string, string> = {
