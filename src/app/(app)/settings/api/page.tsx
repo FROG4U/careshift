@@ -47,6 +47,32 @@ export default async function ApiAccessPage() {
     }),
   ]);
 
+  // What has actually been taken, per dataset. Read from the last few hundred
+  // calls and reduced here rather than one query per dataset: the answer to
+  // "has my change reached Omexx yet" should not cost thirteen round trips.
+  const history = await prisma.apiRequest.findMany({
+    where: { tenantId: tenant.id, status: 200 },
+    orderBy: { createdAt: "desc" },
+    take: 500,
+    select: { path: true, rows: true, createdAt: true },
+  });
+
+  const lastPull = new Map<string, { at: Date; rows: number; calls: number }>();
+  for (const r of history) {
+    // Files are fetched one at a time and would swamp the list.
+    if (r.path.startsWith("/api/export/files/")) continue;
+    const name = r.path.replace("/api/export", "").replace(/^\//, "") || "index";
+    const seen = lastPull.get(name);
+    if (seen) {
+      seen.calls += 1;
+    } else {
+      lastPull.set(name, { at: r.createdAt, rows: r.rows ?? 0, calls: 1 });
+    }
+  }
+  const taken = [...lastPull.entries()].sort((a, b) =>
+    b[1].at.getTime() - a[1].at.getTime(),
+  );
+
   const when = (d: Date) => `${fmtDate(d)} ${fmtTime(d)}`;
   // A server component rendered fresh on every request, so reading the clock
   // here is the point - "has this key expired yet" has no answer without it.
@@ -72,6 +98,9 @@ export default async function ApiAccessPage() {
             ? "retiring"
             : "active",
     calls: t._count.requests,
+    notifyUrl: t.notifyUrl ?? "",
+    notifiedLabel: t.notifiedAt ? when(t.notifiedAt) : null,
+    notifyResult: t.notifyResult ?? null,
   }));
 
   return (
@@ -96,6 +125,49 @@ export default async function ApiAccessPage() {
       <section className="mt-6">
         <KeyManager keys={keys} apiBase={apiBase} />
       </section>
+
+      {/* ── What the other end actually holds ── */}
+      {taken.length > 0 && (
+        <section className="mt-10">
+          <h2 className="font-semibold text-[var(--text-primary)]">
+            What Omexx has taken
+          </h2>
+          <p className="mb-3 text-sm text-[var(--text-secondary)]">
+            The last successful pull of each dataset. This is how you tell
+            whether a change you made has reached them yet.
+          </p>
+          <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-white">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-[var(--border)] text-left text-xs uppercase tracking-wide text-[var(--text-muted)]">
+                  <th className="px-4 py-2 font-semibold">Dataset</th>
+                  <th className="px-4 py-2 font-semibold">Last taken</th>
+                  <th className="px-4 py-2 font-semibold">Rows that time</th>
+                  <th className="px-4 py-2 font-semibold">Pulls</th>
+                </tr>
+              </thead>
+              <tbody>
+                {taken.map(([name, info]) => (
+                  <tr key={name} className="border-b border-[var(--border)]/60 last:border-0">
+                    <td className="px-4 py-2 font-medium text-[var(--text-primary)]">
+                      {name}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-2 text-[var(--text-secondary)]">
+                      {when(info.at)}
+                    </td>
+                    <td className="px-4 py-2 text-[var(--text-secondary)]">
+                      {info.rows}
+                    </td>
+                    <td className="px-4 py-2 text-[var(--text-muted)]">
+                      {info.calls}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
 
       {/* ── What has been taken ── */}
       <section className="mt-10">

@@ -1301,6 +1301,18 @@ model ApiToken {
   revokedAt  DateTime?
   lastUsedAt DateTime?
 
+  /// Where to knock when there is new data, so the far end can come and get
+  /// it rather than waiting for its next scheduled run.
+  ///
+  /// This is a nudge, not a delivery: we never send the data itself, because
+  /// the other system decides what it wants and when. Null until they give
+  /// us an address.
+  notifyUrl    String?
+  /// The last time we knocked, and what came back, so the button can say
+  /// whether it worked instead of looking like it did nothing.
+  notifiedAt   DateTime?
+  notifyResult String?
+
   requests ApiRequest[]
 
   @@index([tenantId])

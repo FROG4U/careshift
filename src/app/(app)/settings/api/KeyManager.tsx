@@ -2,7 +2,13 @@
 
 import { useState, useTransition } from "react";
 import { CopyButton } from "../CopyButton";
-import { createApiKey, rotateApiKey, revokeApiKey } from "./actions";
+import {
+  createApiKey,
+  rotateApiKey,
+  revokeApiKey,
+  setNotifyUrl,
+  pushNow,
+} from "./actions";
 
 /**
  * The export key, on screen.
@@ -24,6 +30,10 @@ export type KeyRow = {
   state: string;
   retiresLabel: string | null;
   calls: number;
+  /** Where we knock when there is new data. Empty until they give us one. */
+  notifyUrl: string;
+  notifiedLabel: string | null;
+  notifyResult: string | null;
 };
 
 export function KeyManager({
@@ -194,6 +204,8 @@ export function KeyManager({
                   </div>
                 )}
               </div>
+
+              {k.state === "active" && <PushPanel row={k} />}
             </li>
           ))}
         </ul>
@@ -238,6 +250,92 @@ export function KeyManager({
             {pending ? "Working..." : "Issue a new key"}
           </button>
         </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Telling the far end there is something new.
+ *
+ * The button sends a nudge, not the data: they pull what they want with the
+ * key they already hold. Until they give us an address it says so plainly
+ * rather than sitting there looking broken.
+ */
+function PushPanel({ row }: { row: KeyRow }) {
+  const [pending, startTx] = useTransition();
+  const [url, setUrl] = useState(row.notifyUrl);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const dirty = url.trim() !== row.notifyUrl;
+
+  const run = (
+    fn: () => Promise<{ error?: string; ok?: boolean; detail?: string; cleared?: boolean }>,
+    good: string,
+  ) => {
+    setMsg(null);
+    startTx(async () => {
+      const res = await fn();
+      if (res?.error) return setMsg({ ok: false, text: res.error });
+      setMsg({ ok: true, text: res?.detail ? `${good} ${res.detail}.` : good });
+    });
+  };
+
+  const fd = (extra?: Record<string, string>) => {
+    const f = new FormData();
+    f.set("tokenId", row.id);
+    for (const [k, v] of Object.entries(extra ?? {})) f.set(k, v);
+    return f;
+  };
+
+  return (
+    <div className="mt-4 border-t border-[var(--border)] pt-4">
+      <p className="text-sm font-semibold text-[var(--text-primary)]">
+        Tell them when something changes
+      </p>
+      <p className="mt-0.5 text-xs text-[var(--text-secondary)]">
+        {row.notifyUrl
+          ? "Press Push now and they are told straight away, instead of waiting for their next scheduled pull. We send a nudge, not the data: they come and fetch it with the key they already have."
+          : `Ask ${row.name} for a web address to notify, then paste it here. Until then they only see changes on their own schedule.`}
+      </p>
+
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <input
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          placeholder="https://..."
+          className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 font-mono text-xs"
+        />
+        <button
+          disabled={pending || !dirty}
+          onClick={() => run(() => setNotifyUrl(fd({ notifyUrl: url })), "Address saved.")}
+          className="rounded-xl border border-[var(--border)] px-3 py-2 text-sm font-semibold text-[var(--text-primary)] disabled:opacity-50"
+        >
+          Save address
+        </button>
+        <button
+          disabled={pending || !row.notifyUrl || dirty}
+          onClick={() => run(() => pushNow(fd()), "Pushed.")}
+          className="flex items-center gap-1.5 rounded-xl bg-[var(--brand)] px-3.5 py-2 text-sm font-semibold text-white disabled:opacity-50"
+        >
+          <span className="material-symbols-rounded text-[18px]">sync</span>
+          {pending ? "Pushing..." : "Push now"}
+        </button>
+      </div>
+
+      {msg && (
+        <p
+          className={`mt-2 text-xs font-medium ${
+            msg.ok ? "text-emerald-700" : "text-red-600"
+          }`}
+        >
+          {msg.text}
+        </p>
+      )}
+      {!msg && row.notifiedLabel && (
+        <p className="mt-2 text-xs text-[var(--text-muted)]">
+          Last pushed {row.notifiedLabel}
+          {row.notifyResult && <> - {row.notifyResult}</>}
+        </p>
       )}
     </div>
   );
