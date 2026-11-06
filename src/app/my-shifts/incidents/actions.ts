@@ -72,16 +72,64 @@ export async function createIncident(
     ? severityRaw
     : "MEDIUM";
 
-  const clientId = str(formData.get("clientId")) || null;
-  const shiftId = str(formData.get("shiftId")) || null;
+  // The participant and shift come from dropdowns, so they arrive as ids and
+  // have to be treated as such: both are checked against what this worker
+  // actually has. Without that, a tampered form could name any participant in
+  // the system, and their name would then be read back off the worker's own
+  // incident list. On an NDIS record, who a participant is is precisely the
+  // thing that must not leak.
+  const claimedClient = str(formData.get("clientId")) || null;
+  const claimedShift = str(formData.get("shiftId")) || null;
 
-  // Where the worker sits, so the office can filter by branch.
-  const staff = session.staffId
-    ? await prisma.staff.findUnique({
-        where: { id: session.staffId },
-        select: { branchId: true },
-      })
-    : null;
+  const [allowedClient, allowedShift, staff] = await Promise.all([
+    claimedClient && session.staffId
+      ? prisma.client.findFirst({
+          where: {
+            id: claimedClient,
+            tenantId: session.tenantId,
+            // Allocated to them, or someone they have actually worked with.
+            OR: [
+              { workers: { some: { staffId: session.staffId } } },
+              { shifts: { some: { staffId: session.staffId } } },
+            ],
+          },
+          select: { id: true },
+        })
+      : Promise.resolve(null),
+    claimedShift && session.staffId
+      ? prisma.shift.findFirst({
+          where: {
+            id: claimedShift,
+            tenantId: session.tenantId,
+            staffId: session.staffId,
+          },
+          select: { id: true },
+        })
+      : Promise.resolve(null),
+    // Where the worker sits, so the office can filter by branch.
+    session.staffId
+      ? prisma.staff.findUnique({
+          where: { id: session.staffId },
+          select: { branchId: true },
+        })
+      : Promise.resolve(null),
+  ]);
+
+  if (claimedClient && !allowedClient) {
+    return {
+      ok: false,
+      error: "That participant isn't one of yours. Pick one from the list, or leave it blank and tell the office.",
+    };
+  }
+  if (claimedShift && !allowedShift) {
+    return {
+      ok: false,
+      error: "That shift isn't one of yours. Pick one from the list, or leave it blank.",
+    };
+  }
+
+  const clientId = allowedClient?.id ?? null;
+  const shiftId = allowedShift?.id ?? null;
 
   const incident = await prisma.incident.create({
     data: {
