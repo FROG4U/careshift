@@ -3,17 +3,11 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { useUnreadChat } from "@/lib/useUnreadChat";
+import { useLiveCounts } from "@/lib/useLiveCounts";
+import type { SidebarCounts } from "@/lib/sidebarCounts";
 
-export type SidebarCounts = {
-  unreadChat: number;
-  pendingSwaps: number;
-  pendingLeave: number;
-  pendingTimesheets: number;
-  pendingApprovals: number;
-  pendingAdmins: number;
-  openIncidents: number;
-};
+// The shape lives with the queries that fill it, so the two cannot drift.
+export type { SidebarCounts };
 
 type Item = {
   href: string;
@@ -109,11 +103,12 @@ export function AdminSidebar({
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  // The layout only recomputes its counts on a full page load, so the chat
-  // badge polls for itself. The rest are approval queues the same admin is
-  // usually the one clearing, so a per-navigation refresh is enough for them.
-  const unreadChat = useUnreadChat(counts.unreadChat);
-  const liveCounts: SidebarCounts = { ...counts, unreadChat };
+  // A layout does not re-render as you move between pages, so the counts the
+  // server worked out when the shell loaded would otherwise sit there all day.
+  // Every badge now refreshes, not just chat: a worker signing up while an
+  // admin is on the Schedule used to leave Approvals dark until a hard
+  // refresh, which is exactly when a badge is supposed to earn its keep.
+  const liveCounts = useLiveCounts(counts);
 
   const toggle = (title: string) =>
     setCollapsed((prev) => {

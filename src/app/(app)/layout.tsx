@@ -6,7 +6,6 @@ import { BroadcastGuard } from "@/components/BroadcastGuard";
 import { AdminSidebar } from "@/components/AdminSidebar";
 import { NotificationBell } from "@/components/NotificationBell";
 import { logoutAction } from "./actions";
-import { totalUnread } from "@/lib/chat";
 import { InstallPrompt } from "@/components/InstallPrompt";
 import { PushRegistrar } from "@/components/PushRegistrar";
 import { AdminBottomNav } from "@/components/AdminBottomNav";
@@ -14,7 +13,8 @@ import { PresenceHeartbeat } from "@/components/PresenceHeartbeat";
 import { CallCentre } from "@/components/CallCentre";
 import { UpdateWatcher } from "@/components/UpdateWatcher";
 import { buildId } from "@/lib/buildId";
-import { loadScope, canSeeAnyCharges, opsWhere, opsWhereVia } from "@/lib/scope";
+import { loadScope, canSeeAnyCharges } from "@/lib/scope";
+import { loadSidebarCounts } from "@/lib/sidebarCounts";
 
 export default async function AppLayout({
   children,
@@ -43,72 +43,22 @@ export default async function AppLayout({
     headOffice: scope.headOffice,
   };
 
-  // Fetch everything the layout needs in ONE parallel batch. These used to run
-  // sequentially — with the DB in Sydney and the app abroad, ~7 round-trips
-  // stacked back-to-back on every page load (~10s). Running them together
-  // collapses that to a single round-trip. All scope by session.tenantId so
-  // none has to wait for the tenant lookup first.
-  const [
-    tenant,
-    notifications,
-    pendingTimesheets,
-    pendingSwaps,
-    pendingLeave,
-    unreadChat,
-    pendingApprovals,
-    pendingAdmins,
-    openIncidents,
-    broadcast,
-  ] = await Promise.all([
+  // Tenant, notifications and the badge counts, in one go. These used to run
+  // sequentially - with the database in Sydney and the app abroad, seven
+  // round-trips stacked up on every page load (~10s). Running them together
+  // collapses that to one.
+  //
+  // The counts come from lib/sidebarCounts, which /api/badges also uses, so
+  // the number on a badge and the number the poll replaces it with are worked
+  // out by the same code.
+  const [tenant, notifications, counts, broadcast] = await Promise.all([
     prisma.tenant.findUnique({ where: { id: session.tenantId } }),
     prisma.notification.findMany({
       where: { userId: session.id },
       orderBy: { createdAt: "desc" },
       take: 20,
     }),
-    prisma.shift.count({
-      where: {
-        tenantId: session.tenantId,
-        approval: "PENDING",
-        status: "COMPLETED",
-        // Badges count only what this account can open.
-        ...opsWhere(scope),
-      },
-    }),
-    prisma.shiftSwap.count({
-      where: { tenantId: session.tenantId, status: "PENDING", ...opsWhereVia(scope, "shift") },
-    }),
-    prisma.availability.count({
-      where: { tenantId: session.tenantId, status: "PENDING", ...opsWhereVia(scope, "staff") },
-    }),
-    totalUnread(session.tenantId, session.id),
-    isManager
-      ? prisma.user.count({
-          where: {
-            tenantId: session.tenantId,
-            status: "PENDING",
-            role: "WORKER",
-          },
-        })
-      : Promise.resolve(0),
-    superAdmin
-      ? prisma.user.count({
-          where: {
-            tenantId: session.tenantId,
-            status: "PENDING",
-            role: { in: ["ADMIN", "SUPER_ADMIN"] },
-          },
-        })
-      : Promise.resolve(0),
-    isManager
-      ? prisma.incident.count({
-          where: {
-            tenantId: session.tenantId,
-            status: { in: ["SUBMITTED", "UNDER_REVIEW"] },
-            ...opsWhere(scope),
-          },
-        })
-      : Promise.resolve(0),
+    loadSidebarCounts(session, scope),
     pendingBroadcastFor(session.id),
   ]);
   if (!tenant) redirect("/login");
@@ -139,15 +89,7 @@ export default async function AppLayout({
         isAdmin={adminLevel}
         isSuperAdmin={superAdmin}
         access={access}
-        counts={{
-          unreadChat,
-          pendingSwaps,
-          pendingLeave,
-          pendingTimesheets,
-          pendingApprovals,
-          pendingAdmins,
-          openIncidents,
-        }}
+        counts={counts}
         logout={logoutAction}
       />
 
@@ -164,7 +106,10 @@ export default async function AppLayout({
         </header>
         {children}
       </main>
-      <AdminBottomNav unreadChat={unreadChat} pendingTimesheets={pendingTimesheets} />
+      <AdminBottomNav
+        unreadChat={counts.unreadChat}
+        pendingTimesheets={counts.pendingTimesheets}
+      />
       {broadcast && <BroadcastGuard item={broadcast} />}
       <InstallPrompt />
       <PushRegistrar />
