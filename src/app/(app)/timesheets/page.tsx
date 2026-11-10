@@ -62,6 +62,22 @@ export default async function TimesheetsPage({
     }
   }
 
+  // Nothing asked for means this month, not everything ever. The page used to
+  // open on the entire history, which is a very long scroll by the second
+  // year and buries the only rows that need doing anything about. Anything
+  // still waiting for approval is added back below, whatever month it is in.
+  const showAll = month === "all";
+  const defaultedToThisMonth = !showAll && !month && !from && !to;
+  if (defaultedToThisMonth) {
+    const now = new Date();
+    start = new Date(now.getFullYear(), now.getMonth(), 1);
+    end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  }
+  if (showAll) {
+    start = undefined;
+    end = undefined;
+  }
+
   // Who acknowledged a handover — the shift only stores the staff id.
   const staffNames = new Map(
     (
@@ -79,12 +95,21 @@ export default async function TimesheetsPage({
       ...opsWhere(scope),
       ...(client ? { clientId: client } : {}),
       ...(staff ? { staffId: staff } : {}),
+      // The date window filters the HISTORY. Anything still awaiting approval
+      // comes through regardless: a shift from six weeks ago that nobody has
+      // signed off is the single most important row on this page, and the
+      // month filter was hiding it.
       ...(start || end
         ? {
-            start: {
-              ...(start ? { gte: start } : {}),
-              ...(end ? { lt: end } : {}),
-            },
+            OR: [
+              { approval: "PENDING" },
+              {
+                start: {
+                  ...(start ? { gte: start } : {}),
+                  ...(end ? { lt: end } : {}),
+                },
+              },
+            ],
           }
         : {}),
     },
@@ -117,6 +142,57 @@ export default async function TimesheetsPage({
     : rows;
 
   const pendingCount = shifts.filter((s) => s.approval === "PENDING").length;
+
+  // The page is two things at once: a queue to work through, and a history to
+  // look things up in. They were one undifferentiated list, so the handful of
+  // rows that needed a decision were indistinguishable from months of settled
+  // ones. Split them, and break the history into months.
+  type Row = (typeof shifts)[number];
+  type Entry =
+    | { kind: "header"; key: string; title: string; note: string; queue: boolean }
+    | { kind: "shift"; key: string; s: Row };
+
+  const monthOf = (r: Row) =>
+    r.start.toLocaleDateString("en-AU", {
+      month: "long",
+      year: "numeric",
+      timeZone: tzForState(r.branch?.state ?? null),
+    });
+
+  const hoursOf = (list: Row[]) =>
+    list.reduce((n, r) => n + netHoursOf(r), 0);
+
+  const awaiting = shifts.filter((r) => r.approval === "PENDING");
+  const settled = shifts.filter((r) => r.approval !== "PENDING");
+
+  const entries: Entry[] = [];
+  if (awaiting.length > 0) {
+    entries.push({
+      kind: "header",
+      key: "queue",
+      title: "Waiting for you to approve",
+      note: `${awaiting.length} shift${awaiting.length === 1 ? "" : "s"} · ${hoursOf(awaiting).toFixed(2)} h`,
+      queue: true,
+    });
+    for (const r of awaiting) entries.push({ kind: "shift", key: r.id, s: r });
+  }
+
+  let runningMonth = "";
+  for (const r of settled) {
+    const label = monthOf(r);
+    if (label !== runningMonth) {
+      runningMonth = label;
+      const inMonth = settled.filter((x) => monthOf(x) === label);
+      entries.push({
+        kind: "header",
+        key: `m-${label}`,
+        title: label,
+        note: `${inMonth.length} shift${inMonth.length === 1 ? "" : "s"} · ${hoursOf(inMonth).toFixed(2)} h paid`,
+        queue: false,
+      });
+    }
+    entries.push({ kind: "shift", key: r.id, s: r });
+  }
 
   // Month dropdown — the last 18 months.
   const nowD = new Date();
@@ -218,6 +294,24 @@ export default async function TimesheetsPage({
           </span>
           .
         </p>
+        {defaultedToThisMonth && (
+          <p className="mt-1 text-sm text-slate-500">
+            Showing{" "}
+            <span className="font-medium text-slate-700">
+              {new Date().toLocaleDateString("en-AU", {
+                month: "long",
+                year: "numeric",
+              })}
+            </span>
+            . Anything waiting for approval is listed whatever month it is in.{" "}
+            <a
+              href="/timesheets?month=all"
+              className="font-semibold text-[var(--brand)] underline"
+            >
+              Show every month
+            </a>
+          </p>
+        )}
       </header>
 
       <DayShiftRepair
@@ -263,7 +357,8 @@ export default async function TimesheetsPage({
             defaultValue={month ?? ""}
             className="mt-1 rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-[var(--brand)]"
           >
-            <option value="">Any month</option>
+            <option value="">This month</option>
+            <option value="all">Every month</option>
             {monthOptions.map((m) => (
               <option key={m.val} value={m.val}>
                 {m.label}
@@ -359,7 +454,52 @@ export default async function TimesheetsPage({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {shifts.map((s) => {
+            {entries.map((entry) => {
+              // A section heading, spanning the table. The queue gets the
+              // amber treatment because it is the part with work in it.
+              if (entry.kind === "header") {
+                return (
+                  <tr
+                    key={entry.key}
+                    className={entry.queue ? "bg-amber-50" : "bg-slate-50"}
+                  >
+                    <th
+                      colSpan={8}
+                      scope="colgroup"
+                      className={`px-5 py-2.5 text-left ${
+                        entry.queue
+                          ? "border-y border-amber-200"
+                          : "border-y border-slate-200"
+                      }`}
+                    >
+                      <span className="flex flex-wrap items-center gap-2">
+                        {entry.queue && (
+                          <span className="material-symbols-rounded text-[18px] text-amber-600">
+                            pending_actions
+                          </span>
+                        )}
+                        <span
+                          className={`text-sm font-bold ${
+                            entry.queue ? "text-amber-900" : "text-slate-700"
+                          }`}
+                        >
+                          {entry.title}
+                        </span>
+                        <span
+                          className={`text-xs font-medium ${
+                            entry.queue ? "text-amber-700" : "text-slate-500"
+                          }`}
+                        >
+                          {entry.note}
+                        </span>
+                      </span>
+                    </th>
+                  </tr>
+                );
+              }
+
+              const s = entry.s;
+              return ((s) => {
               // What they actually clocked, vs what's payable. They differ
               // when a worker starts early or runs past the rostered end —
               // pay follows the roster at both ends (see paidWindowOf).
@@ -732,6 +872,7 @@ export default async function TimesheetsPage({
                   </td>
                 </tr>
               );
+              })(s);
             })}
             {shifts.length === 0 && (
               <tr>
