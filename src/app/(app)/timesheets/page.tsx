@@ -119,6 +119,11 @@ export default async function TimesheetsPage({
       pauses: true,
       branch: { select: { state: true } },
       clockAttempts: { orderBy: { createdAt: "asc" } },
+      // The scans behind a QR clock, so the panel can say whether the phone
+      // actually knew where it was. A scan with no position is the one way
+      // this can be faked, so it has to be visible here and not only on the
+      // participant's card page.
+      qrScans: { orderBy: { scannedAt: "asc" } },
       rosterEdits: { orderBy: { createdAt: "desc" } },
       transports: {
         include: {
@@ -567,6 +572,8 @@ export default async function TimesheetsPage({
                 !!clockIn ||
                 !!clockOut ||
                 trips.some((t) => t.path.length > 0);
+              const clientRadiusM =
+                (s.client.geofenceFt ?? DEFAULT_GEOFENCE_FT) / FT_PER_M;
               const detail: ShiftDetailData = {
                 id: s.id,
                 worker: s.staff
@@ -657,6 +664,25 @@ export default async function TimesheetsPage({
                           Math.abs(s.clockDriftSec) > 300
                             ? Math.round(s.clockDriftSec / 60)
                             : null,
+                        scans: s.qrScans.map((sc) => ({
+                          kind: sc.kind,
+                          at: `${fmtDate(sc.scannedAt)} ${fmtTime(sc.scannedAt)}`,
+                          where:
+                            sc.lat == null
+                              ? null
+                              : sc.distanceM == null
+                                ? "position recorded"
+                                : sc.distanceM <= clientRadiusM
+                                  ? "at the home"
+                                  : sc.distanceM < 1000
+                                    ? `${Math.round(sc.distanceM)} m away`
+                                    : `${(sc.distanceM / 1000).toFixed(1)} km away`,
+                          noLocationReason: sc.noLocationReason,
+                        })),
+                        anyWithoutLocation: s.qrScans.some((sc) => sc.lat == null),
+                        anyFarAway: s.qrScans.some(
+                          (sc) => sc.distanceM != null && sc.distanceM > clientRadiusM,
+                        ),
                       }
                     : null,
                 manualEntry:

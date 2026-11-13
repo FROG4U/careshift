@@ -69,6 +69,19 @@ export type ShiftDetailData = {
     syncedAt: string | null;
     /** How far out the phone's clock was, in minutes. Null when it was fine. */
     driftMin: number | null;
+    /** One line per scan, so a blank position cannot hide behind a total. */
+    scans: {
+      kind: string;
+      at: string;
+      /** "at the home" / "1.4 km away" / null when the phone gave no position. */
+      where: string | null;
+      /** The worker's own words when there was no position. */
+      noLocationReason: string | null;
+    }[];
+    /** True when any scan came in without a position. */
+    anyWithoutLocation: boolean;
+    /** True when any scan was further out than the participant's radius. */
+    anyFarAway: boolean;
   } | null;
   /** Set when the office entered this shift by hand rather than it being clocked. */
   manualEntry: { by: string; at: string; reason: string } | null;
@@ -590,9 +603,26 @@ export function ShiftDetail({ data }: { data: ShiftDetailData }) {
                 )}
 
                 {data.qrClock && (
-                  <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+                  <div
+                    className={`rounded-xl border p-3 ${
+                      data.qrClock.anyWithoutLocation || data.qrClock.anyFarAway
+                        ? "border-amber-300 bg-amber-50"
+                        : "border-emerald-200 bg-emerald-50"
+                    }`}
+                  >
                     <div className="flex items-center gap-1 text-sm font-medium text-slate-700">
-                      <Icon name="qr_code_2" className="text-[16px] text-emerald-600" />
+                      <Icon
+                        name={
+                          data.qrClock.anyWithoutLocation || data.qrClock.anyFarAway
+                            ? "warning"
+                            : "qr_code_2"
+                        }
+                        className={`text-[16px] ${
+                          data.qrClock.anyWithoutLocation || data.qrClock.anyFarAway
+                            ? "text-amber-600"
+                            : "text-emerald-600"
+                        }`}
+                      />
                       {data.qrClock.clockedIn && data.qrClock.clockedOut
                         ? "Both clocks by scanning the card"
                         : data.qrClock.clockedIn
@@ -601,13 +631,53 @@ export function ShiftDetail({ data }: { data: ShiftDetailData }) {
                     </div>
                     <p className="mt-1 text-xs text-slate-600">
                       The card only exists at the participant&apos;s home, so a
-                      scan of it places the worker there
-                      {data.qrClock.distanceFt != null && (
-                        <> - the phone read {data.qrClock.distanceFt} ft from the
-                          address pin</>
-                      )}
-                      .
+                      scan of it places the worker there - as long as the phone
+                      also said where it was.
                     </p>
+
+                    {/* Scan by scan. A missing position is the only way this
+                        can be faked, so it is never summarised away. */}
+                    {data.qrClock.scans.length > 0 && (
+                      <ul className="mt-2 space-y-1.5">
+                        {data.qrClock.scans.map((sc, i) => (
+                          <li key={i} className="text-xs">
+                            <span className="font-semibold text-slate-700">
+                              {sc.kind === "IN" ? "Scanned in" : "Scanned out"}
+                            </span>{" "}
+                            <span className="text-slate-500">{sc.at}</span>
+                            {" - "}
+                            {sc.where ? (
+                              <span
+                                className={
+                                  sc.where === "at the home"
+                                    ? "font-medium text-emerald-700"
+                                    : "font-medium text-amber-700"
+                                }
+                              >
+                                {sc.where}
+                              </span>
+                            ) : (
+                              <span className="font-medium text-amber-700">
+                                no location from the phone
+                              </span>
+                            )}
+                            {sc.noLocationReason && (
+                              <div className="text-slate-600">
+                                They said: &ldquo;{sc.noLocationReason}&rdquo;
+                              </div>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+
+                    {data.qrClock.anyWithoutLocation && (
+                      <p className="mt-2 text-xs text-amber-900">
+                        A scan with no position is the one that could have been
+                        taken anywhere. Worth a word if it keeps happening with
+                        the same person.
+                      </p>
+                    )}
                     {data.qrClock.syncedAt && (
                       <p className="mt-1 text-xs text-slate-500">
                         Taken with no signal and sent at {data.qrClock.syncedAt}.

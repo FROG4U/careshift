@@ -1383,22 +1383,30 @@ model QrScan {
   shift    Shift?  @relation(fields: [shiftId], references: [id], onDelete: SetNull)
 
   /// IN | OUT
-  kind      String
+  kind             String
   /// When the phone recorded the scan - the time the clock is set from.
-  scannedAt DateTime
+  scannedAt        DateTime
   /// When the server received it. Later than scannedAt for an offline scan.
-  syncedAt  DateTime @default(now())
+  syncedAt         DateTime @default(now())
   /// True when the phone had no signal and held the scan until it did.
-  offline   Boolean  @default(false)
+  offline          Boolean  @default(false)
   /// How far the phone's clock was from the server's at sync (positive = ahead).
-  driftSec  Int?
-  lat       Float?
-  lng       Float?
+  driftSec         Int?
+  lat              Float?
+  lng              Float?
   /// Metres from the participant's registered address, where both are known.
-  distanceM Float?
+  distanceM        Float?
+  /// Why the phone gave no position, in the worker's own words.
+  ///
+  /// A scan with no location is the one way this feature can be cheated: a
+  /// photographed card scanned from the sofa looks identical to a real one.
+  /// It is still allowed, because the whole point is houses where GPS cannot
+  /// lock, but it now costs the worker a deliberate answer that is kept
+  /// beside the scan instead of a silent blank.
+  noLocationReason String?
   /// CLOCKED_IN | CLOCKED_OUT | NO_SHIFT | UNKNOWN_CODE | ERROR
-  outcome   String
-  message   String?
+  outcome          String
+  message          String?
 
   @@index([tenantId, scannedAt])
   @@index([clientId, scannedAt])

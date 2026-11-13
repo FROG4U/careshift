@@ -52,6 +52,7 @@ const GROUPS: Group[] = [
       { href: "/swaps", label: "Shift Swaps", icon: "swap_horiz", badgeKey: "pendingSwaps" },
       { href: "/leave", label: "Availability", icon: "event_busy", badgeKey: "pendingLeave" },
       { href: "/incidents", label: "Incident Records", icon: "report", badgeKey: "openIncidents", managerOnly: true },
+      { href: "/scans", label: "Card Scans", icon: "qr_code_scanner", managerOnly: true },
       { href: "/attendance", label: "Attendance", icon: "fact_check", managerOnly: true },
       { href: "/payroll", label: "Payroll Period", icon: "payments", managerOnly: true, needsPayroll: true },
       { href: "/sales", label: "Sales & Profit", icon: "trending_up", needsCharges: true },

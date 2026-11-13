@@ -52,6 +52,8 @@ export type QueuedScan = {
   shiftId: string | null;
   /** True when it was taken with no signal. */
   offline: boolean;
+  /** Why the phone gave no position. Only set when lat/lng are null. */
+  noLocationReason?: string | null;
   state: "WAITING" | "DONE" | "FAILED";
   message?: string;
 };
@@ -212,6 +214,7 @@ export async function syncQueue(): Promise<SyncOutcome> {
           // at the time: a phone showing bars on a dying tower fails the same
           // way, and the office needs to see the gap either way.
           offline: s.offline || Date.now() - new Date(s.at).getTime() > 120_000,
+          noLocationReason: s.noLocationReason ?? null,
         })),
       }),
     });

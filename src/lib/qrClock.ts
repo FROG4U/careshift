@@ -80,6 +80,8 @@ export type ScanEvent = {
   /** Notes typed at the door while offline, for a clock-out scan. */
   note?: string | null;
   handover?: string | null;
+  /** Why the phone gave no position, in the worker's own words. */
+  noLocationReason?: string | null;
 };
 
 export type ScanResult = {
@@ -200,6 +202,9 @@ export async function applyScan(
         lat,
         lng,
         distanceM,
+        // Only meaningful when there is no position to explain away.
+        noLocationReason:
+          lat == null ? ev.noLocationReason?.trim().slice(0, 300) || null : null,
         outcome,
         message,
       },

@@ -30,6 +30,18 @@ import {
  * someone's hallway, one-handed, often in a hurry.
  */
 
+/**
+ * Why a phone might give no position. Every one of these is a real thing that
+ * happens on a round; none of them is an accusation. The point is that the
+ * worker says which, so a blank is never just a blank.
+ */
+const NO_GPS_REASONS = [
+  "I'm inside and the phone can't get a signal",
+  "Location is switched off on this phone",
+  "The phone asked and I said no by mistake",
+  "Something else",
+];
+
 const WAITING_NOTE =
   "Saved on your phone. It will send itself as soon as you have signal - you can put your phone away.";
 
@@ -75,6 +87,11 @@ export function ClockScreen() {
   // itself - a page reopened from history would then clock someone out - so
   // it becomes one explicit tap.
   const [fromLink, setFromLink] = useState<string | null>(null);
+
+  // Set when a scan could not get a position and is waiting on an answer.
+  const [noGps, setNoGps] = useState<string | null>(null);
+  const [gpsReason, setGpsReason] = useState("");
+  const [gpsNote, setGpsNote] = useState("");
 
   const reload = useCallback(() => {
     setShifts(readShifts());
@@ -126,23 +143,14 @@ export function ClockScreen() {
     };
   }, [catchUp, reload]);
 
-  const handleCode = useCallback(
-    async (text: string) => {
-      setScanning(false);
-      setResult(null);
-      const token = tokenFromScan(text);
-      if (!token) {
-        setResult({
-          ok: false,
-          title: "That isn't a PCG card",
-          detail:
-            "The code you scanned isn't one of ours. Look for the PCG Shift Care card, usually by the front door.",
-        });
-        return;
-      }
-
-      setBusy("Finding where you are...");
-      const [hash, where] = await Promise.all([hashToken(token), position()]);
+  const commitScan = useCallback(
+    async (
+      token: string,
+      where: { lat: number; lng: number } | null,
+      noLocationReason: string | null,
+    ) => {
+      setBusy("Saving...");
+      const hash = await hashToken(token);
       const nowIso = new Date().toISOString();
       const match = hash ? matchShift(readShifts(), hash, Date.now()) : null;
       const kind: "IN" | "OUT" =
@@ -160,6 +168,7 @@ export function ClockScreen() {
         clientName: match?.clientName ?? "",
         shiftId: match?.id ?? null,
         offline: !navigator.onLine,
+        noLocationReason,
         state: "WAITING",
       };
       // On the phone first, always. A scan that only lives in a request can be
@@ -206,6 +215,39 @@ export function ClockScreen() {
     },
     [reload],
   );
+
+  const handleCode = useCallback(
+    async (text: string) => {
+      setScanning(false);
+      setResult(null);
+      const token = tokenFromScan(text);
+      if (!token) {
+        setResult({
+          ok: false,
+          title: "That isn't a PCG card",
+          detail:
+            "The code you scanned isn't one of ours. Look for the PCG Shift Care card, usually by the front door.",
+        });
+        return;
+      }
+
+      setBusy("Finding where you are...");
+      const where = await position();
+      setBusy(null);
+
+      // No position is the one way this can be cheated: a photographed card
+      // scanned from the sofa looks exactly like a real one. It is still
+      // allowed, because the feature exists for houses where GPS cannot lock,
+      // but it now costs a deliberate answer that is kept beside the scan.
+      if (!where) {
+        setNoGps(token);
+        return;
+      }
+      await commitScan(token, where, null);
+    },
+    [commitScan],
+  );
+
 
   const waiting = queue.filter((s) => s.state === "WAITING");
   const recent = queue
@@ -429,6 +471,81 @@ export function ClockScreen() {
 
       {scanning && (
         <QrScan onCode={handleCode} onClose={() => setScanning(false)} />
+      )}
+
+      {/* The phone gave no position. Not refused, but not silent either. */}
+      {noGps && (
+        <div className="fixed inset-0 z-[150] flex items-end justify-center bg-black/50 p-4 sm:items-center">
+          <div className="w-full max-w-md rounded-3xl bg-white p-5 shadow-xl">
+            <h2 className="flex items-center gap-2 text-lg font-bold text-slate-900">
+              <span className="material-symbols-rounded text-[22px] text-amber-600">
+                location_off
+              </span>
+              Your phone didn&apos;t give a location
+            </h2>
+            <p className="mt-1 text-sm text-slate-600">
+              The scan still counts. We just need a line about why, so the
+              office can see it was you and not a problem with the card.
+            </p>
+
+            <div className="mt-4 space-y-2">
+              {NO_GPS_REASONS.map((r) => (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => setGpsReason(r)}
+                  className={`w-full rounded-xl border px-3.5 py-3 text-left text-sm font-medium ${
+                    gpsReason === r
+                      ? "border-[#003146] bg-[#003146]/5 text-slate-900"
+                      : "border-slate-200 text-slate-700"
+                  }`}
+                >
+                  {r}
+                </button>
+              ))}
+            </div>
+
+            <textarea
+              value={gpsNote}
+              onChange={(e) => setGpsNote(e.target.value)}
+              rows={2}
+              maxLength={300}
+              placeholder="Anything else worth saying (optional)"
+              className="mt-3 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[#003146]"
+            />
+
+            <div className="mt-4 flex gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setNoGps(null);
+                  setGpsReason("");
+                  setGpsNote("");
+                }}
+                className="flex-1 rounded-xl border border-slate-300 py-3 text-sm font-semibold text-slate-600"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!gpsReason || !!busy}
+                onClick={() => {
+                  const token = noGps;
+                  const reason = [gpsReason, gpsNote.trim()]
+                    .filter(Boolean)
+                    .join(" - ");
+                  setNoGps(null);
+                  setGpsReason("");
+                  setGpsNote("");
+                  void commitScan(token, null, reason);
+                }}
+                className="flex-[2] rounded-xl bg-[#003146] py-3 text-sm font-bold text-white disabled:opacity-50"
+              >
+                {busy ?? "Save the scan"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
